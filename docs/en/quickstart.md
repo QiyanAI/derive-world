@@ -1,6 +1,6 @@
 # Quick Start
 
-Derive World `v0.1.0` is an OSS-MVP foundation. This guide starts the G05
+Derive World `v0.1.0` is an OSS-MVP foundation. This guide starts the
 Open Reference World in Fixture mode, walks through both Living Object types,
 two independent users, the Handoff → Personal AI → human confirmation → Derive
 loop, error states, and the browser acceptance suite, then shows how to switch
@@ -29,7 +29,7 @@ curl -fsS http://127.0.0.1:8080/readyz
 Open <http://127.0.0.1:8080>. The header shows `FIXTURE`; all AI output in this
 mode is deterministic demo data, not real model output.
 
-## G05 Reference World walkthrough
+## Reference World walkthrough
 
 1. Choose **Create account**. Registration creates the user, Personal AI
    profile, empty private context, default delegation, and session in one
@@ -84,7 +84,7 @@ RATE_LIMIT_API_PER_MIN=600
 CI applies the same overrides inside the workflow and asserts `model_mode` is
 `fixture`. Production defaults are unchanged.
 
-## G04 capability walkthrough
+## Capability walkthrough
 
 The same stack runs the Capability Broker and the independent
 `content.structure` Provider. The Provider is reachable only on `capnet`; it
@@ -149,7 +149,9 @@ curl -fsS http://127.0.0.1:8080/api/v1/meta
 ```
 
 The response must report `"model_mode":"real"`. Missing Real-mode settings make
-the process fail at startup; it never silently falls back to Fixture.
+the process fail at startup; it never silently falls back to Fixture. Real AI
+uses your own provider account: you supply the endpoint and key, and the
+provider bills you directly. Never commit the key.
 
 ## Local development
 
@@ -157,6 +159,10 @@ the process fail at startup; it never silently falls back to Fixture.
 npm ci
 npm run -w web build
 npm run -w sdk/typescript build
+# Start a local PostgreSQL first, for example:
+# docker run --rm -d --name dw-dev-db -p 5432:5432 #   -e POSTGRES_USER=derive -e POSTGRES_PASSWORD=dw_local_only #   -e POSTGRES_DB=derive_world postgres:17-alpine
+cp .env.example .env
+set -a; . ./.env; set +a
 go run ./cmd/server migrate
 go run ./cmd/server serve
 ```
@@ -175,23 +181,22 @@ npm run -w web dev
   `PUBLIC_BASE_URL` together.
 - **`migrate` exits non-zero:** inspect `docker compose logs migrate`. The app
   does not start unless migration succeeds.
-- **`/readyz` returns 503:** PostgreSQL is not ready or `DATABASE_URL` is wrong.
+- **`/readyz` returns 503:** a required dependency, usually PostgreSQL, is not
+  ready or `DATABASE_URL` is wrong; inspect `docker compose logs migrate app`.
 - **Real mode fails at startup:** the missing variable name is printed; values
   are never printed.
 - **Browser shows `UNKNOWN` mode:** the web client cannot reach
   `/api/v1/meta`; confirm the app container is running.
 
-## Scope and later gates
+## Scope and later versions
 
 Accounts, sessions, Living Objects, object authorization, versioned actions,
 event history, Derive, Lineage, invitations/Derive Links, Handoff, Personal AI
 conversations, proposals, confirmations, PATs, the Capability Broker, all five
 capabilities, the Open API, the TypeScript SDK, the independent Provider, the
 bilingual Reference World, and the Chromium + Firefox acceptance suite are
-implemented. G00–G06 are accepted/closed (G06 final acceptance recorded
-2026-10-24). This tree is the `v0.1.0` release candidate; G07 is engineering
-complete with Owner review pending and release NO-GO, and no public Release has
-been published. Real AI is VERIFIED_REAL only for the approved two-call API-level
-run at `e90f23a`/`9fd32c1` (DeepSeek `deepseek-flash`), not for every model or
-provider; it was not re-run on the final closure SHA. No route fabricates
-success.
+implemented. `v0.1.0` is the first public release.
+Real AI is VERIFIED_REAL only for the approved two-call API-level run (DeepSeek `deepseek-flash`), not for every model or
+provider; it was not re-run on the release SHA. No route fabricates success.
+See [Showcase and sharing](../../SHOWCASE.md) for the three launch examples and
+how to share your own Living Object.

@@ -1,10 +1,9 @@
 # Derive World v0.1.0 — Release Notes
 
-**Status:** release candidate; the `v0.1.0-rc.1` label is planned, **not
-created**. No Git tag or GitHub Release exists.
+**Status:** public OSS MVP release.
 **License:** Apache License 2.0.
-**Repository:** private until the public-release gate; no GitHub Release has
-been published.
+**Repository:** <https://github.com/QiyanAI/derive-world>
+**Release:** <https://github.com/QiyanAI/derive-world/releases/tag/v0.1.0>
 
 Derive World is an open-source foundation for *Living Objects*: shared,
 versioned objects that people and their Personal AI can read, contribute to,
@@ -64,31 +63,34 @@ curl -fsS http://127.0.0.1:8080/readyz
 ```
 
 Open <http://127.0.0.1:8080>. Fixture mode needs no model account and labels
-all AI output as `FIXTURE`; it is not real AI.
+all AI output as `FIXTURE`; it is not real AI. Real AI mode requires the user to
+configure an OpenAI-compatible endpoint and API key, and the user bears the
+model provider's costs.
 
 ### Platform archives
 
-The release builds three archives:
+The release provides these assets:
 
 | Platform | Asset |
 |---|---|
-| Linux amd64 | `derive-world_0.1.0-rc.1_linux_amd64.tar.gz` |
-| macOS arm64 | `derive-world_0.1.0-rc.1_darwin_arm64.tar.gz` |
-| Windows amd64 | `derive-world_0.1.0-rc.1_windows_amd64.zip` |
+| Linux amd64 | `derive-world_0.1.0_linux_amd64.tar.gz` |
+| macOS arm64 | `derive-world_0.1.0_darwin_arm64.tar.gz` |
+| Windows amd64 | `derive-world_0.1.0_windows_amd64.zip` |
+| Source | `derive-world_0.1.0_source.tar.gz` |
 
-Each archive contains the server binary, the built web client under `web/dist`,
-`capabilities.yaml`, the deterministic fixture data under `tests/fixtures/model`,
-`.env.example`, `README.md`, `README.zh-CN.md`, `LICENSE`, `NOTICE`, `THIRD_PARTY_NOTICES.md`,
-`SECURITY.md`, `TRADEMARK.md`, `CONTRIBUTING.md`, `CODE_OF_CONDUCT.md`,
-`CHANGELOG.md`, the pinned dependency manifests (`go.mod`, `go.sum`,
-`package.json`, `package-lock.json`), the OpenAPI contract, and the
-bilingual `docs/` tree (including the release notes and demo assets). Extract
-the archive and change into its top-level directory. The standalone binary reads
-process environment variables; it does not load `.env` itself, so export the
-values before running:
+Each platform archive contains the server binary, the built web client under
+`web/dist`, `capabilities.yaml`, the deterministic fixture data under
+`tests/fixtures/model`, `.env.example`, `README.md`, `README.zh-CN.md`,
+`SHOWCASE.md`, `LICENSE`, `NOTICE`, `THIRD_PARTY_NOTICES.md`, `SECURITY.md`,
+`SECURITY.zh-CN.md`, `TRADEMARK.md`, `CONTRIBUTING.md`, `CONTRIBUTING.zh-CN.md`,
+`CODE_OF_CONDUCT.md`, `CHANGELOG.md`, the pinned dependency manifests (`go.mod`, `go.sum`, `package.json`, `package-lock.json`), the
+OpenAPI contract, and the bilingual `docs/` tree (including these release notes
+and the demo assets). Extract the archive and change into its top-level
+directory. The standalone binary reads process environment variables; it does
+not load `.env` itself, so export the values before running:
 
 ```bash
-cd derive-world_0.1.0-rc.1_linux_amd64
+cd derive-world_0.1.0_linux_amd64
 cp .env.example .env
 set -a; . ./.env; set +a
 ./derive-world migrate
@@ -98,88 +100,79 @@ set -a; . ./.env; set +a
 On Windows the binary is `derive-world.exe`; use PowerShell or cmd to export
 the variables from `.env`. Some POSIX shells on Windows rewrite absolute paths
 such as `MODEL_CHAT_PATH`; leave that variable unset to use the default
-`/v1/chat/completions`. The server requires PostgreSQL, the
-three secrets of at least 32 bytes, and a `WEB_DIST_DIR` containing
-`index.html`. The archive includes `web/dist` and `capabilities.yaml` for that
-reason. The reference `content.structure` Provider is a separate process; use
-Compose for the complete reference stack.
+`/v1/chat/completions`. The server requires PostgreSQL, the three secrets of at
+least 32 bytes, and a `WEB_DIST_DIR` containing `index.html`. The archive
+includes `web/dist` and `capabilities.yaml` for that reason. The reference
+`content.structure` Provider is a separate process; use Compose for the
+complete reference stack.
 
 ## Verification
 
-The release workflow is prepared to build from an immutable tag. **No Git tag
-or GitHub Release exists for this candidate**; the owner withheld tag creation
-by the owner. The candidate dry-run built the three platform archives, a
-source candidate archive, and `SHA256SUMS` from the final main SHA, and the
-archives were built twice and compared byte-for-byte. The final main SHA, CI
-run URLs, `SHA256SUMS`, and build manifest are recorded in the release
-evidence package.
-The required checks are `Go`, `Web`, `SDK`, `Architecture`, `Contract`,
-`Integration`, `govulncheck`, `gitleaks`, and `E2E`. The release preflight also
-requires the Security `License` and `npm audit` jobs at the same SHA. The `E2E`
-job runs real PostgreSQL, the real Go API, the production web build, and
-Chromium, Firefox, and a 390 px mobile project with two independent users.
-Release verification scope: the workflow builds a source candidate archive
-(`derive-world_<version>_source.tar.gz`) from the exact commit and includes it
-in `SHA256SUMS`; the GitHub automatic source archive is additional, not a
-substitute. The `docs/assets` demo material is 21 PNG screenshots plus 2 WebM
-recordings with synthetic `example.test` data; the candidate version is
-`0.1.0-rc.1` (a label, not a tag; the final `v0.1.0` is created only at the authorized public release).
+The `v0.1.0` tag is immutable and points at the final public `main` commit.
+The Release workflow builds from that exact tag with Go 1.27.3 and Node
+24.14.0, builds the binaries and archives twice and compares them
+byte-for-byte, creates the source archive and `SHA256SUMS`, writes
+`BUILD-MANIFEST.json`, and creates a draft Release only. The draft is published
+only after the asset hashes, manifest, permissions, and provenance checks pass.
 
-SHA-256 proves file integrity; it does not by itself prove the issuer's
-identity. **No GitHub build-provenance attestation has been generated for this
-private candidate.** The public-release workflow is prepared to generate and
-verify an attestation on a future authorized public tag run; that attestation
-is unverified and not claimed. The draft/dry-run status is not a published
-release.
+`SHA256SUMS` on the Release page covers every asset. The workflow generates
+GitHub OIDC/Sigstore build-provenance attestations for every archive,
+`BUILD-MANIFEST.json`, and `SHA256SUMS`. Verify an asset with:
+
+```bash
+gh attestation verify derive-world_0.1.0_linux_amd64.tar.gz \
+  --repo QiyanAI/derive-world \
+  --source-digest <the tag's commit SHA> \
+  --signer-workflow QiyanAI/derive-world/.github/workflows/release.yml
+```
+
+SHA-256 proves file integrity; the attestation binds the asset to this
+repository, commit, and release workflow identity. The required checks are
+`Go`, `Web`, `SDK`, `Architecture`, `Contract`, `Integration`, `govulncheck`,
+`gitleaks`, and `E2E`; the release preflight also requires Security `License`
+and `npm audit` at the same SHA. `E2E` runs real PostgreSQL, the real Go API,
+the production web build, Chromium, Firefox, and a 390 px mobile project with
+two independent users. GitHub Dependency Review runs on public pull requests;
+GitHub Private Vulnerability Reporting is enabled.
 
 ## Known limitations
 
-See [Limitations](https://github.com/QiyanAI/derive-world/blob/main/docs/en/limitations.md) for the complete list. The main limits are:
+See [Limitations](https://github.com/QiyanAI/derive-world/blob/main/docs/en/limitations.md)
+for the complete list. The main limits are:
 
 - Single instance; no horizontal scaling or real-time collaboration.
 - No email, password reset, OAuth, email verification, or account deletion.
 - One model adapter per deployment; no concurrent multi-provider routing or
   per-Personal-AI model selection.
-- Real AI is VERIFIED_REAL only for the approved two-call API-level run at
-  `e90f23a`/`9fd32c1` (DeepSeek `deepseek-flash`), not for every model or
-  provider; it was not re-run on the final closure SHA.
+- Real AI is VERIFIED_REAL only for the approved two-call API-level run (DeepSeek `deepseek-flash`), not for every model or
+  provider; it was not re-run on the release SHA.
 - Historical object state has no read endpoint; derive from an older version
   uses immutable snapshots.
-- GitHub Dependency review is not available on the private plan; govulncheck,
-  gitleaks, npm audit, and License cover the private candidate. Dependency
-  review runs when the repository is public.
 - No prebuilt container images; Compose builds from source.
-- The repository remains private and no public Release has been published.
-- Build provenance attestation is not generated for this private candidate; the
-  public-release workflow is prepared but has not run. The attestation is
-  unverified and not claimed.
+- `v0.1.0` is an OSS MVP, not a production-ready platform; no production use is
+  supported or claimed.
 
 ## Security
 
-Report vulnerabilities privately as described in
+Report vulnerabilities privately through GitHub Private Vulnerability
+Reporting: open the repository's **Security** tab and choose **Report a
+vulnerability**. Do not open a public issue for a suspected vulnerability. See
 [SECURITY.md](https://github.com/QiyanAI/derive-world/blob/main/SECURITY.md).
-Do not open a public issue for a suspected vulnerability. GitHub Private
-Vulnerability Reporting will be enabled at the public-release gate.
 
 Read [Security](https://github.com/QiyanAI/derive-world/blob/main/docs/en/security.md)
 for the implemented controls, model data flow, and untrusted-content handling.
 
 ## Process notes
 
-- `v0.1.0-rc.N` tags are immutable release candidates. The final `v0.1.0`
-  release requires explicit owner authorization.
-- **G06 final acceptance.** The owner recorded final acceptance of G06 on
-  2026-10-24. Real-AI evidence is an API-level, exactly two-call run to
-  DeepSeek `deepseek-flash` at `e90f23a`/`9fd32c1`; it was not re-run on this
-  candidate and is not a general provider claim. The candidate adds durable
-  pre-call model-call accounting plus documentation, demo assets, test, and UI
-  changes; it does not change model-adapter, authorization, schema, API path,
-  permission, capability, identity, or dependency semantics.
-- Contributions use the Developer Certificate of Origin 1.1. The pre-public
-  development history is retained in a private repository and is not part of
-  the public source history. History is never rewritten to hide a process
-  deviation.
-- G07 is **engineering complete; owner review pending; release NO-GO**. G07 is
-  not self-accepted.
-- Do not reuse release-candidate assets as final `v0.1.0` assets. The final
-  release is rebuilt and attested from its own tag.
+- `v0.1.0` is immutable. Tags are never moved, deleted, or reused. If a
+  candidate changes, create the next version.
+- The public repository starts from a clean, DCO-compliant initial commit. The
+  pre-public development history is retained in a separate private development
+  archive and is not part of this repository's Git history.
+- Contributions use the Developer Certificate of Origin 1.1.
+- the bounded Real AI evidence was recorded on 2026-10-24. The real-AI evidence is an
+  API-level, exactly two-call run to DeepSeek `deepseek-flash` ; it was not re-run on this release and is not a general
+  provider claim.
+- `v0.1.0` is the first public release.
+- Do not reuse release-candidate assets as `v0.1.0` assets. This release is
+  rebuilt and attested from its own tag.

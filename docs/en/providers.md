@@ -2,7 +2,7 @@
 
 The reference Provider executes `content.structure` in a separate process. It is
 a stdlib-only Go module (`examples/capability-provider`) that speaks the frozen
-D06 HTTP+HMAC protocol. It never imports the Derive World main module, never
+HTTP+HMAC protocol. It never imports the Derive World main module, never
 connects to PostgreSQL, and never receives a user cookie, PAT, CSRF token,
 private AI context, or database credential.
 
@@ -77,7 +77,7 @@ Environment variables:
 | `LISTEN_ADDR` | no | `:8081` | Listen address inside the private network. |
 | `PROVIDER_ID` | no | `reference.content-structure` | Any other value is a startup error. |
 | `CONTRACT_VERSION` | no | `1.0` | Any other value is a startup error. |
-| `MAX_BODY_BYTES` | no | `65536` | Business input cap, 1..65536. The HTTP body cap is `MAX_BODY_BYTES + 126` for the exact D06 envelope. |
+| `MAX_BODY_BYTES` | no | `65536` | Business input cap, 1..65536. The HTTP body cap is `MAX_BODY_BYTES + 126` for the exact signed envelope. |
 | `REPLAY_CACHE_SIZE` | no | `4096` | Positive LRU capacity. |
 
 Point the Broker at it by editing `capabilities.yaml` (or the file named by
@@ -161,7 +161,7 @@ still limits replay.
 
 ### Signed responses (`http_hmac_v2`)
 
-`http_hmac_v2` keeps the frozen D06 1.0 request envelope and adds a response
+`http_hmac_v2` keeps the frozen 1.0 request envelope and adds a response
 signature. For a request that sent
 `X-DW-Response-Signature-Version: v2`, every Provider response (success or
 error after signature verification) carries:
@@ -188,7 +188,7 @@ response as `capability_unknown`; it never stores or returns the output. A
 a request that does not ask for v2.
 
 The public `contract_version` remains `1.0`; `http_hmac_v2` is an additive
-transport profile, not a change to the D06 request contract. The legacy
+transport profile, not a change to the request contract. The legacy
 `http_hmac` transport remains available only for internal compatibility and
 does not sign responses; public Providers must use `http_hmac_v2`.
 

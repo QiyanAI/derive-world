@@ -2,11 +2,10 @@
 
 ## Reporting
 
-The designated long-term channel is GitHub Private Vulnerability Reporting. It
-is not enabled yet for this release candidate; it will be enabled at the
-public-release gate. Until then, contact the repository owner through a private
-GitHub channel. Do not open a public issue for a suspected vulnerability. See
-`SECURITY.md` for scope and process.
+GitHub Private Vulnerability Reporting is enabled for this public repository.
+Use the repository's Security tab and choose Report a vulnerability. Do not
+open a public issue for a suspected vulnerability. See `SECURITY.md` for scope
+and process.
 
 ## Defaults in this build
 
@@ -25,7 +24,7 @@ GitHub channel. Do not open a public issue for a suspected vulnerability. See
 - Model API keys come only from `MODEL_API_KEY`; they are never stored in the
   database, logged, or sent to the browser.
 
-## Implemented controls (G04)
+## Capability and provider controls
 
 - Passwords use Argon2id (`m=64 MiB, t=3, p=2`, 16-byte salt, 32-byte key) and
   are never logged, audited, or returned.
@@ -107,7 +106,7 @@ GitHub channel. Do not open a public issue for a suspected vulnerability. See
 - Capability input summaries are redacted (`input_redacted` ≤2 KiB) and never
   contain text, body, summary, prompt, or title values.
 
-## Implemented controls (G06)
+## Real AI and budget controls
 
 - The `http_hmac_v2` Provider transport verifies an HMAC-signed response over
   the request timestamp, invocation id, HTTP status, and SHA-256 of the exact
@@ -147,15 +146,13 @@ GitHub channel. Do not open a public issue for a suspected vulnerability. See
 
 ## Not yet implemented
 
-G00–G06 are accepted/closed (G06 final acceptance recorded 2026-10-24). The
-approved two-call API-level dual Personal AI run at `e90f23a`/`9fd32c1`
-(DeepSeek `deepseek-flash`) completed and Real AI is **VERIFIED_REAL** for that
-exact scope; it was not re-run on the final closure SHA and no general
-model/provider acceptance is claimed. G07 is engineering complete with Owner
-review pending; release is NO-GO; no public Release has been published. The
-legacy `http_hmac` transport remains available only for internal
-compatibility; it does not sign responses and must not be used for a public
-Provider.
+`v0.1.0` is the first public release. The approved
+two-call API-level dual Personal AI run (DeepSeek
+`deepseek-flash`) completed and Real AI is **VERIFIED_REAL** for that exact
+scope; it was not re-run on the release SHA and no general model/provider
+acceptance is claimed. The legacy `http_hmac` transport remains available only
+for internal compatibility; it does not sign responses and must not be used for
+a public Provider.
 
 ## Model data flow
 

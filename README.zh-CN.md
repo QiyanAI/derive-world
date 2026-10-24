@@ -4,7 +4,15 @@
 
 Derive World 是一个面向 *Living Object（活对象）* 的开源基础：共享、有版本的对象，人和自己的 Personal AI 可以读取、贡献、衍生，并沿着显式来源链追溯。首个版本只做可自托管的 OSS MVP（`v0.1.0`），不是完整平台。
 
-> **状态：G00–G06 — 已验收/关闭（G06 最终验收记录于 2026-10-24）；G07 — 工程完成，Owner 复核待定，发布 NO-GO。Real AI — 仅对已批准的双 Personal AI 两次 API 级调用（`e90f23a`/`9fd32c1`，DeepSeek `deepseek-flash`，合成数据）记为 VERIFIED_REAL；未在最终收口 SHA 上重跑，不构成对所有模型或 Provider 的普遍验收。** 本树是 `v0.1.0` 发布候选。发布证据记录最终 main SHA、CI 运行（包括真实 PostgreSQL 与 Chromium/Firefox/移动端浏览器验收）、计划中的 `v0.1.0-rc.1` 标签（**未创建**）与 dry-run 产物哈希。**本候选不存在任何 Git Tag 或 GitHub Release。** 仓库仍为私有；公开发布需要负责人明确授权。见[发行说明](docs/zh/release-notes.md)与 [CHANGELOG](CHANGELOG.md)。Fixture 输出仍不是真实 AI。冻结的 22 表 Schema 与五个能力描述符未变。这里没有任何生产发布。
+**为什么不同：** 多数 AI 工具把聊天当作产品。Derive World 把 *对象* 当作产品：Living Object 有版本、成员、权限与可追溯的来源链。Personal AI 可以提议修改并衍生子对象，但只有人类可以批准；衍生对象是独立的，不是活指针。结果是一个小而可审计、可自托管的开源基础。
+
+## 演示
+
+![17 秒 Derive World 演示](docs/assets/demo-preview.gif)
+
+17 秒参考世界演示：Living Object、版本历史与来源链、互动投票。完整录屏见 [`demo-17s.webm`](docs/assets/demo-17s.webm)。Fixture 模式，无需模型 API Key。[作品展示](docs/zh/showcase.md)提供三个首发示例与自愿分享入口。
+
+> **状态：公开 OSS MVP — `v0.1.0`。** 这是 Derive World 的首个公开版本：一个可自托管的 Living Object 基础，不是生产平台。**Real AI 仅对已批准的双 Personal AI 两次 API 级调用（DeepSeek `deepseek-flash`，合成数据）记为 VERIFIED_REAL；未在发布 SHA 上重跑，不构成对所有模型或 Provider 的普遍验收。Fixture 模式不调用模型，不是真实 AI。** 冻结的 22 表 Schema 与五个能力描述符未变。见[发行说明](docs/zh/release-notes.md)与 [CHANGELOG](CHANGELOG.md)。
 
 ## 参考世界
 
@@ -42,7 +50,7 @@ docker compose ps
 curl -fsS http://127.0.0.1:8080/readyz
 ```
 
-Compose 构建标识为 `0.1.0-rc.1`；除非显式设置，`DW_COMMIT` 与 `DW_BUILD_TIME` 为 `unknown`。发行归档注入带标签的提交与由提交派生的构建时间。
+Compose 构建标识为 `0.1.0`；除非显式设置，`DW_COMMIT` 与 `DW_BUILD_TIME` 为 `unknown`。发行归档注入带标签的提交与由提交派生的构建时间。
 
 打开 <http://127.0.0.1:8080>。确定性适配器启用时，顶部显示 `FIXTURE`。注册本地账号，创建协作或互动对象，邀请第二个人，应用 AI 提议，批准衍生并查看谱系。`.env.example` 中的值是仅限开发的占位值，不是生产密钥。
 
@@ -100,6 +108,10 @@ Real 部署还应设置[自托管文档](docs/zh/self-hosting.md#模型预算与
 npm ci
 npm run -w web build
 npm run -w sdk/typescript build
+# 先启动一个本地 PostgreSQL，例如：
+# docker run --rm -d --name dw-dev-db -p 5432:5432 #   -e POSTGRES_USER=derive -e POSTGRES_PASSWORD=dw_local_only #   -e POSTGRES_DB=derive_world postgres:17-alpine
+cp .env.example .env
+set -a; . ./.env; set +a
 go run ./cmd/server migrate
 go run ./cmd/server serve
 ```
@@ -147,7 +159,7 @@ ops/github-metrics/         独立 AI-OPS 指标模块
 - 模型调用具有单次输入与输出 Token 上限、每用户每日调用/字符上限、部署级每日调用/字符硬上限，以及运维停止开关。配额拒绝发生在 Provider 调用之前，会写入审计，并在重启后从 `model_invocations` 重新计数。每次实际尝试 Provider 调用前，都会在 `model_invocations` 写入持久预占记录；进程崩溃、业务回滚或最终记录更新失败都不会漏记可能产生费用的调用。
 - `timeout` 与 `unknown` 能力结果绝不报告为成功；unknown 不带输出。
 
-漏洞请按 [SECURITY.md](SECURITY.md) 私下报告。本发布候选尚未公开；GitHub Private Vulnerability Reporting 将在公开发布门启用。在此之前，请通过 GitHub 私密渠道联系仓库所有者。不要开公开 issue。
+漏洞请按 [SECURITY.zh-CN.md](SECURITY.zh-CN.md) 私下报告。GitHub 私密漏洞报告已对本公开仓库启用：请在仓库的 Security 页面选择 Report a vulnerability。不要开公开 issue。
 
 ## 限制
 
@@ -155,14 +167,14 @@ ops/github-metrics/         独立 AI-OPS 指标模块
 - `v0.1.0` 不发邮件、不做密码找回、不做 OAuth、不提供账号删除。
 - 无实时协作；对象工作区在页面可见时每 10 秒轮询，并提供显式刷新。
 - 五项能力都经单一 Broker；外部 `content.structure` Provider 运行在内部网络的独立进程。没有运行时能力注册或任意 Provider URL。
-- Real AI 仅对已批准的双 Personal AI 两次 API 级调用（`e90f23a`/`9fd32c1`，DeepSeek `deepseek-flash`，合成数据）记为 VERIFIED_REAL；未在最终收口 SHA 上重跑，这不是对所有模型或 Provider 的普遍验收声明。每个部署只激活一个适配器。
+- Real AI 仅对已批准的双 Personal AI 两次 API 级调用（DeepSeek `deepseek-flash`，合成数据）记为 VERIFIED_REAL；未在发布 SHA 上重跑，这不是对所有模型或 Provider 的普遍验收声明。每个部署只激活一个适配器。
 - Fixture 模式不调用模型。确定性结构化回复是演示数据，不是真实 AI。
 - 参考 Compose 栈在内部明文网络上使用 v2 响应签名传输；公网 Provider 必须使用 HTTPS。TLS 与双向 TLS 由 Go 客户端校验并有测试覆盖，默认 Compose 文件不启用。
 - Web 客户端的 Handoff 预览是成员级投影；个人 AI 实际投影还会受到调用者授权的进一步限制。
 - 合法对象可能超过 32 KiB Handoff 预算；AI 分区会报告该容量失败，而不是声称执行了操作。
 - `v0.1.0` 没有历史对象状态读取端点；历史是事件与版本摘要，从旧版本衍生使用不可变快照。界面会明确说明。
 - Compose 是参考部署，不是生产编排器。
-- `v0.1.0` 发布候选尚未公开发布；仓库在公开发布门前保持私有。尚未发布任何 GitHub Release。
+- `v0.1.0` 是首个公开 OSS MVP 版本；它不是生产平台，不支持也不声称生产使用。
 
 ## 文档
 
@@ -176,6 +188,9 @@ ops/github-metrics/         独立 AI-OPS 指标模块
 - [安全](docs/zh/security.md)
 - [限制](docs/zh/limitations.md)
 - [发行说明](docs/zh/release-notes.md)
+- [作品展示与分享](docs/zh/showcase.md)
+- [安全策略](SECURITY.zh-CN.md)
+- [贡献指南](CONTRIBUTING.zh-CN.md)
 - [English README](README.md)
 
 ## 许可证
@@ -184,4 +199,4 @@ Apache License 2.0。见 [LICENSE](LICENSE) 与 [NOTICE](NOTICE)。
 第三方许可证文本见 [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md)。
 许可证不授予商标权；见 [TRADEMARK.md](TRADEMARK.md)。
 
-贡献使用 Developer Certificate of Origin；见 [CONTRIBUTING.md](CONTRIBUTING.md)。
+贡献使用 Developer Certificate of Origin；见 [CONTRIBUTING.zh-CN.md](CONTRIBUTING.zh-CN.md)。

@@ -27,9 +27,9 @@ audit -> store
 
 `httpx`、`config`、`model` 只依赖标准库及其冻结依赖。`internal/arch/TestModuleBoundaries` 强制禁止边、无环、子 module 隔离与表归属矩阵。
 
-## G04 范围
+## 能力范围
 
-G04 保持冻结的 22 表 Schema，激活 Capability Broker、五项冻结能力、`capability_definitions` 同步、调用记录、Open API、TypeScript SDK 与独立 `content.structure` Provider。Broker 复用 G02/G03 的对象、Handoff、提议、Derive、Trust Kernel 与确认路径，不建立第二套授权、对象写入、衍生或确认机制。
+本范围保持冻结的 22 表 Schema，激活 Capability Broker、五项冻结能力、`capability_definitions` 同步、调用记录、Open API、TypeScript SDK 与独立 `content.structure` Provider。Broker 复用对象、Handoff、提议、Derive、Trust Kernel 与确认路径，不建立第二套授权、对象写入、衍生或确认机制。
 
 对象聚合是 `living_objects`、`object_memberships`、`object_events`、`object_action_receipts`、`object_proposals`、`invitations`、`derivation_edges` 的唯一写入者。`internal/derive` 只组装子对象状态，并通过 objects 服务写入；人类端点与确认执行共享同一套准备/变更路径。`internal/trust` 拥有 `delegation_grants` 与 `confirmations`，是唯一 AI 授权裁定点。`internal/personalai` 拥有档案、私人上下文、会话与消息，只能通过窄接口调用 objects 提议写入，绝不写对象状态。`internal/handoff` 只读对象数据。`internal/model` 拥有 `model_invocations`。`internal/identity` 写用户、会话与 PAT；`internal/audit` 在调用方事务内追加审计；`internal/store` 拥有幂等预约表。
 

@@ -1,6 +1,6 @@
 # Two-user demo guide
 
-This is the reproducible Derive Loop that G05 acceptance uses. It runs against
+This is the reproducible Derive Loop that the Reference World acceptance uses. It runs against
 the real Compose stack: PostgreSQL, the Go API, the production web bundle, and
 two independent browser identities. Fixture mode is deterministic and labelled;
 it is not real AI.

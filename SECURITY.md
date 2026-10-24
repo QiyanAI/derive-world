@@ -1,27 +1,24 @@
 # Security Policy
 
+[中文](SECURITY.zh-CN.md) | English
+
 ## Supported versions
 
 | Version | Supported |
 |---|---|
-| 0.1.x | Yes, once released |
+| 0.1.x | Yes |
 | < 0.1.0 | No |
 
-This is the `v0.1.0` release candidate. It is not a production deployment and
-no production use is supported or claimed. The repository remains private
-until the public-release gate.
+This is the `v0.1.0` public OSS MVP. It is not a production deployment and no
+production use is supported or claimed.
 
 ## Reporting a vulnerability
 
-The designated long-term channel is GitHub Private Vulnerability Reporting.
-It is **not enabled yet** for this release candidate; it will be enabled when
-the repository enters the public-release gate, subject to the owner's release
-authorization and the repository security settings.
-
-Until then, contact the repository owner through GitHub and request a private
-channel. Do **not** open a public issue, discussion, or pull request for a
-suspected vulnerability. Do not include exploit details in public channels.
-Do not send secrets or personal data in the first message.
+GitHub Private Vulnerability Reporting is enabled for this public repository.
+Use the repository's **Security** tab and choose **Report a vulnerability**.
+Do **not** open a public issue, discussion, or pull request for a suspected
+vulnerability. Do not include exploit details in public channels. Do not send
+secrets or personal data in the first message.
 
 ## What to include
 
