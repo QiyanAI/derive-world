@@ -1,0 +1,26 @@
+name: Question
+description: Ask a usage or design question
+title: "[Question]: "
+labels: ["question"]
+body:
+  - type: textarea
+    id: question
+    attributes:
+      label: Question
+      description: What are you trying to do, and what is unclear?
+    validations:
+      required: true
+  - type: textarea
+    id: context
+    attributes:
+      label: Context
+      description: Commands, configuration (without secrets), and relevant docs.
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: Checklist
+      options:
+        - label: I removed secrets and personal data.
+          required: true
+        - label: This is not a security vulnerability.
+          required: true

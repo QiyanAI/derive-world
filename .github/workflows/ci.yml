@@ -1,0 +1,258 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  go:
+    name: Go
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version: "1.27.3"
+          cache: true
+      - name: gofmt
+        run: test -z "$(gofmt -l .)"
+      - name: go vet
+        run: go vet ./...
+      - name: go test
+        run: go test ./... -race -count=1
+      - name: go test discovery
+        run: go test -list '.*' ./... | grep -q '^Test'
+      - name: go build
+        run: go build ./...
+      - name: independent modules
+        run: |
+          (cd examples/capability-provider && go test ./... -count=1 && go test -list '.*' ./... | grep -q '^Test')
+          (cd ops/github-metrics && go test ./... -count=1 && go test -list '.*' ./... | grep -q '^Test')
+      - name: pin-check
+        run: |
+          set -euo pipefail
+          bad=$(grep -hoE '^[[:space:]]*(-[[:space:]]+)?uses:[[:space:]]*[^#[:space:]]+' .github/workflows/*.yml \
+                | sed -E 's/^[[:space:]]*(-[[:space:]]+)?uses:[[:space:]]*//' \
+                | grep -vE '@[0-9a-f]{40}$' || true)
+          [ -z "$bad" ] || { echo "unpinned actions: $bad"; exit 1; }
+          if grep -nE '^[[:space:]]*(-[[:space:]]+)?uses:.*@(main|master|latest|v[0-9]+)$' .github/workflows/*.yml; then
+            echo "mutable action reference found"; exit 1
+          fi
+          if find web sdk examples -name package-lock.json -print -quit | grep -q .; then
+            echo "second lockfile found"; exit 1
+          fi
+          awk '/^[[:space:]]*FROM[[:space:]]/ && $0 !~ /@sha256:/ {print "no digest: " $0; bad=1} END{exit bad}' Dockerfile
+          awk '/^[[:space:]]*image:/ && $0 !~ /@sha256:/ {print "no digest: " $0; bad=1} END{exit bad}' compose.yaml
+          if grep -rnE 'curl[^|]*\|[[:space:]]*(ba)?sh' .github/workflows/; then
+            echo "curl pipe to shell found"; exit 1
+          fi
+          if grep -rnE '^[[:space:]]*pull_request_target:' .github/workflows/; then
+            echo "pull_request_target found"; exit 1
+          fi
+          grep -q '"private": true' package.json
+          grep -q '"private": true' sdk/typescript/package.json
+      - name: docs-command-check
+        run: go test ./internal/app -run TestDocsCommands -count=1
+      - name: DCO sign-off
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          PR_BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          PR_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          PUSH_BEFORE_SHA: ${{ github.event.before }}
+          PUSH_AFTER_SHA: ${{ github.event.after }}
+        run: |
+          set -euo pipefail
+          zero=0000000000000000000000000000000000000000
+          missing=0
+
+          check_commit() {
+            sha="$1"
+            author_email=$(git log -1 --format=%ae "$sha")
+            trail=$(git log -1 --format=%B "$sha" | tr -d '\r' \
+                    | git interpret-trailers --parse \
+                    | grep '^Signed-off-by: ' || true)
+            if [ -z "$trail" ]; then
+              echo "missing Signed-off-by in $sha"
+              missing=1
+              return
+            fi
+            # D03-38: a sign-off trailer must carry the commit author's email.
+            if ! printf '%s\n' "$trail" | grep -qF "<$author_email>"; then
+              echo "Signed-off-by in $sha does not match author <$author_email>"
+              missing=1
+            fi
+          }
+
+          if [ "$EVENT_NAME" = "pull_request" ]; then
+            # Every commit the PR contributes must be signed off.
+            range="$PR_BASE_SHA..$PR_HEAD_SHA"
+          else
+            # Branch deletion: nothing was introduced.
+            if [ -z "$PUSH_AFTER_SHA" ] || [ "$PUSH_AFTER_SHA" = "$zero" ]; then
+              exit 0
+            fi
+            if [ -z "$PUSH_BEFORE_SHA" ] || [ "$PUSH_BEFORE_SHA" = "$zero" ] \
+               || ! git cat-file -e "${PUSH_BEFORE_SHA}^{commit}" 2>/dev/null; then
+              # First push, or a force push whose old tip is not present: audit
+              # every commit reachable from "after".
+              range="$PUSH_AFTER_SHA"
+            else
+              # Normal, multi-commit, or force push: check every non-merge
+              # commit in the pushed range, not only head_commit, so a signed
+              # tip cannot hide an earlier unsigned commit in the same push.
+              range="$PUSH_BEFORE_SHA..$PUSH_AFTER_SHA"
+            fi
+          fi
+
+          # Do not use github.event.commits: the push payload truncates that
+          # list. before/after plus the fetch-depth: 0 clone are complete. Use
+          # command substitution so a rev-list failure is fatal rather than an
+          # empty (passing) list.
+          if ! commits=$(git rev-list --no-merges "$range"); then
+            echo "cannot enumerate commits for range: $range"
+            exit 1
+          fi
+          while IFS= read -r sha; do
+            [ -n "$sha" ] || continue
+            check_commit "$sha"
+          done <<< "$commits"
+          exit "$missing"
+
+  web:
+    name: Web
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: "24"
+          cache: npm
+          cache-dependency-path: package-lock.json
+      - run: npm ci
+      - run: npm run -w web typecheck
+      - run: npm run -w web build
+
+  sdk:
+    name: SDK
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: "24"
+          cache: npm
+          cache-dependency-path: package-lock.json
+      - run: npm ci
+      - run: npm run -w sdk/typescript typecheck
+      - run: npm run -w sdk/typescript build
+      - run: npm run -w sdk/typescript test
+      - name: zero runtime dependencies
+        run: node -e "const p=require('./sdk/typescript/package.json'); if (Object.keys(p.dependencies||{}).length) { console.error('SDK must have zero runtime dependencies'); process.exit(1); }"
+
+  arch:
+    name: Architecture
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version: "1.27.3"
+          cache: true
+      - run: go test ./internal/arch -run TestModuleBoundaries -count=1
+      - run: go test -list '.*' ./internal/arch | grep -q TestModuleBoundaries
+
+  contract:
+    name: Contract
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version: "1.27.3"
+          cache: true
+      - run: go test ./internal/app -run 'TestOpenAPI|TestCapabilityOpenAPIContract|TestLicenseHeaders|TestDocsCommands' -count=1
+      - run: go test -list '.*' ./internal/app | grep -q '^Test'
+      - name: release gate scripts compile
+        run: python3 -m py_compile .github/scripts/*.py
+      - name: G08 authorization validator tests
+        run: python3 tests/release/test_g08_authorization.py
+      - name: release identity validator tests
+        run: python3 tests/release/test_release_identity.py
+
+  integration:
+    name: Integration
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    services:
+      postgres:
+        image: postgres:17-alpine@sha256:b0f9560a2de083e2cc7382e75f808c7381a32852a7ec49117deedb300e552b24
+        env:
+          POSTGRES_USER: derive
+          POSTGRES_PASSWORD: dw_local_only
+          POSTGRES_DB: derive_world
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U derive -d derive_world"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 20
+    env:
+      APP_ENV: test
+      PUBLIC_BASE_URL: http://127.0.0.1:8080
+      MODEL_MODE: fixture
+      DATABASE_URL: postgres://derive:dw_local_only@localhost:5432/derive_world?sslmode=disable
+      CURSOR_HMAC_SECRET: test-only-cursor-hmac-secret-0000000001
+      IP_HASH_PEPPER: test-only-ip-hash-pepper-000000000001
+      CAPABILITY_HMAC_SECRET: test-only-capability-hmac-secret-000001
+      WEB_DIST_DIR: ./web/dist
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version: "1.27.3"
+          cache: true
+      - name: migrate
+        run: go run ./cmd/server migrate
+      - name: real-ai gate guard
+        run: |
+          set -euo pipefail
+          for name in G03_REAL_AI_TEST G03_REAL_AI_RELAY G03_REAL_AI_ALLOW_CI \
+            G06_REAL_AI_DUAL G06_REAL_AI_AUTHORIZATION G06_REAL_AI_ALLOW_CI \
+            G06_REAL_AI_MAX_CALLS G06_REAL_AI_MAX_INPUT_CHARS \
+            G06_REAL_AI_MAX_OUTPUT_TOKENS MODEL_API_KEY; do
+            if [ -n "${!name:-}" ]; then
+              echo "$name must not be set in the CI integration job"
+              exit 1
+            fi
+          done
+      - name: integration tests
+        run: go test -tags=integration ./tests/... -count=1
+      - name: integration test discovery
+        run: go test -list '.*' -tags=integration ./tests/... | grep -q '^Test'

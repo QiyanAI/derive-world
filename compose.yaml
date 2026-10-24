@@ -1,0 +1,128 @@
+name: derive-world
+
+services:
+  db:
+    image: postgres:17-alpine@sha256:b0f9560a2de083e2cc7382e75f808c7381a32852a7ec49117deedb300e552b24
+    environment:
+      POSTGRES_USER: derive
+      POSTGRES_PASSWORD: dw_local_only
+      POSTGRES_DB: derive_world
+    volumes:
+      - dw_pgdata:/var/lib/postgresql/data
+    networks:
+      - data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U derive -d derive_world"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+    restart: unless-stopped
+
+  migrate:
+    build:
+      context: .
+      target: server
+      args:
+        GOPROXY: ${GOPROXY:-https://proxy.golang.org,direct}
+        VERSION: ${DW_VERSION:-0.1.0-rc.1}
+        COMMIT: ${DW_COMMIT:-unknown}
+        BUILD_TIME: ${DW_BUILD_TIME:-unknown}
+    command: ["migrate"]
+    env_file:
+      - .env
+    environment:
+      DATABASE_URL: postgres://derive:dw_local_only@db:5432/derive_world?sslmode=disable
+    networks:
+      - data
+    depends_on:
+      db:
+        condition: service_healthy
+    restart: "no"
+
+  app:
+    build:
+      context: .
+      target: server
+      args:
+        GOPROXY: ${GOPROXY:-https://proxy.golang.org,direct}
+        VERSION: ${DW_VERSION:-0.1.0-rc.1}
+        COMMIT: ${DW_COMMIT:-unknown}
+        BUILD_TIME: ${DW_BUILD_TIME:-unknown}
+    command: ["serve"]
+    env_file:
+      - .env
+    environment:
+      BIND_ADDR: 0.0.0.0:8080
+      WEB_DIST_DIR: /app/web
+      DATABASE_URL: postgres://derive:dw_local_only@db:5432/derive_world?sslmode=disable
+      TMPDIR: /tmp
+    ports:
+      - "127.0.0.1:8080:8080"
+    networks:
+      - edge
+      - data
+      - capnet
+    depends_on:
+      db:
+        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
+      capability-provider:
+        condition: service_healthy
+    read_only: true
+    tmpfs:
+      - /tmp
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    user: "10001:10001"
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:8080/readyz >/dev/null || exit 1"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+      start_period: 10s
+    restart: unless-stopped
+
+  capability-provider:
+    build:
+      context: .
+      target: provider
+      args:
+        GOPROXY: ${GOPROXY:-https://proxy.golang.org,direct}
+    environment:
+      LISTEN_ADDR: ":8081"
+      CAPABILITY_HMAC_SECRET: ${CAPABILITY_HMAC_SECRET}
+      CAPABILITY_HMAC_KEY_ID: ${CAPABILITY_HMAC_KEY_ID:-k1}
+      REQUIRE_RESPONSE_SIGNING: "true"
+    networks:
+      - capnet
+    read_only: true
+    tmpfs:
+      - /tmp
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    user: "10001:10001"
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:8081/healthz >/dev/null || exit 1"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+      start_period: 5s
+    restart: unless-stopped
+
+volumes:
+  dw_pgdata:
+
+networks:
+  edge:
+    driver: bridge
+  data:
+    driver: bridge
+    internal: true
+  capnet:
+    driver: bridge
+    internal: true

@@ -1,0 +1,30 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://derive.world/schemas/capability/content.structure.output.json",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["items", "item_count", "truncated", "format"],
+  "properties": {
+    "items": {
+      "type": "array",
+      "maxItems": 500,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["index", "kind", "text"],
+        "properties": {
+          "index": { "type": "integer", "minimum": 0, "maximum": 499 },
+          "kind": {
+            "type": "string",
+            "enum": ["heading", "paragraph", "list_item", "code_block", "quote"]
+          },
+          "text": { "type": "string", "minLength": 1, "maxLength": 8000 },
+          "level": { "type": "integer", "minimum": 1, "maximum": 6 }
+        }
+      }
+    },
+    "item_count": { "type": "integer", "minimum": 0, "maximum": 500 },
+    "truncated": { "type": "boolean" },
+    "format": { "type": "string", "enum": ["plain_text", "markdown"] }
+  }
+}

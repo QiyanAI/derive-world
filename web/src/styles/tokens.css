@@ -1,0 +1,38 @@
+/* SPDX-License-Identifier: Apache-2.0 */
+:root {
+  --color-bg: #f7f5f0;
+  --color-surface: #ffffff;
+  --color-surface-muted: #f0ece3;
+  --color-ink: #1c1b18;
+  --color-muted: #5f5a52;
+  --color-border: #d9d3c7;
+  --color-accent: #0f5c4d;
+  --color-accent-strong: #0a4439;
+  --color-accent-soft: #e3efe9;
+  --color-warn-bg: #fff3d6;
+  --color-warn-ink: #5c4300;
+  --color-danger: #8a1f1f;
+
+  --font-sans: system-ui, -apple-system, "Segoe UI", "Noto Sans", sans-serif;
+  --font-mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 24px;
+  --space-6: 32px;
+  --space-7: 48px;
+  --space-8: 64px;
+
+  --radius-sm: 6px;
+  --radius-md: 12px;
+  --radius-lg: 20px;
+
+  --shadow-sm: 0 1px 2px rgba(28, 27, 24, 0.08);
+  --shadow-md: 0 8px 24px rgba(28, 27, 24, 0.1);
+
+  --max-width: 1120px;
+  --focus-ring: 0 0 0 3px rgba(15, 92, 77, 0.35);
+  --transition: 160ms ease;
+}

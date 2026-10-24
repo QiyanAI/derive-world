@@ -1,0 +1,149 @@
+name: E2E
+
+# Real PostgreSQL, the real Go API, the production web build, and two
+# independent browser identities. G05 makes this job a blocking check:
+# Chromium and Firefox both execute the complete Derive Loop.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  e2e:
+    name: E2E
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: real-ai gate guard
+        run: |
+          set -euo pipefail
+          for name in G03_REAL_AI_TEST G03_REAL_AI_RELAY G03_REAL_AI_ALLOW_CI \
+            G06_REAL_AI_DUAL G06_REAL_AI_AUTHORIZATION G06_REAL_AI_ALLOW_CI \
+            G06_REAL_AI_MAX_CALLS G06_REAL_AI_MAX_INPUT_CHARS \
+            G06_REAL_AI_MAX_OUTPUT_TOKENS MODEL_API_KEY; do
+            if [ -n "${!name:-}" ]; then
+              echo "$name must not be set in the browser acceptance job"
+              exit 1
+            fi
+          done
+
+      - name: prepare environment
+        run: |
+          set -euo pipefail
+          cp .env.example .env
+          # Deterministic test-stack limits only. Production defaults are not
+          # changed. Two browsers and the smoke scripts register many identities
+          # from one loopback IP.
+          sed -i 's/^RATE_LIMIT_AUTH_PER_MIN=.*/RATE_LIMIT_AUTH_PER_MIN=1000/' .env
+          sed -i 's/^RATE_LIMIT_API_PER_MIN=.*/RATE_LIMIT_API_PER_MIN=600/' .env
+          grep -q '^RATE_LIMIT_AUTH_PER_MIN=1000$' .env
+          grep -q '^RATE_LIMIT_API_PER_MIN=600$' .env
+          grep -q '^MODEL_MODE=fixture$' .env
+
+      - name: validate compose
+        run: docker compose config -q
+
+      - name: build and start
+        run: docker compose up -d --build
+
+      - name: wait for readiness
+        run: |
+          set -euo pipefail
+          for _ in $(seq 1 60); do
+            if curl -fsS http://127.0.0.1:8080/readyz >/dev/null 2>&1; then
+              exit 0
+            fi
+            sleep 2
+          done
+          echo "service did not become ready"
+          docker compose ps
+          exit 1
+
+      - name: smoke checks
+        run: |
+          set -euo pipefail
+          curl -fsS http://127.0.0.1:8080/healthz
+          curl -fsS http://127.0.0.1:8080/readyz
+          curl -fsS http://127.0.0.1:8080/api/v1/meta > /tmp/dw-meta.json
+          grep -q '"model_mode":"fixture"' /tmp/dw-meta.json
+          curl -fsS http://127.0.0.1:8080/ > /tmp/dw-index.html
+          grep -q 'id="root"' /tmp/dw-index.html
+          curl -fsS http://127.0.0.1:8080/api/v1/openapi.yaml > /tmp/dw-openapi.yaml
+          grep -q 'openapi: 3.1.0' /tmp/dw-openapi.yaml
+          docker compose exec -T app env | grep -q '^RATE_LIMIT_AUTH_PER_MIN=1000$'
+
+      - name: G02 end-to-end smoke
+        run: bash tests/e2e/smoke.sh
+
+      - name: G03 end-to-end smoke
+        env:
+          RESTART_APP: "1"
+        run: bash tests/e2e/g03-smoke.sh
+
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: "24"
+          cache: npm
+          cache-dependency-path: package-lock.json
+
+      - run: npm ci
+
+      - run: npm run -w sdk/typescript build
+
+      - name: G04 end-to-end smoke
+        env:
+          RUN_SDK: "1"
+          RESTART_APP: "1"
+        run: bash tests/e2e/g04-smoke.sh
+
+      - name: install Playwright browsers
+        run: npx playwright install --with-deps chromium firefox
+
+      - name: browser test discovery
+        run: |
+          set -euo pipefail
+          npx playwright test --config=tests/e2e/playwright.config.ts --list > /tmp/pw-list.txt
+          grep -q '\[chromium\]' /tmp/pw-list.txt
+          grep -q '\[firefox\]' /tmp/pw-list.txt
+          grep -q '\[mobile-chromium\]' /tmp/pw-list.txt
+          count=$(grep -c '›' /tmp/pw-list.txt || true)
+          test "$count" -ge 10
+          echo "discovered $count browser tests"
+
+      - name: Chromium + Firefox + mobile acceptance
+        env:
+          E2E_BASE_URL: http://127.0.0.1:8080
+          PW_REQUIRE_FIXTURE: "1"
+        run: npm run test:e2e
+
+      - name: upload browser evidence
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: g05-playwright-${{ github.sha }}
+          path: |
+            test-results/
+            playwright-report/
+          if-no-files-found: warn
+          retention-days: 7
+
+      - name: logs
+        if: always()
+        run: docker compose logs --no-color
+
+      - name: stop
+        if: always()
+        run: docker compose down -v

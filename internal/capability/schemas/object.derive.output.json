@@ -1,0 +1,17 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://derive.world/schemas/capability/object.derive.output.json",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["child_object_id"],
+  "properties": {
+    "child_object_id": { "$ref": "#/$defs/uuid_v7" }
+  },
+  "$defs": {
+    "uuid_v7": {
+      "type": "string",
+      "format": "uuid",
+      "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
+    }
+  }
+}

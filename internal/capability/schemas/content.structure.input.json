@@ -1,0 +1,19 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://derive.world/schemas/capability/content.structure.input.json",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["object_id", "text", "format"],
+  "properties": {
+    "object_id": { "$ref": "#/$defs/object_id" },
+    "text": { "type": "string", "minLength": 1, "maxLength": 48000 },
+    "format": { "type": "string", "enum": ["plain_text", "markdown"] }
+  },
+  "$defs": {
+    "object_id": {
+      "type": "string",
+      "format": "uuid",
+      "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
+    }
+  }
+}

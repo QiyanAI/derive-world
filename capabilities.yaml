@@ -1,0 +1,35 @@
+# Derive World capability registration (G00 contract §A.8.3, D06 §3.2).
+#
+# Registration is configuration-only: this file is read, validated, and
+# synchronized into capability_definitions at startup. There is no runtime
+# registration API. The five capability IDs, their provider bindings, schemas,
+# scopes, and operations are frozen by G00 and cannot be changed here.
+#
+# The external reference provider must run on an internal network. Network
+# and address rules are enforced before every outbound request.
+contract_version: "1.0"
+providers:
+  - provider_id: reference.content-structure
+    # http_hmac_v2 keeps the frozen D06 1.0 request envelope and adds a
+    # signed response bound to the invocation. Public providers must use v2;
+    # the legacy http_hmac transport remains available only for internal
+    # compatibility and has no response signature.
+    transport: http_hmac_v2
+    base_url: "http://capability-provider:8081"
+    network: internal
+    allowed_hosts:
+      - capability-provider
+    timeout_ms: 10000
+    max_input_bytes: 65536
+    max_output_bytes: 262144
+capabilities:
+  object.read:
+    enabled: true
+  object.context:
+    enabled: true
+  object.propose_change:
+    enabled: true
+  object.derive:
+    enabled: true
+  content.structure:
+    enabled: true

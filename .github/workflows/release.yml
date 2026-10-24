@@ -1,0 +1,676 @@
+name: Release
+
+# Two modes:
+# - dry-run (workflow_dispatch): builds and validates the candidate from the
+#   current main SHA, uploads a private CI artifact, and never creates a tag,
+#   draft Release, published Release, or attestation.
+# - tag (push v* or workflow_dispatch mode=tag): requires a public repository,
+#   the exact immutable tag at the current main tip, green exact-SHA push
+#   runs, and a fail-closed G08 authorization record in the repository
+#   variable G08_AUTHORIZATION. It creates a draft Release only. Publishing is
+#   never automated.
+#
+# The workflow is bound to one commit. It does not reuse evidence from another
+# SHA.
+
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+    inputs:
+      mode:
+        description: "dry-run (main SHA, no Release) or tag (authorized tag release)"
+        required: true
+        default: dry-run
+        type: choice
+        options:
+          - dry-run
+          - tag
+      tag:
+        description: "Existing v* tag (required for mode=tag)"
+        required: false
+        type: string
+      version:
+        description: "Candidate version for dry-run (no leading v)"
+        required: false
+        default: "0.1.0-rc.1"
+        type: string
+
+permissions: {}
+
+concurrency:
+  # Serialize every release/dry-run run. Tag pushes and workflow_dispatch runs
+  # otherwise use different refs and could race on the same tag.
+  group: release
+  cancel-in-progress: false
+
+jobs:
+  preflight:
+    name: Preflight
+    runs-on: ubuntu-24.04
+    timeout-minutes: 35
+    permissions:
+      contents: read
+      actions: read
+      checks: read
+    outputs:
+      mode: ${{ steps.meta.outputs.mode }}
+      tag: ${{ steps.meta.outputs.tag }}
+      version: ${{ steps.meta.outputs.version }}
+      sha: ${{ steps.meta.outputs.sha }}
+      tree: ${{ steps.meta.outputs.tree }}
+      source_date_epoch: ${{ steps.meta.outputs.source_date_epoch }}
+      build_time: ${{ steps.meta.outputs.build_time }}
+      tag_object_sha: ${{ steps.meta.outputs.tag_object_sha }}
+      tag_commit_sha: ${{ steps.meta.outputs.tag_commit_sha }}
+      authorization_sha256: ${{ steps.meta.outputs.authorization_sha256 }}
+      ci_run: ${{ steps.runs.outputs.ci_run }}
+      security_run: ${{ steps.runs.outputs.security_run }}
+      e2e_run: ${{ steps.runs.outputs.e2e_run }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.event_name == 'workflow_dispatch' && inputs.mode == 'tag' && inputs.tag || github.ref }}
+          fetch-depth: 0
+          # The read-only job token is kept only for git fetch below. It is not
+          # passed to any build step.
+          persist-credentials: true
+
+      - name: resolve release mode, identity, and G08 authorization
+        id: meta
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          INPUT_MODE: ${{ inputs.mode }}
+          INPUT_TAG: ${{ inputs.tag }}
+          INPUT_VERSION: ${{ inputs.version }}
+          REF_NAME: ${{ github.ref_name }}
+          REPO_PRIVATE: ${{ github.event.repository.private }}
+          G08_AUTHORIZATION: ${{ vars.G08_AUTHORIZATION }}
+        run: |
+          set -euo pipefail
+
+          # The validator rejects any input that is not a single whole token,
+          # including values containing newlines. Only its validated output is
+          # written to GITHUB_OUTPUT, so an input cannot inject extra outputs.
+          identity="$(python3 .github/scripts/resolve_release_identity.py \
+            --event "$EVENT_NAME" \
+            --mode "$INPUT_MODE" \
+            --tag "$INPUT_TAG" \
+            --version "$INPUT_VERSION" \
+            --ref-name "$REF_NAME")"
+          mode="$(printf '%s\n' "$identity" | sed -n 's/^mode=//p')"
+          tag="$(printf '%s\n' "$identity" | sed -n 's/^tag=//p')"
+          version="$(printf '%s\n' "$identity" | sed -n 's/^version=//p')"
+          printf '%s\n' "$identity" >> "$GITHUB_OUTPUT"
+
+          tag_object_sha=""
+          tag_commit_sha=""
+          authorization_sha256=""
+          if [ "$mode" = "tag" ]; then
+            # Mirror remote tags, pruning deleted ones, then check out the tag.
+            git fetch --prune --prune-tags --tags origin
+            if [ "$EVENT_NAME" = "workflow_dispatch" ]; then
+              git checkout --detach "refs/tags/$tag"
+            fi
+            sha="$(git rev-parse HEAD)"
+            tag_object_sha="$(git rev-parse "refs/tags/$tag" 2>/dev/null || true)"
+            tag_commit_sha="$(git rev-parse "refs/tags/$tag^{commit}" 2>/dev/null || true)"
+            if [ -z "$tag_object_sha" ] || [ -z "$tag_commit_sha" ]; then
+              echo "tag $tag does not resolve"
+              exit 1
+            fi
+            if [ "$tag_commit_sha" != "$sha" ]; then
+              echo "checked-out commit $sha does not match tag $tag ($tag_commit_sha)"
+              exit 1
+            fi
+            remote_object="$(git ls-remote origin "refs/tags/$tag" | cut -f1)"
+            remote_commit="$(git ls-remote origin "refs/tags/$tag^{}" | cut -f1)"
+            if [ -z "$remote_commit" ]; then
+              remote_commit="$remote_object"
+            fi
+            if [ "$remote_object" != "$tag_object_sha" ] || [ "$remote_commit" != "$tag_commit_sha" ]; then
+              echo "remote tag $tag does not match the local tag object"
+              exit 1
+            fi
+            git fetch --force origin main
+            main_sha="$(git rev-parse origin/main)"
+            if [ "$sha" != "$main_sha" ]; then
+              echo "tag commit $sha is not the current origin/main tip ($main_sha)"
+              exit 1
+            fi
+
+            # Fail closed: a missing, malformed, or mismatched Owner record
+            # stops the workflow before any build starts.
+            python3 .github/scripts/verify_g08_authorization.py \
+              --repository "$GITHUB_REPOSITORY" \
+              --tag "$tag" \
+              --commit "$sha"
+            if [ "$REPO_PRIVATE" != "false" ]; then
+              echo "scope=public-release requires a public repository; tag mode is refused while private"
+              exit 1
+            fi
+            authorization_sha256="$(printf '%s' "$G08_AUTHORIZATION" | sha256sum | awk '{print $1}')"
+          else
+            sha="$(git rev-parse HEAD)"
+            git fetch --force origin main
+            main_sha="$(git rev-parse origin/main)"
+            if [ "$sha" != "$main_sha" ]; then
+              echo "dry-run commit $sha is not the current origin/main tip ($main_sha)"
+              exit 1
+            fi
+          fi
+
+          printf 'sha=%s\n' "$sha" >> "$GITHUB_OUTPUT"
+          printf 'tree=%s\n' "$(git rev-parse "$sha^{tree}")" >> "$GITHUB_OUTPUT"
+          printf 'source_date_epoch=%s\n' "$(git log -1 --format=%ct "$sha")" >> "$GITHUB_OUTPUT"
+          printf 'build_time=%s\n' "$(git log -1 --format=%cI "$sha")" >> "$GITHUB_OUTPUT"
+          printf 'tag_object_sha=%s\n' "$tag_object_sha" >> "$GITHUB_OUTPUT"
+          printf 'tag_commit_sha=%s\n' "$tag_commit_sha" >> "$GITHUB_OUTPUT"
+          printf 'authorization_sha256=%s\n' "$authorization_sha256" >> "$GITHUB_OUTPUT"
+
+      - name: require exact-SHA CI, Security, and E2E success
+        env:
+          GH_TOKEN: ${{ github.token }}
+          SHA: ${{ steps.meta.outputs.sha }}
+        run: |
+          set -euo pipefail
+          required=("Go" "Web" "SDK" "Architecture" "Contract" "Integration" "govulncheck" "gitleaks" "E2E" "License" "npm audit")
+          for attempt in $(seq 1 60); do
+            runs_json="$(gh api "repos/${GITHUB_REPOSITORY}/commits/${SHA}/check-runs?per_page=100&filter=latest")"
+            missing=0
+            for name in "${required[@]}"; do
+              conclusion="$(jq -r --arg n "$name" '[.check_runs[] | select(.name == $n)] | sort_by(.started_at) | last | if . == null then "missing" else (.conclusion // .status // "missing") end' <<<"$runs_json")"
+              if [ "$conclusion" != "success" ]; then
+                echo "check $name at $SHA: $conclusion"
+                missing=1
+              fi
+            done
+            if [ "$missing" -eq 0 ]; then
+              break
+            fi
+            if [ "$attempt" -eq 60 ]; then
+              echo "required checks are not green at $SHA after 30 minutes"
+              exit 1
+            fi
+            sleep 30
+          done
+
+      - name: record exact-SHA run URLs
+        id: runs
+        env:
+          GH_TOKEN: ${{ github.token }}
+          SHA: ${{ steps.meta.outputs.sha }}
+        run: |
+          set -euo pipefail
+          # Only push runs on main count. A manual or scheduled run at the same
+          # SHA cannot supply the release gate.
+          runs_json="$(gh run list --commit "$SHA" --event push --branch main --limit 100 \
+            --json databaseId,name,workflowName,headSha,headBranch,conclusion,status,url)"
+          latest_run() {
+            jq -c --arg sha "$SHA" --arg name "$1" \
+              '[.[] | select(.headSha == $sha and .headBranch == "main" and (.workflowName == $name or .name == $name))] | sort_by(.databaseId) | last // empty' \
+              <<<"$runs_json"
+          }
+          job_names=""
+          for name in CI Security E2E; do
+            entry="$(latest_run "$name")"
+            if [ -z "$entry" ]; then
+              echo "no $name push run on main at $SHA"
+              exit 1
+            fi
+            status="$(jq -r '.conclusion' <<<"$entry")"
+            url="$(jq -r '.url' <<<"$entry")"
+            run_id="$(jq -r '.databaseId' <<<"$entry")"
+            if [ "$status" != "success" ]; then
+              echo "latest $name push run on main at $SHA is $status, not success"
+              exit 1
+            fi
+            job_names+="$(gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${run_id}/jobs?per_page=100" --jq '.jobs[].name')"$'\n'
+            case "$name" in
+              CI) printf 'ci_run=%s\n' "$url" >> "$GITHUB_OUTPUT" ;;
+              Security) printf 'security_run=%s\n' "$url" >> "$GITHUB_OUTPUT" ;;
+              E2E) printf 'e2e_run=%s\n' "$url" >> "$GITHUB_OUTPUT" ;;
+            esac
+          done
+
+          required=("Go" "Web" "SDK" "Architecture" "Contract" "Integration" "govulncheck" "gitleaks" "E2E" "License" "npm audit")
+          for name in "${required[@]}"; do
+            if ! grep -qxF "$name" <<<"$job_names"; then
+              echo "required job $name is not present in the exact-SHA push runs"
+              exit 1
+            fi
+          done
+
+  build:
+    name: Build release archives
+    needs: preflight
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    permissions:
+      contents: read
+      id-token: write
+      attestations: write
+    env:
+      RELEASE_MODE: ${{ needs.preflight.outputs.mode }}
+      TAG: ${{ needs.preflight.outputs.tag }}
+      VERSION: ${{ needs.preflight.outputs.version }}
+      COMMIT: ${{ needs.preflight.outputs.sha }}
+      TREE: ${{ needs.preflight.outputs.tree }}
+      SOURCE_DATE_EPOCH: ${{ needs.preflight.outputs.source_date_epoch }}
+      BUILD_TIME: ${{ needs.preflight.outputs.build_time }}
+      CI_RUN: ${{ needs.preflight.outputs.ci_run }}
+      SECURITY_RUN: ${{ needs.preflight.outputs.security_run }}
+      E2E_RUN: ${{ needs.preflight.outputs.e2e_run }}
+      TAG_OBJECT_SHA: ${{ needs.preflight.outputs.tag_object_sha }}
+      TAG_COMMIT_SHA: ${{ needs.preflight.outputs.tag_commit_sha }}
+      AUTHORIZATION_SHA256: ${{ needs.preflight.outputs.authorization_sha256 }}
+      GOTOOLCHAIN: local
+      TZ: UTC
+      LC_ALL: C
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ needs.preflight.outputs.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: verify the checked-out commit
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$COMMIT"
+          test "$(git rev-parse 'HEAD^{tree}')" = "$TREE"
+          test -z "$(git status --porcelain)"
+
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version: "1.27.3"
+          cache: true
+
+      - name: verify the pinned Go toolchain
+        run: |
+          set -euo pipefail
+          actual="$(go env GOVERSION)"
+          if [ "$actual" != "go1.27.3" ]; then
+            echo "release build requires Go 1.27.3 under GOTOOLCHAIN=local; actual: $actual"
+            exit 1
+          fi
+          go version
+
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+          cache-dependency-path: package-lock.json
+
+      - name: verify the pinned Node toolchain
+        run: |
+          set -euo pipefail
+          actual="$(node --version)"
+          expected="v$(tr -d '[:space:]\r' < .nvmrc)"
+          if [ "$actual" != "$expected" ]; then
+            echo "release build requires Node $expected from .nvmrc; actual: $actual"
+            exit 1
+          fi
+          node --version
+          npm --version
+
+      - name: install and build the reference client
+        run: |
+          set -euo pipefail
+          umask 022
+          npm ci
+          npm run build
+
+      - name: build binaries twice and compare
+        run: |
+          set -euo pipefail
+          umask 022
+          ldflags="-s -w -X main.version=${VERSION} -X main.commit=${COMMIT} -X main.buildTime=${BUILD_TIME}"
+          build() {
+            out="$1"
+            mkdir -p "$out"
+            GOOS=linux GOARCH=amd64 CGO_ENABLED=0 go build -trimpath -buildvcs=false -ldflags "$ldflags" -o "$out/derive-world_linux_amd64" ./cmd/server
+            GOOS=darwin GOARCH=arm64 CGO_ENABLED=0 go build -trimpath -buildvcs=false -ldflags "$ldflags" -o "$out/derive-world_darwin_arm64" ./cmd/server
+            GOOS=windows GOARCH=amd64 CGO_ENABLED=0 go build -trimpath -buildvcs=false -ldflags "$ldflags" -o "$out/derive-world_windows_amd64.exe" ./cmd/server
+          }
+          build dist/bin-a
+          build dist/bin-b
+          for f in derive-world_linux_amd64 derive-world_darwin_arm64 derive-world_windows_amd64.exe; do
+            cmp "dist/bin-a/$f" "dist/bin-b/$f"
+          done
+
+      - name: create the source candidate archive twice and compare
+        run: |
+          set -euo pipefail
+          mkdir -p dist/src-a dist/src-b
+          for out in dist/src-a dist/src-b; do
+            git archive --format=tar.gz --prefix="derive-world_${VERSION}/" \
+              -o "$out/derive-world_${VERSION}_source.tar.gz" HEAD
+            test -s "$out/derive-world_${VERSION}_source.tar.gz"
+          done
+          cmp "dist/src-a/derive-world_${VERSION}_source.tar.gz" \
+              "dist/src-b/derive-world_${VERSION}_source.tar.gz"
+
+      - name: package deterministic archives twice and compare
+        run: |
+          set -euo pipefail
+          umask 022
+          for out in dist/pkg-a dist/pkg-b; do
+            python3 .github/scripts/package_release.py \
+              --root . \
+              --out "$out" \
+              --bin-dir dist/bin-a \
+              --version "$VERSION" \
+              --epoch "$SOURCE_DATE_EPOCH" \
+              --source-archive "dist/src-a/derive-world_${VERSION}_source.tar.gz"
+          done
+          for f in dist/pkg-a/derive-world_*.tar.gz dist/pkg-a/derive-world_*.zip dist/pkg-a/SHA256SUMS; do
+            cmp "$f" "dist/pkg-b/$(basename "$f")"
+          done
+          cp dist/pkg-a/derive-world_*.tar.gz dist/pkg-a/derive-world_*.zip \
+             dist/pkg-a/SHA256SUMS dist/
+
+      - name: write the build manifest
+        env:
+          WORKFLOW_RUN: https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          set -euo pipefail
+          python3 .github/scripts/write_build_manifest.py \
+            --dist dist \
+            --bin-dir dist/bin-a \
+            --mode "$RELEASE_MODE" \
+            --repository "$GITHUB_REPOSITORY" \
+            --tag "$TAG" \
+            --version "$VERSION" \
+            --commit "$COMMIT" \
+            --tree "$TREE" \
+            --source-date-epoch "$SOURCE_DATE_EPOCH" \
+            --build-time "$BUILD_TIME" \
+            --tag-object-sha "$TAG_OBJECT_SHA" \
+            --tag-commit-sha "$TAG_COMMIT_SHA" \
+            --authorization-sha256 "$AUTHORIZATION_SHA256" \
+            --workflow-run "$WORKFLOW_RUN" \
+            --ci-run "$CI_RUN" \
+            --security-run "$SECURITY_RUN" \
+            --e2e-run "$E2E_RUN"
+
+      - name: attest build provenance on an authorized public release
+        if: github.event.repository.private == false && needs.preflight.outputs.mode == 'tag'
+        uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4.2.2
+        with:
+          subject-path: |
+            dist/*.tar.gz
+            dist/*.zip
+            dist/BUILD-MANIFEST.json
+            dist/SHA256SUMS
+
+      - name: record attestation status
+        id: attest_status
+        run: |
+          set -euo pipefail
+          if [ "$RELEASE_MODE" = "dry-run" ]; then
+            status="not_applicable_dry_run"
+          elif [ "${{ github.event.repository.private }}" = "true" ]; then
+            status="unavailable_private_repo_without_ghas"
+          else
+            status="generated"
+          fi
+          printf 'status=%s\n' "$status" >> "$GITHUB_OUTPUT"
+
+      - name: write the attestation record
+        env:
+          ATTESTATION_STATUS: ${{ steps.attest_status.outputs.status }}
+          WORKFLOW_RUN: https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          set -euo pipefail
+          python3 .github/scripts/write_attestation_record.py \
+            --dist dist \
+            --status "$ATTESTATION_STATUS" \
+            --repository "$GITHUB_REPOSITORY" \
+            --tag "$TAG" \
+            --commit "$COMMIT" \
+            --workflow-run "$WORKFLOW_RUN"
+
+      - name: verify release artifacts and provenance
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          args=(--dist dist --mode "$RELEASE_MODE" --repository "$GITHUB_REPOSITORY"
+                --version "$VERSION" --commit "$COMMIT" --tree "$TREE")
+          if [ "$RELEASE_MODE" = "tag" ]; then
+            args+=(--tag "$TAG")
+          fi
+          python3 .github/scripts/verify_release_artifacts.py "${args[@]}"
+
+      - name: collect release assets
+        run: |
+          set -euo pipefail
+          mkdir -p release
+          cp dist/derive-world_*.tar.gz dist/derive-world_*.zip dist/SHA256SUMS \
+             dist/BUILD-MANIFEST.json dist/ATTESTATION.json release/
+          (cd release && sha256sum -c SHA256SUMS)
+          ls -l release
+
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: derive-world-${{ needs.preflight.outputs.version }}-${{ needs.preflight.outputs.sha }}
+          path: release/
+          retention-days: 90
+
+  smoke:
+    name: Smoke-test the Linux archive
+    needs: [preflight, build]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    permissions:
+      contents: read
+      actions: read
+    services:
+      postgres:
+        image: postgres:17-alpine@sha256:b0f9560a2de083e2cc7382e75f808c7381a32852a7ec49117deedb300e552b24
+        env:
+          POSTGRES_USER: derive
+          POSTGRES_PASSWORD: dw_local_only
+          POSTGRES_DB: derive_world
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U derive -d derive_world"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 20
+    env:
+      VERSION: ${{ needs.preflight.outputs.version }}
+      COMMIT: ${{ needs.preflight.outputs.sha }}
+      ARTIFACT: derive-world-${{ needs.preflight.outputs.version }}-${{ needs.preflight.outputs.sha }}
+    steps:
+      - name: download the verified artifact
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          gh run download "$GITHUB_RUN_ID" --repo "$GITHUB_REPOSITORY" --name "$ARTIFACT" --dir release
+          ls -l release
+
+      - name: verify the downloaded bytes before executing them
+        env:
+          VERSION: ${{ needs.preflight.outputs.version }}
+          COMMIT: ${{ needs.preflight.outputs.sha }}
+          TREE: ${{ needs.preflight.outputs.tree }}
+          MODE: ${{ needs.preflight.outputs.mode }}
+        run: |
+          set -euo pipefail
+          (cd release && sha256sum -c SHA256SUMS)
+          python3 - <<'PY'
+          import json, os, pathlib
+          manifest = json.loads(pathlib.Path("release/BUILD-MANIFEST.json").read_text())
+          expected = {
+              "version": os.environ["VERSION"],
+              "commit": os.environ["COMMIT"],
+              "tree": os.environ["TREE"],
+              "mode": os.environ["MODE"],
+          }
+          for key, value in expected.items():
+              if manifest.get(key) != value:
+                  raise SystemExit(f"manifest {key} is {manifest.get(key)!r}, expected {value!r}")
+          if manifest.get("release", {}).get("published") is not False:
+              raise SystemExit("manifest must record published=false")
+          print("downloaded manifest matches the requested release identity")
+          PY
+
+      - name: extract and run the archive as documented
+        run: |
+          set -euo pipefail
+          tmp="$(mktemp -d)"
+          tar -xzf "release/derive-world_${VERSION}_linux_amd64.tar.gz" -C "$tmp"
+          cd "$tmp/derive-world_${VERSION}_linux_amd64"
+          cp .env.example .env
+          set -a
+          . ./.env
+          set +a
+          ./derive-world version | tee version.txt
+          grep -q "derive-world ${VERSION}" version.txt
+          grep -q "commit ${COMMIT}" version.txt
+          ./derive-world migrate
+          ./derive-world serve > server.log 2>&1 &
+          pid=$!
+          trap 'kill "$pid" 2>/dev/null || true' EXIT
+          ready=0
+          for _ in $(seq 1 60); do
+            if curl -fsS http://127.0.0.1:8080/readyz >/dev/null 2>&1; then
+              ready=1
+              break
+            fi
+            sleep 2
+          done
+          if [ "$ready" -ne 1 ]; then
+            cat server.log
+            exit 1
+          fi
+          curl -fsS http://127.0.0.1:8080/api/v1/meta | tee meta.json
+          grep -q "\"version\":\"${VERSION}\"" meta.json
+          grep -q "\"commit\":\"${COMMIT}\"" meta.json
+          grep -q '"model_mode":"fixture"' meta.json
+          curl -fsS http://127.0.0.1:8080/ | grep -q 'id="root"'
+
+  draft:
+    name: Create draft release
+    needs: [preflight, build, smoke]
+    # Gate on the raw event, not only on a preflight output. This is the
+    # primary isolation between dry-run and release.
+    if: github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && inputs.mode == 'tag')
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    # "environment: release" is an organizational label only. The private Team
+    # plan rejects required-reviewer protection (HTTP 422), so this is not a
+    # human approval gate. The job creates a draft only and never publishes;
+    # publication requires a separate explicit owner authorization.
+    environment: release
+    permissions:
+      contents: write
+      actions: read
+    env:
+      TAG: ${{ needs.preflight.outputs.tag }}
+      VERSION: ${{ needs.preflight.outputs.version }}
+      COMMIT: ${{ needs.preflight.outputs.sha }}
+      TREE: ${{ needs.preflight.outputs.tree }}
+      G08_AUTHORIZATION: ${{ vars.G08_AUTHORIZATION }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ needs.preflight.outputs.sha }}
+          fetch-depth: 0
+          fetch-tags: true
+          persist-credentials: false
+
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version: "1.27.3"
+          cache: true
+
+      - name: download the verified artifact
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          gh run download "$GITHUB_RUN_ID" \
+            --repo "$GITHUB_REPOSITORY" \
+            --name "derive-world-${{ needs.preflight.outputs.version }}-${{ needs.preflight.outputs.sha }}" \
+            --dir release
+          ls -l release
+
+      - name: re-verify tag, authorization, and artifacts
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          git fetch --prune --prune-tags --tags origin
+          tag_sha="$(git rev-parse "refs/tags/${TAG}^{commit}")"
+          if [ "$tag_sha" != "$COMMIT" ]; then
+            echo "tag $TAG now points to $tag_sha, not the authorized $COMMIT"
+            exit 1
+          fi
+          python3 .github/scripts/verify_g08_authorization.py \
+            --repository "$GITHUB_REPOSITORY" \
+            --tag "$TAG" \
+            --commit "$COMMIT"
+          (cd release && sha256sum -c SHA256SUMS)
+          python3 .github/scripts/verify_release_artifacts.py \
+            --dist release \
+            --mode tag \
+            --repository "$GITHUB_REPOSITORY" \
+            --tag "$TAG" \
+            --version "$VERSION" \
+            --commit "$COMMIT" \
+            --tree "$TREE"
+
+      - name: render release notes for this tag
+        run: |
+          set -euo pipefail
+          python3 .github/scripts/render_release_notes.py \
+            --dist release \
+            --out release/RELEASE-NOTES.md \
+            --repository "$GITHUB_REPOSITORY" \
+            --tag "$TAG" \
+            --version "$VERSION" \
+            --commit "$COMMIT"
+
+      - name: create the draft release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          # Re-run protection: an existing draft is never deleted or silently
+          # overwritten. Release evidence is immutable; a mistaken draft must
+          # be handled by the Owner outside this workflow, or by issuing a new
+          # version. Re-run is refused.
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            echo "release $TAG already exists; refusing to modify or replace existing release evidence"
+            exit 1
+          fi
+          prerelease=()
+          case "$TAG" in
+            *-rc.*) prerelease=(--prerelease) ;;
+          esac
+          gh release create "$TAG" \
+            --draft \
+            --verify-tag \
+            --latest=false \
+            "${prerelease[@]}" \
+            --title "Derive World $TAG" \
+            --notes-file release/RELEASE-NOTES.md \
+            release/derive-world_*.tar.gz \
+            release/derive-world_*.zip \
+            release/SHA256SUMS \
+            release/BUILD-MANIFEST.json \
+            release/ATTESTATION.json
+          gh release view "$TAG" --json url,isDraft,tagName,assets > release/DRAFT-RELEASE.json
+          cat release/DRAFT-RELEASE.json
+          test "$(jq -r .isDraft release/DRAFT-RELEASE.json)" = "true"
+          after_sha="$(git ls-remote origin "refs/tags/${TAG}^{}" | cut -f1)"
+          if [ -z "$after_sha" ]; then
+            after_sha="$(git ls-remote origin "refs/tags/${TAG}" | cut -f1)"
+          fi
+          test "$after_sha" = "$COMMIT"

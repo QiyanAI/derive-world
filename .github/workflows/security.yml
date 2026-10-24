@@ -1,0 +1,166 @@
+name: Security
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  schedule:
+    - cron: "0 3 * * 1"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name != 'schedule' }}
+
+jobs:
+  govulncheck:
+    name: govulncheck
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version: "1.27.3"
+          cache: true
+      - run: go run golang.org/x/vuln/cmd/govulncheck@v1.9.0 ./...
+      - run: (cd examples/capability-provider && go run golang.org/x/vuln/cmd/govulncheck@v1.9.0 ./...)
+      - run: (cd ops/github-metrics && go run golang.org/x/vuln/cmd/govulncheck@v1.9.0 ./...)
+
+  gitleaks:
+    name: gitleaks
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version: "1.27.3"
+          cache: true
+      - name: full-history secret scan
+        run: go run github.com/zricethezav/gitleaks/v8@v8.30.1 git . --log-opts=--all --config .gitleaks.toml --redact --exit-code 1
+      - name: gitleaks sentinel
+        run: |
+          set -euo pipefail
+          tmp="$(mktemp -d)"
+          token="dw_pat_$(head -c 48 /dev/urandom | base64 | tr -dc 'A-Za-z0-9_-' | head -c 43)"
+          printf 'leaked = "%s"\n' "$token" > "$tmp/leak.txt"
+          set +e
+          go run github.com/zricethezav/gitleaks/v8@v8.30.1 detect --no-git --source "$tmp"             --config .gitleaks.toml --redact --report-format json --report-path "$tmp/report.json"
+          status=$?
+          set -e
+          if [ "$status" -eq 0 ]; then
+            echo "gitleaks sentinel was not detected"
+            exit 1
+          fi
+          grep -q 'dw-pat' "$tmp/report.json" || {
+            echo "gitleaks did not report the dw-pat rule"
+            exit 1
+          }
+
+  npm-audit:
+    name: npm audit
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: "24"
+          cache: npm
+          cache-dependency-path: package-lock.json
+      - run: npm ci
+      - run: npm audit --audit-level=high
+
+  license:
+    name: License
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version: "1.27.3"
+          cache: true
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: "24"
+          cache: npm
+          cache-dependency-path: package-lock.json
+      - run: go run github.com/google/go-licenses@v1.6.0 check ./... --allowed_licenses=Apache-2.0,MIT,BSD-2-Clause,BSD-3-Clause,ISC,MPL-2.0
+      - run: (cd examples/capability-provider && go run github.com/google/go-licenses@v1.6.0 check ./... --allowed_licenses=Apache-2.0,MIT,BSD-2-Clause,BSD-3-Clause,ISC,MPL-2.0 --ignore github.com/QiyanAI/derive-world/examples/capability-provider)
+      - run: (cd ops/github-metrics && go run github.com/google/go-licenses@v1.6.0 check ./... --allowed_licenses=Apache-2.0,MIT,BSD-2-Clause,BSD-3-Clause,ISC,MPL-2.0 --ignore github.com/QiyanAI/derive-world/ops/github-metrics)
+      - run: npm ci
+      - name: npm production license check
+        # Production dependencies only. Build-only dev dependencies (for
+        # example browserslist data) are not shipped in the release bundle.
+        # The workspace-aware tree is required because npm hoists dependencies
+        # to the root node_modules and the root package has no direct runtime
+        # dependencies of its own.
+        run: |
+          node - <<'JS'
+          const { execSync } = require('node:child_process');
+          const fs = require('node:fs');
+          const path = require('node:path');
+
+          const tree = JSON.parse(execSync('npm ls --omit=dev --all --workspaces --json', { encoding: 'utf8' }));
+          const allowed = new Set(['MIT', 'Apache-2.0', 'BSD-2-Clause', 'BSD-3-Clause', 'ISC', 'MPL-2.0']);
+          const seen = new Map();
+          let bad = 0;
+
+          function walk(node) {
+            if (!node || typeof node !== 'object') return;
+            for (const [name, dep] of Object.entries(node.dependencies || {})) {
+              if (dep && dep.version && !name.startsWith('@derive-world/') && name !== 'derive-world') {
+                const key = `${name}@${dep.version}`;
+                if (!seen.has(key)) {
+                  let license = null;
+                  try {
+                    license = JSON.parse(fs.readFileSync(path.join('node_modules', name, 'package.json'), 'utf8')).license;
+                  } catch {
+                    license = null;
+                  }
+                  if (!license || !allowed.has(license)) {
+                    console.error(`disallowed or unknown npm license: ${key} -> ${license}`);
+                    bad = 1;
+                  }
+                  seen.set(key, license);
+                }
+              }
+              walk(dep);
+            }
+          }
+
+          walk(tree);
+          console.log(`checked ${seen.size} production npm packages`);
+          process.exit(bad);
+          JS
+
+  dependency-review:
+    name: Dependency review
+    # Auxiliary check (D08 T-14). GitHub Dependency Review requires Dependency
+    # Graph plus GitHub Advanced Security; it is unavailable on the current
+    # private Team plan without Code Security. Run it when the repository is
+    # public (G08); do not report it as passed on private.
+    if: github.event_name == 'pull_request' && github.event.repository.private == false
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    permissions:
+      contents: read
+      pull-requests: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/dependency-review-action@a1d282b36b6f3519aa1f3fc636f609c47dddb294 # v5.0.0

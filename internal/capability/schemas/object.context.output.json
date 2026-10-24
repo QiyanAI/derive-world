@@ -1,0 +1,78 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://derive.world/schemas/capability/object.context.output.json",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "handoff_id", "issued_at", "expires_at", "object_id", "object_version",
+    "object_type", "permitted_object_context", "permitted_actions",
+    "data_provenance", "context_schema_version", "truncated"
+  ],
+  "properties": {
+    "handoff_id": { "$ref": "#/$defs/uuid_v7" },
+    "issued_at": { "$ref": "#/$defs/rfc3339" },
+    "expires_at": { "$ref": "#/$defs/rfc3339" },
+    "object_id": { "$ref": "#/$defs/uuid_v7" },
+    "object_version": { "type": "integer", "minimum": 1 },
+    "object_type": { "type": "string", "enum": ["collaborative", "interactive"] },
+    "permitted_object_context": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["state", "shared_context", "recent_events"],
+      "properties": {
+        "state": { "type": "object" },
+        "shared_context": { "type": "object" },
+        "recent_events": {
+          "type": "array",
+          "maxItems": 20,
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["seq", "event_type", "actor_type", "created_at", "summary"],
+            "properties": {
+              "seq": { "type": "integer", "minimum": 1 },
+              "event_type": { "type": "string", "enum": ["object.created", "object.state_changed", "object.derived"] },
+              "actor_type": { "type": "string", "enum": ["user", "personal_ai", "system"] },
+              "created_at": { "$ref": "#/$defs/rfc3339" },
+              "summary": { "type": "string", "maxLength": 280 }
+            }
+          }
+        }
+      }
+    },
+    "permitted_actions": {
+      "type": "array",
+      "uniqueItems": true,
+      "items": { "type": "string", "enum": ["read", "contribute", "derive"] }
+    },
+    "data_provenance": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["field", "source", "object_version"],
+        "properties": {
+          "field": { "type": "string", "maxLength": 200 },
+          "source": { "type": "string", "enum": ["object_state", "shared_context", "event"] },
+          "object_version": { "type": "integer", "minimum": 1 },
+          "truncated": { "type": "boolean" }
+        }
+      }
+    },
+    "context_schema_version": { "type": "integer", "const": 1 },
+    "truncated": { "type": "boolean" }
+  },
+  "$defs": {
+    "uuid_v7": {
+      "type": "string",
+      "format": "uuid",
+      "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
+    },
+    "rfc3339": { "type": "string", "format": "date-time" },
+    "permission": { "type": "string", "enum": ["read", "contribute", "derive", "invite", "manage"] },
+    "event_type": {
+      "type": "string",
+      "enum": ["object.created", "object.state_changed", "object.derived"]
+    }
+  }
+}

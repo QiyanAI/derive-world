@@ -1,0 +1,31 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://derive.world/schemas/capability/object.read.output.json",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["object"],
+  "properties": {
+    "object": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "type", "version", "state", "shared_context"],
+      "properties": {
+        "id": { "$ref": "#/$defs/object_id" },
+        "type": { "$ref": "#/$defs/object_type" },
+        "version": { "type": "integer", "minimum": 1 },
+        "state": { "$ref": "#/$defs/object_state" },
+        "shared_context": { "$ref": "#/$defs/shared_context" }
+      }
+    }
+  },
+  "$defs": {
+    "object_id": {
+      "type": "string",
+      "format": "uuid",
+      "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
+    },
+    "object_type": { "type": "string", "enum": ["collaborative", "interactive"] },
+    "object_state": { "type": "object" },
+    "shared_context": { "type": "object" }
+  }
+}

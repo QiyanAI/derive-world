@@ -1,0 +1,3254 @@
+openapi: 3.1.0
+info:
+  title: Derive World API
+  version: 0.1.0
+  description: |
+    Derive World OSS MVP API. Implements Digital Self sessions; collaborative
+    and interactive Living Objects with controlled mutation, authorization,
+    versioned events, derivation, privacy-clipped lineage, audit, and
+    idempotency; invitations and Derive Links; Handoff; Personal AI
+    conversations, proposals, and human confirmations; personal access tokens
+    and self-only export; the Capability Broker with the five frozen
+    capabilities; the OpenAPI contract and TypeScript SDK; and the API surface
+    used by the v0.1.0 Reference World web client. Real AI access is implemented.
+    The approved two-call real-AI acceptance run verified a DeepSeek
+    `deepseek-flash` dual Personal AI relay (A and B) within its exact owner-
+    authorized scope; it does not claim acceptance of every model, Provider, or
+    production environment. Fixture mode is deterministic and is never a real
+    model call.
+  license:
+    name: Apache-2.0
+servers:
+  - url: http://127.0.0.1:8080
+    description: Local development default
+security:
+  - cookieAuth: []
+paths:
+  /healthz:
+    get:
+      operationId: getHealthz
+      summary: Liveness probe
+      security: []
+      responses:
+        "200":
+          description: The process is alive.
+          content:
+            text/plain:
+              schema:
+                type: string
+                example: "ok\n"
+  /readyz:
+    get:
+      operationId: getReadyz
+      summary: Readiness probe
+      description: Returns 200 only when the database is reachable.
+      security: []
+      responses:
+        "200":
+          description: The service is ready.
+          content:
+            text/plain:
+              schema:
+                type: string
+                example: "ok\n"
+        "503":
+          description: The service is not ready.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ReadyError"
+  /api/v1/meta:
+    get:
+      operationId: getMeta
+      summary: Build and model-mode metadata
+      security: []
+      responses:
+        "200":
+          description: Current build and model mode.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Meta"
+  /api/v1/openapi.yaml:
+    get:
+      operationId: getOpenAPIDocument
+      summary: This OpenAPI document
+      security: []
+      responses:
+        "200":
+          description: OpenAPI 3.1 YAML document.
+          content:
+            application/yaml:
+              schema:
+                type: string
+  /api/v1/auth/register:
+    post:
+      operationId: register
+      summary: Create a Digital Self and a browser session
+      security: []
+      parameters:
+        - $ref: "#/components/parameters/OriginHeader"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RegisterRequest"
+      responses:
+        "201":
+          description: The user, Personal AI profile, and session cookies.
+          headers:
+            Set-Cookie:
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AuthResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "413":
+          $ref: "#/components/responses/PayloadTooLarge"
+        "415":
+          $ref: "#/components/responses/UnsupportedMediaType"
+        "429":
+          $ref: "#/components/responses/RateLimited"
+  /api/v1/auth/login:
+    post:
+      operationId: login
+      summary: Sign in and rotate the browser session
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/LoginRequest"
+      responses:
+        "200":
+          description: The user, Personal AI profile, and session cookies.
+          headers:
+            Set-Cookie:
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AuthResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "413":
+          $ref: "#/components/responses/PayloadTooLarge"
+        "415":
+          $ref: "#/components/responses/UnsupportedMediaType"
+        "429":
+          $ref: "#/components/responses/RateLimited"
+  /api/v1/auth/logout:
+    post:
+      operationId: logout
+      summary: Revoke the current session
+      parameters:
+        - $ref: "#/components/parameters/CSRFToken"
+      responses:
+        "204":
+          description: The session was revoked.
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "429":
+          $ref: "#/components/responses/RateLimited"
+  /api/v1/auth/me:
+    get:
+      operationId: getMe
+      summary: Current identity and Personal AI summary
+      security:
+        - cookieAuth: []
+        - bearerAuth: []
+      responses:
+        "200":
+          description: The current user.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AuthResponse"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "429":
+          $ref: "#/components/responses/RateLimited"
+  /api/v1/objects:
+    get:
+      operationId: listObjects
+      summary: List objects visible to the caller
+      security:
+        - cookieAuth: []
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/Scope"
+        - $ref: "#/components/parameters/Limit"
+        - $ref: "#/components/parameters/Cursor"
+      responses:
+        "200":
+          description: A page of object cards.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ObjectList"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "429":
+          $ref: "#/components/responses/RateLimited"
+    post:
+      operationId: createObject
+      summary: Create a Living Object
+      security:
+        - cookieAuth: []
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/IdempotencyKey"
+        - $ref: "#/components/parameters/CSRFTokenOptional"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateObjectRequest"
+      responses:
+        "201":
+          description: The created object.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ObjectView"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "413":
+          $ref: "#/components/responses/PayloadTooLarge"
+        "415":
+          $ref: "#/components/responses/UnsupportedMediaType"
+        "429":
+          $ref: "#/components/responses/RateLimited"
+  /api/v1/objects/{id}:
+    parameters:
+      - $ref: "#/components/parameters/ObjectID"
+    get:
+      operationId: getObject
+      summary: Read one object
+      security:
+        - cookieAuth: []
+        - bearerAuth: []
+      responses:
+        "200":
+          description: The object.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ObjectView"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "429":
+          $ref: "#/components/responses/RateLimited"
+    delete:
+      operationId: deleteObject
+      summary: Soft delete an object
+      parameters:
+        - $ref: "#/components/parameters/CSRFToken"
+      responses:
+        "204":
+          description: The object was soft deleted.
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "429":
+          $ref: "#/components/responses/RateLimited"
+  /api/v1/objects/{id}/events:
+    parameters:
+      - $ref: "#/components/parameters/ObjectID"
+    get:
+      operationId: listObjectEvents
+      summary: Read the object event timeline
+      security:
+        - cookieAuth: []
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/Limit"
+        - name: cursor
+          in: query
+          required: false
+          description: Opaque event sequence cursor.
+          schema:
+            type: string
+      responses:
+        "200":
+          description: A page of visible events.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EventList"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "429":
+          $ref: "#/components/responses/RateLimited"
+  /api/v1/objects/{id}/actions:
+    parameters:
+      - $ref: "#/components/parameters/ObjectID"
+    post:
+      operationId: applyObjectAction
+      summary: Apply one whitelisted state action
+      security:
+        - cookieAuth: []
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/IdempotencyKey"
+        - $ref: "#/components/parameters/CSRFTokenOptional"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ActionRequest"
+      responses:
+        "200":
+          description: The updated object.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ObjectView"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "413":
+          $ref: "#/components/responses/PayloadTooLarge"
+        "415":
+          $ref: "#/components/responses/UnsupportedMediaType"
+        "429":
+          $ref: "#/components/responses/RateLimited"
+  /api/v1/objects/{id}/members:
+    parameters:
+      - $ref: "#/components/parameters/ObjectID"
+    get:
+      operationId: listObjectMembers
+      summary: List active object members
+      security:
+        - cookieAuth: []
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Active members.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MemberList"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "429":
+          $ref: "#/components/responses/RateLimited"
+  /api/v1/objects/{id}/derive:
+    parameters:
+      - $ref: "#/components/parameters/ObjectID"
+    post:
+      operationId: deriveObject
+      summary: Derive an independent child object
+      security:
+        - cookieAuth: []
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/IdempotencyKey"
+        - $ref: "#/components/parameters/CSRFTokenOptional"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/DeriveRequest"
+      responses:
+        "201":
+          description: The independent child object.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ObjectView"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "413":
+          $ref: "#/components/responses/PayloadTooLarge"
+        "415":
+          $ref: "#/components/responses/UnsupportedMediaType"
+        "429":
+          $ref: "#/components/responses/RateLimited"
+  /api/v1/objects/{id}/lineage:
+    parameters:
+      - $ref: "#/components/parameters/ObjectID"
+    get:
+      operationId: getObjectLineage
+      summary: Read bounded lineage with privacy clipping
+      security:
+        - cookieAuth: []
+        - bearerAuth: []
+      parameters:
+        - name: depth
+          in: query
+          required: false
+          description: Maximum depth, 1..10. Defaults to 10.
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 10
+      responses:
+        "200":
+          description: Ancestors and descendants.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Lineage"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "429":
+          $ref: "#/components/responses/RateLimited"
+  /api/v1/me/export:
+    get:
+      operationId: exportMe
+      summary: Export the caller's personal data
+      responses:
+        '200':
+          description: The caller's own data.
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+  /api/v1/objects/{id}/members/{user_id}:
+    parameters:
+    - $ref: '#/components/parameters/ObjectID'
+    - name: user_id
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+    delete:
+      operationId: removeObjectMember
+      summary: Remove an object member
+      parameters:
+      - $ref: '#/components/parameters/CSRFToken'
+      responses:
+        '204':
+          description: The membership was revoked.
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+  /api/v1/objects/{id}/invitations:
+    parameters:
+    - $ref: '#/components/parameters/ObjectID'
+    post:
+      operationId: createInvitation
+      summary: Create an invitation or Derive Link
+      parameters:
+      - $ref: '#/components/parameters/IdempotencyKey'
+      - $ref: '#/components/parameters/CSRFToken'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateInvitationRequest'
+      responses:
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '201':
+          description: The invitation with its one-time plaintext token.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Invitation'
+        '200':
+          description: Idempotent replay with token:null and token_redacted:true.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Invitation'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '413':
+          $ref: '#/components/responses/PayloadTooLarge'
+        '415':
+          $ref: '#/components/responses/UnsupportedMediaType'
+    get:
+      operationId: listInvitations
+      summary: List active invitations
+      responses:
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '200':
+          description: Active invitations without plaintext tokens.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/InvitationList'
+  /api/v1/objects/{id}/invitations/{invitation_id}:
+    parameters:
+    - $ref: '#/components/parameters/ObjectID'
+    - name: invitation_id
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+    delete:
+      operationId: revokeInvitation
+      summary: Revoke an invitation immediately
+      parameters:
+      - $ref: '#/components/parameters/CSRFToken'
+      responses:
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '204':
+          description: The invitation was revoked.
+  /api/v1/invitations/{token}:
+    parameters:
+    - name: token
+      in: path
+      required: true
+      description: One-time invitation token.
+      schema:
+        type: string
+    get:
+      operationId: previewInvitation
+      summary: Preview an invitation while signed in
+      responses:
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '200':
+          description: Safe invitation metadata, never object state.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/InvitationPreview'
+  /api/v1/invitations/{token}/accept:
+    parameters:
+    - name: token
+      in: path
+      required: true
+      schema:
+        type: string
+    post:
+      operationId: acceptInvitation
+      summary: Accept an invitation
+      parameters:
+      - $ref: '#/components/parameters/CSRFToken'
+      responses:
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '200':
+          description: The joined object summary.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AcceptedInvitation'
+  /api/v1/objects/{id}/handoff:
+    parameters:
+    - $ref: '#/components/parameters/ObjectID'
+    get:
+      operationId: getObjectHandoff
+      summary: Build a bounded Handoff projection
+      security:
+      - cookieAuth: []
+      - bearerAuth: []
+      responses:
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '413':
+          $ref: '#/components/responses/PayloadTooLarge'
+        '200':
+          description: The permission-trimmed object projection.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Handoff'
+  /api/v1/objects/{id}/proposals:
+    parameters:
+    - $ref: '#/components/parameters/ObjectID'
+    get:
+      operationId: listObjectProposals
+      summary: List the caller's AI proposals
+      responses:
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '200':
+          description: The caller's own proposals.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProposalList'
+  /api/v1/objects/{id}/proposals/{proposal_id}/apply:
+    parameters:
+    - $ref: '#/components/parameters/ObjectID'
+    - name: proposal_id
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+    post:
+      operationId: applyObjectProposal
+      summary: Apply the caller's pending AI proposal
+      parameters:
+      - $ref: '#/components/parameters/CSRFToken'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ApplyProposalRequest'
+      responses:
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '200':
+          description: The applied proposal and updated object.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApplyProposalResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '413':
+          $ref: '#/components/responses/PayloadTooLarge'
+        '415':
+          $ref: '#/components/responses/UnsupportedMediaType'
+  /api/v1/objects/{id}/proposals/{proposal_id}/deny:
+    parameters:
+    - $ref: '#/components/parameters/ObjectID'
+    - name: proposal_id
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+    post:
+      operationId: denyObjectProposal
+      summary: Deny the caller's pending AI proposal
+      parameters:
+      - $ref: '#/components/parameters/CSRFToken'
+      responses:
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '200':
+          description: The denied proposal.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Proposal'
+  /api/v1/ai/profile:
+    get:
+      operationId: getPersonalAIProfile
+      summary: Read the caller's Personal AI profile
+      responses:
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '200':
+          description: The caller's own profile.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Profile'
+    patch:
+      operationId: updatePersonalAIProfile
+      summary: Update the caller's Personal AI profile
+      parameters:
+      - $ref: '#/components/parameters/CSRFToken'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateProfileRequest'
+      responses:
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '200':
+          description: The updated profile.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Profile'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '413':
+          $ref: '#/components/responses/PayloadTooLarge'
+        '415':
+          $ref: '#/components/responses/UnsupportedMediaType'
+  /api/v1/ai/context:
+    get:
+      operationId: getPrivateAIContext
+      summary: Read the caller's private AI context
+      responses:
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '200':
+          description: The caller's private context.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PrivateContext'
+    put:
+      operationId: updatePrivateAIContext
+      summary: Replace the caller's private AI context
+      parameters:
+      - $ref: '#/components/parameters/CSRFToken'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateContextRequest'
+      responses:
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '200':
+          description: The updated private context.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PrivateContext'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '413':
+          $ref: '#/components/responses/PayloadTooLarge'
+        '415':
+          $ref: '#/components/responses/UnsupportedMediaType'
+  /api/v1/ai/conversations:
+    get:
+      operationId: listAIConversations
+      summary: List the caller's private conversations
+      parameters:
+      - $ref: '#/components/parameters/Limit'
+      - $ref: '#/components/parameters/Cursor'
+      responses:
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '200':
+          description: A page of private conversations.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ConversationList'
+    post:
+      operationId: createAIConversation
+      summary: Create a private conversation
+      parameters:
+      - $ref: '#/components/parameters/IdempotencyKey'
+      - $ref: '#/components/parameters/CSRFToken'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateConversationRequest'
+      responses:
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '201':
+          description: The created conversation.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Conversation'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '413':
+          $ref: '#/components/responses/PayloadTooLarge'
+        '415':
+          $ref: '#/components/responses/UnsupportedMediaType'
+  /api/v1/ai/conversations/{id}:
+    parameters:
+    - name: id
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+    get:
+      operationId: getAIConversation
+      summary: Read the caller's private conversation
+      responses:
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '200':
+          description: The conversation and its messages.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ConversationDetail'
+    delete:
+      operationId: deleteAIConversation
+      summary: Soft delete a private conversation
+      parameters:
+      - $ref: '#/components/parameters/CSRFToken'
+      responses:
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '204':
+          description: The conversation was soft deleted.
+  /api/v1/ai/conversations/{id}/messages:
+    parameters:
+    - name: id
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+    post:
+      operationId: sendAIMessage
+      summary: Send one message to the Personal AI
+      parameters:
+      - $ref: '#/components/parameters/IdempotencyKey'
+      - $ref: '#/components/parameters/CSRFToken'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SendMessageRequest'
+      responses:
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '502':
+          description: The model is unavailable or returned invalid output.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '504':
+          description: The model timed out.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '200':
+          description: The persisted turn and any accepted actions.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SendMessageResult'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '413':
+          $ref: '#/components/responses/PayloadTooLarge'
+        '415':
+          $ref: '#/components/responses/UnsupportedMediaType'
+  /api/v1/ai/delegations:
+    get:
+      operationId: listAIDelegations
+      summary: List the caller's AI delegations
+      responses:
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '200':
+          description: The caller's own delegation grants.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DelegationList'
+    post:
+      operationId: createAIDelegation
+      summary: Create a delegation never larger than the caller's permissions
+      parameters:
+      - $ref: '#/components/parameters/CSRFToken'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateDelegationRequest'
+      responses:
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '201':
+          description: The created delegation.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Delegation'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '413':
+          $ref: '#/components/responses/PayloadTooLarge'
+        '415':
+          $ref: '#/components/responses/UnsupportedMediaType'
+  /api/v1/ai/delegations/{id}:
+    parameters:
+    - name: id
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+    delete:
+      operationId: revokeAIDelegation
+      summary: Revoke a delegation immediately
+      parameters:
+      - $ref: '#/components/parameters/CSRFToken'
+      responses:
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '204':
+          description: The delegation was revoked.
+  /api/v1/tokens:
+    get:
+      operationId: listPersonalAccessTokens
+      summary: List personal access token metadata
+      responses:
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '200':
+          description: Token metadata, never plaintext or hashes.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TokenList'
+    post:
+      operationId: createPersonalAccessToken
+      summary: Create a personal access token
+      parameters:
+      - $ref: '#/components/parameters/CSRFToken'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateTokenRequest'
+      responses:
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '201':
+          description: The token metadata and the one-time plaintext.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CreatedToken'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '413':
+          $ref: '#/components/responses/PayloadTooLarge'
+        '415':
+          $ref: '#/components/responses/UnsupportedMediaType'
+  /api/v1/tokens/{id}:
+    parameters:
+    - name: id
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+    delete:
+      operationId: revokePersonalAccessToken
+      summary: Revoke a personal access token
+      parameters:
+      - $ref: '#/components/parameters/CSRFToken'
+      responses:
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '204':
+          description: The token was revoked.
+  /api/v1/confirmations:
+    get:
+      operationId: listConfirmations
+      summary: List the caller's confirmations
+      parameters:
+      - name: status
+        in: query
+        required: false
+        schema:
+          type: string
+          enum:
+          - pending
+          - all
+          default: pending
+      responses:
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '200':
+          description: Safe confirmation projections.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ConfirmationList'
+  /api/v1/confirmations/{id}:
+    parameters:
+    - name: id
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+    get:
+      operationId: getConfirmation
+      summary: Read a confirmation
+      responses:
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '410':
+          description: The confirmation has expired.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '200':
+          description: The safe confirmation projection.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Confirmation'
+  /api/v1/confirmations/{id}/approve:
+    parameters:
+    - name: id
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+    post:
+      operationId: approveConfirmation
+      summary: Approve and execute a confirmation
+      parameters:
+      - $ref: '#/components/parameters/IdempotencyKey'
+      - $ref: '#/components/parameters/CSRFToken'
+      responses:
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '410':
+          description: The confirmation has expired.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '200':
+          description: The executed action result.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ObjectView'
+  /api/v1/confirmations/{id}/deny:
+    parameters:
+    - name: id
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+    post:
+      operationId: denyConfirmation
+      summary: Deny a confirmation
+      parameters:
+      - $ref: '#/components/parameters/CSRFToken'
+      responses:
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '410':
+          description: The confirmation has expired.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '200':
+          description: The denied confirmation.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Confirmation'
+  /api/v1/capabilities:
+    get:
+      operationId: listCapabilities
+      summary: List enabled capability descriptors
+      security:
+        - cookieAuth: []
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Enabled descriptors. Provider addresses and secrets are never included.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CapabilityList"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "429":
+          $ref: "#/components/responses/RateLimited"
+  /api/v1/capabilities/{capability_id}:
+    parameters:
+      - name: capability_id
+        in: path
+        required: true
+        schema:
+          type: string
+          enum:
+            - object.read
+            - object.context
+            - object.propose_change
+            - object.derive
+            - content.structure
+    get:
+      operationId: getCapability
+      summary: Read one enabled capability descriptor
+      security:
+        - cookieAuth: []
+        - bearerAuth: []
+      responses:
+        "200":
+          description: The capability descriptor.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CapabilityDescriptor"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "429":
+          $ref: "#/components/responses/RateLimited"
+  /api/v1/capabilities/{capability_id}/invoke:
+    parameters:
+      - name: capability_id
+        in: path
+        required: true
+        schema:
+          type: string
+          enum:
+            - object.read
+            - object.context
+            - object.propose_change
+            - object.derive
+            - content.structure
+    post:
+      operationId: invokeCapability
+      summary: Invoke one capability through the Capability Broker
+      description: |
+        All capability calls pass through the single Broker: authentication,
+        rate limits, delegation, object membership, PAT scopes, input schema,
+        idempotency, execution, output schema, and audit. AI `object.derive`
+        invocations return 202 while a human confirmation is pending.
+      security:
+        - cookieAuth: []
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/IdempotencyKey"
+        - $ref: "#/components/parameters/CSRFTokenOptional"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CapabilityInvokeRequest"
+      responses:
+        "200":
+          description: Synchronous success. The output has passed schema and semantic validation.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CapabilityInvocationSuccess"
+        "202":
+          description: |
+            Reserved for AI-originated invocations waiting for human
+            confirmation. The public session/PAT endpoint does not trigger this
+            state in v0.1.0; Personal AI derive creates the confirmation through
+            the conversation runtime and returns its confirmation id there.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CapabilityInvocationPending"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "413":
+          $ref: "#/components/responses/PayloadTooLarge"
+        "415":
+          $ref: "#/components/responses/UnsupportedMediaType"
+        "429":
+          $ref: "#/components/responses/RateLimited"
+        "502":
+          description: The capability failed or its result is unknown.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "504":
+          description: The capability exceeded its execution deadline.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "500":
+          description: Unclassified internal failure.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+  /api/v1/capability-invocations/{id}:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+    get:
+      operationId: getCapabilityInvocation
+      summary: Read one capability invocation
+      description: Only the invocation actor with current object read access may read it.
+      security:
+        - cookieAuth: []
+        - bearerAuth: []
+      responses:
+        "200":
+          description: The invocation status and, for success, its validated output.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CapabilityInvocation"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "429":
+          $ref: "#/components/responses/RateLimited"
+components:
+  securitySchemes:
+    cookieAuth:
+      type: apiKey
+      in: cookie
+      name: dw_session
+    bearerAuth:
+      type: http
+      scheme: bearer
+      description: Personal access token created by POST /api/v1/tokens.
+  parameters:
+    ObjectID:
+      name: id
+      in: path
+      required: true
+      description: UUIDv7 object identifier.
+      schema:
+        type: string
+        format: uuid
+    IdempotencyKey:
+      name: Idempotency-Key
+      in: header
+      required: true
+      schema:
+        type: string
+        pattern: "^[A-Za-z0-9_-]{16,128}$"
+    CSRFToken:
+      name: X-CSRF-Token
+      in: header
+      required: true
+      schema:
+        type: string
+    CSRFTokenOptional:
+      name: X-CSRF-Token
+      in: header
+      required: false
+      description: Required for browser cookie sessions; bearer tokens are not automatically attached by browsers and do not use it.
+      schema:
+        type: string
+    OriginHeader:
+      name: Origin
+      in: header
+      required: false
+      schema:
+        type: string
+    Limit:
+      name: limit
+      in: query
+      required: false
+      schema:
+        type: integer
+        minimum: 1
+        maximum: 100
+        default: 20
+    Cursor:
+      name: cursor
+      in: query
+      required: false
+      description: Opaque signed cursor returned by the previous page.
+      schema:
+        type: string
+    Scope:
+      name: scope
+      in: query
+      required: false
+      schema:
+        type: string
+        enum: [owned, shared, all]
+        default: all
+  responses:
+    BadRequest:
+      description: The request is invalid.
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/Error"
+    Unauthenticated:
+      description: Authentication is required.
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/Error"
+    Forbidden:
+      description: The action is not permitted.
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/Error"
+    NotFound:
+      description: The resource does not exist or is not visible.
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/Error"
+    Conflict:
+      description: A conflict, version conflict, or idempotency conflict.
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/Error"
+    PayloadTooLarge:
+      description: The payload exceeds a frozen limit.
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/Error"
+    UnsupportedMediaType:
+      description: Content-Type must be application/json.
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/Error"
+    RateLimited:
+      description: The rate limit or budget was exceeded.
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/Error"
+  schemas:
+    Meta:
+      type: object
+      additionalProperties: false
+      required: [version, commit, build_time, model_mode]
+      properties:
+        version:
+          type: string
+        commit:
+          type: string
+        build_time:
+          type: string
+        model_mode:
+          type: string
+          enum: [fixture, real]
+    ReadyError:
+      type: object
+      additionalProperties: false
+      required: [status]
+      properties:
+        status:
+          type: string
+          const: unavailable
+    CapabilityExecutionConstraints:
+      type: object
+      additionalProperties: false
+      required: [timeout_ms, max_input_bytes, max_output_bytes]
+      properties:
+        timeout_ms:
+          type: integer
+          minimum: 1
+          maximum: 10000
+        max_input_bytes:
+          type: integer
+          minimum: 1
+          maximum: 65536
+        max_output_bytes:
+          type: integer
+          minimum: 1
+          maximum: 262144
+    CapabilityDescriptor:
+      type: object
+      additionalProperties: false
+      required:
+        - capability_id
+        - contract_version
+        - provider_id
+        - description
+        - input_schema
+        - output_schema
+        - required_scopes
+        - supported_operations
+        - execution_constraints
+      properties:
+        capability_id:
+          type: string
+          enum:
+            - object.read
+            - object.context
+            - object.propose_change
+            - object.derive
+            - content.structure
+        contract_version:
+          type: string
+          const: "1.0"
+        provider_id:
+          type: string
+          enum:
+            - trusted_core
+            - reference.content-structure
+        description:
+          type: string
+          minLength: 1
+          maxLength: 500
+        input_schema:
+          type: object
+        output_schema:
+          type: object
+        required_scopes:
+          type: array
+          minItems: 1
+          uniqueItems: true
+          items:
+            type: string
+            enum: [read, contribute, derive, invite, manage]
+        supported_operations:
+          type: array
+          minItems: 1
+          uniqueItems: true
+          items:
+            type: string
+        execution_constraints:
+          $ref: "#/components/schemas/CapabilityExecutionConstraints"
+    CapabilityList:
+      type: object
+      additionalProperties: false
+      required: [items, next_cursor]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/CapabilityDescriptor"
+        next_cursor:
+          type: [string, "null"]
+    CapabilityObjectIDInput:
+      type: object
+      additionalProperties: false
+      required: [object_id]
+      properties:
+        object_id:
+          type: string
+          format: uuid
+          pattern: "^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
+    CapabilityProposeChangeInput:
+      type: object
+      additionalProperties: false
+      required: [object_id, action, input, expected_version]
+      properties:
+        object_id:
+          type: string
+          format: uuid
+          pattern: "^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
+        action:
+          type: string
+          enum:
+            - set_title
+            - set_summary
+            - set_body
+            - add_checklist_item
+            - toggle_checklist_item
+            - remove_checklist_item
+            - add_tag
+            - remove_tag
+            - cast_vote
+        input:
+          type: object
+          description: Action input. The stored proposal input is limited to 64 KiB of canonical JSON; action-level field limits from the object contract still apply.
+        expected_version:
+          type: integer
+          minimum: 1
+    CapabilityDeriveInput:
+      type: object
+      additionalProperties: false
+      required: [object_id, inheritance_fields, title]
+      properties:
+        object_id:
+          type: string
+          format: uuid
+          pattern: "^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
+        source_version:
+          type: integer
+          minimum: 1
+        inheritance_fields:
+          type: array
+          minItems: 1
+          uniqueItems: true
+          items:
+            type: string
+            enum: [summary, body, checklist, tags, prompt, options]
+        title:
+          type: string
+          minLength: 1
+          maxLength: 200
+    CapabilityContentStructureInput:
+      type: object
+      additionalProperties: false
+      required: [object_id, text, format]
+      properties:
+        object_id:
+          type: string
+          format: uuid
+          pattern: "^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
+        text:
+          type: string
+          minLength: 1
+          maxLength: 48000
+        format:
+          type: string
+          enum: [plain_text, markdown]
+    CapabilityInvokeRequest:
+      description: The request body is exactly the input schema of the invoked capability.
+      oneOf:
+        - $ref: "#/components/schemas/CapabilityObjectIDInput"
+        - $ref: "#/components/schemas/CapabilityProposeChangeInput"
+        - $ref: "#/components/schemas/CapabilityDeriveInput"
+        - $ref: "#/components/schemas/CapabilityContentStructureInput"
+    CapabilityInvocationSuccess:
+      type: object
+      additionalProperties: false
+      required:
+        - id
+        - capability_id
+        - status
+        - output
+        - duration_ms
+        - created_at
+        - completed_at
+      properties:
+        id:
+          type: string
+          format: uuid
+        capability_id:
+          type: string
+          enum:
+            - object.read
+            - object.context
+            - object.propose_change
+            - object.derive
+            - content.structure
+        status:
+          type: string
+          const: succeeded
+        output:
+          type: object
+          additionalProperties: true
+        duration_ms:
+          type: integer
+          minimum: 0
+        created_at:
+          type: string
+          format: date-time
+        completed_at:
+          type: string
+          format: date-time
+    CapabilityInvocation:
+      type: object
+      additionalProperties: false
+      required:
+        - id
+        - capability_id
+        - contract_version
+        - provider_id
+        - status
+        - output
+        - error_code
+        - duration_ms
+        - created_at
+        - completed_at
+      properties:
+        id:
+          type: string
+          format: uuid
+        capability_id:
+          type: string
+          enum:
+            - object.read
+            - object.context
+            - object.propose_change
+            - object.derive
+            - content.structure
+        contract_version:
+          type: string
+          const: "1.0"
+        provider_id:
+          type: string
+          enum:
+            - trusted_core
+            - reference.content-structure
+        status:
+          type: string
+          enum: [pending, succeeded, failed, denied, timeout, unknown]
+        output:
+          type: [object, "null"]
+          additionalProperties: true
+        error_code:
+          type: [string, "null"]
+        duration_ms:
+          type: [integer, "null"]
+          minimum: 0
+        created_at:
+          type: string
+          format: date-time
+        completed_at:
+          type: [string, "null"]
+          format: date-time
+    CapabilityInvocationPending:
+      type: object
+      additionalProperties: false
+      required: [id, capability_id, status, confirmation_id, created_at]
+      properties:
+        id:
+          type: string
+          format: uuid
+        capability_id:
+          type: string
+          enum:
+            - object.read
+            - object.context
+            - object.propose_change
+            - object.derive
+            - content.structure
+        status:
+          type: string
+          const: pending
+        confirmation_id:
+          type: string
+          format: uuid
+        created_at:
+          type: string
+          format: date-time
+    Error:
+      type: object
+      additionalProperties: false
+      required: [error]
+      properties:
+        error:
+          type: object
+          additionalProperties: false
+          required: [code, message, request_id, details]
+          properties:
+            code:
+              type: string
+            message:
+              type: string
+            request_id:
+              type: string
+            details:
+              type: object
+              additionalProperties: true
+    RegisterRequest:
+      type: object
+      additionalProperties: false
+      required: [email, handle, display_name, password]
+      properties:
+        email:
+          type: string
+          format: email
+          maxLength: 254
+        handle:
+          type: string
+          pattern: "^[a-z0-9][a-z0-9_-]{2,31}$"
+        display_name:
+          type: string
+          minLength: 1
+          maxLength: 80
+        password:
+          type: string
+          minLength: 12
+          maxLength: 128
+    LoginRequest:
+      type: object
+      additionalProperties: false
+      required: [email, password]
+      properties:
+        email:
+          type: string
+          format: email
+        password:
+          type: string
+    User:
+      type: object
+      additionalProperties: false
+      required: [id, email, handle, display_name, created_at]
+      properties:
+        id:
+          type: string
+          format: uuid
+        email:
+          type: string
+        handle:
+          type: string
+        display_name:
+          type: string
+        created_at:
+          type: string
+          format: date-time
+    PersonalAI:
+      type: object
+      additionalProperties: false
+      required: [id, name, persona]
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+        persona:
+          type: string
+    AuthResponse:
+      type: object
+      additionalProperties: false
+      required: [user, personal_ai, auth_method]
+      properties:
+        user:
+          $ref: "#/components/schemas/User"
+        personal_ai:
+          $ref: "#/components/schemas/PersonalAI"
+        auth_method:
+          type: string
+          enum: [session, pat]
+        csrf_token:
+          type: string
+        scopes:
+          type: array
+          items:
+            type: string
+            enum: [objects:read, objects:write, derive:create, capabilities:invoke]
+    CreateObjectRequest:
+      type: object
+      additionalProperties: false
+      required: [object_type, title]
+      properties:
+        object_type:
+          type: string
+          enum: [collaborative, interactive]
+        title:
+          type: string
+          minLength: 1
+          maxLength: 200
+        content:
+          type: object
+          description: |
+            Template-specific initial content. Collaborative accepts summary,
+            body, checklist[{text,done}], tags[]. Interactive accepts prompt and
+            options[{label}] (2..10). The server generates all ids.
+          additionalProperties: true
+        shared_context:
+          type: object
+          additionalProperties: true
+    ObjectView:
+      type: object
+      additionalProperties: false
+      required:
+        - id
+        - object_type
+        - presentation_template
+        - schema_version
+        - creator_id
+        - owner_id
+        - version
+        - state
+        - shared_context
+        - status
+        - permissions
+        - role
+        - created_at
+        - updated_at
+      properties:
+        id:
+          type: string
+          format: uuid
+        object_type:
+          type: string
+          enum: [collaborative, interactive]
+        presentation_template:
+          type: string
+          enum: [collaborative_v1, interactive_v1]
+        schema_version:
+          type: integer
+          const: 1
+        creator_id:
+          type: string
+          format: uuid
+        owner_id:
+          type: string
+          format: uuid
+        version:
+          type: integer
+          minimum: 1
+        state:
+          type: object
+          additionalProperties: true
+        shared_context:
+          type: object
+          additionalProperties: true
+        status:
+          type: string
+          enum: [active, deleted]
+        permissions:
+          type: array
+          items:
+            type: string
+            enum: [read, contribute, derive, invite, manage]
+        role:
+          type: string
+          enum: [owner, editor, viewer, custom]
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+        lineage:
+          $ref: "#/components/schemas/DeriveLineage"
+    DeriveLineage:
+      type: object
+      additionalProperties: false
+      required: [parent, inherited_fields]
+      properties:
+        parent:
+          type: object
+          additionalProperties: false
+          required: [object_id, version]
+          properties:
+            object_id:
+              type: string
+              format: uuid
+            version:
+              type: integer
+              minimum: 1
+        inherited_fields:
+          type: array
+          minItems: 1
+          items:
+            type: string
+    ObjectListItem:
+      type: object
+      additionalProperties: false
+      required: [id, object_type, title, version, owner_id, role, permissions, created_at, updated_at]
+      properties:
+        id:
+          type: string
+          format: uuid
+        object_type:
+          type: string
+          enum: [collaborative, interactive]
+        title:
+          type: string
+        version:
+          type: integer
+        owner_id:
+          type: string
+          format: uuid
+        role:
+          type: string
+          enum: [owner, editor, viewer, custom]
+        permissions:
+          type: array
+          items:
+            type: string
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+    ObjectList:
+      type: object
+      additionalProperties: false
+      required: [items, next_cursor]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/ObjectListItem"
+        next_cursor:
+          type:
+            - string
+            - "null"
+    ActionRequest:
+      type: object
+      additionalProperties: false
+      required: [action, input, expected_version]
+      properties:
+        action:
+          type: string
+          enum:
+            - set_title
+            - set_summary
+            - set_body
+            - add_checklist_item
+            - toggle_checklist_item
+            - remove_checklist_item
+            - add_tag
+            - remove_tag
+            - cast_vote
+            - close_poll
+            - set_shared_context
+        input:
+          type: object
+          additionalProperties: true
+        expected_version:
+          type: integer
+          minimum: 1
+    EventActor:
+      type: object
+      additionalProperties: false
+      required: [type]
+      properties:
+        type:
+          type: string
+          enum: [user, personal_ai, system]
+        user_id:
+          type: string
+          format: uuid
+        display_name:
+          type: string
+    Event:
+      type: object
+      additionalProperties: false
+      required: [id, seq, object_version, event_type, actor, payload, created_at]
+      properties:
+        id:
+          type: string
+          format: uuid
+        seq:
+          type: integer
+        object_version:
+          type: integer
+        event_type:
+          type: string
+        actor:
+          $ref: "#/components/schemas/EventActor"
+        payload:
+          type: object
+          additionalProperties: true
+        created_at:
+          type: string
+          format: date-time
+    EventList:
+      type: object
+      additionalProperties: false
+      required: [items, next_cursor]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/Event"
+        next_cursor:
+          type:
+            - string
+            - "null"
+    Member:
+      type: object
+      additionalProperties: false
+      required: [user_id, display_name, permissions, role, created_at]
+      properties:
+        user_id:
+          type: string
+          format: uuid
+        display_name:
+          type: string
+        permissions:
+          type: array
+          items:
+            type: string
+        role:
+          type: string
+          enum: [owner, editor, viewer, custom]
+        granted_by:
+          type:
+            - string
+            - "null"
+        created_at:
+          type: string
+          format: date-time
+    MemberList:
+      type: object
+      additionalProperties: false
+      required: [items]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/Member"
+    DeriveRequest:
+      type: object
+      additionalProperties: false
+      required: [title, inheritance_fields]
+      properties:
+        title:
+          type: string
+          minLength: 1
+          maxLength: 200
+        source_version:
+          type: integer
+          minimum: 1
+        inheritance_fields:
+          type: array
+          minItems: 1
+          uniqueItems: true
+          items:
+            type: string
+            enum: [summary, body, checklist, tags, prompt, options]
+    Lineage:
+      type: object
+      additionalProperties: false
+      required: [object, ancestors, descendants, max_depth, truncated]
+      properties:
+        object:
+          type: object
+          additionalProperties: false
+          required: [object_id, version]
+          properties:
+            object_id:
+              type: string
+              format: uuid
+            version:
+              type: integer
+        ancestors:
+          type: array
+          items:
+            type: object
+            additionalProperties: false
+            required: [depth]
+            properties:
+              object_id:
+                type: string
+                format: uuid
+              title:
+                type: string
+              version:
+                type: integer
+              depth:
+                type: integer
+              redacted:
+                type: boolean
+        descendants:
+          type: array
+          items:
+            $ref: "#/components/schemas/Descendant"
+        max_depth:
+          type: integer
+        truncated:
+          type: boolean
+    Descendant:
+      type: object
+      additionalProperties: false
+      required: [object_id, title, version, depth, source_version, children]
+      properties:
+        object_id:
+          type: string
+          format: uuid
+        title:
+          type: string
+        version:
+          type: integer
+        depth:
+          type: integer
+        source_version:
+          type: integer
+        children:
+          type: array
+          items:
+            $ref: "#/components/schemas/Descendant"
+    CreateInvitationRequest:
+      type: object
+      additionalProperties: false
+      properties:
+        permissions:
+          type: array
+          uniqueItems: true
+          items:
+            type: string
+            enum:
+            - read
+            - contribute
+            - derive
+            - invite
+        max_uses:
+          type: integer
+          minimum: 1
+          maximum: 100
+        expires_in_days:
+          type: integer
+          minimum: 1
+          maximum: 30
+    Invitation:
+      type: object
+      additionalProperties: false
+      required:
+      - id
+      - object_id
+      - token
+      - permissions
+      - max_uses
+      - use_count
+      - expires_at
+      - revoked_at
+      - created_at
+      - status
+      properties:
+        id:
+          type: string
+          format: uuid
+        object_id:
+          type: string
+          format: uuid
+        token:
+          type:
+          - string
+          - 'null'
+        token_redacted:
+          type: boolean
+        permissions:
+          type: array
+          items:
+            type: string
+        max_uses:
+          type: integer
+        use_count:
+          type: integer
+        expires_at:
+          type: string
+          format: date-time
+        revoked_at:
+          type:
+          - string
+          - 'null'
+          format: date-time
+        created_at:
+          type: string
+          format: date-time
+        status:
+          type: string
+          enum:
+          - active
+    InvitationList:
+      type: object
+      additionalProperties: false
+      required:
+      - items
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/Invitation'
+    InvitationPreview:
+      type: object
+      additionalProperties: false
+      required:
+      - invitation_id
+      - object_id
+      - object_type
+      - title
+      - inviter_name
+      - permissions
+      - expires_at
+      - max_uses
+      - remaining_uses
+      - already_member
+      properties:
+        invitation_id:
+          type: string
+          format: uuid
+        object_id:
+          type: string
+          format: uuid
+        object_type:
+          type: string
+          enum:
+          - collaborative
+          - interactive
+        title:
+          type: string
+        inviter_name:
+          type: string
+        permissions:
+          type: array
+          items:
+            type: string
+        expires_at:
+          type: string
+          format: date-time
+        max_uses:
+          type: integer
+        remaining_uses:
+          type: integer
+        already_member:
+          type: boolean
+    InvitationObjectSummary:
+      type: object
+      additionalProperties: false
+      required:
+      - id
+      - object_type
+      - version
+      - title
+      - presentation_template
+      properties:
+        id:
+          type: string
+          format: uuid
+        object_type:
+          type: string
+          enum:
+          - collaborative
+          - interactive
+        version:
+          type: integer
+          minimum: 1
+        title:
+          type: string
+        presentation_template:
+          type: string
+          enum:
+          - collaborative_v1
+          - interactive_v1
+    AcceptedInvitation:
+      type: object
+      additionalProperties: false
+      required:
+      - object
+      - permissions
+      - role_effective
+      - already_member
+      properties:
+        object:
+          $ref: '#/components/schemas/InvitationObjectSummary'
+        permissions:
+          type: array
+          items:
+            type: string
+        role_effective:
+          type: string
+          enum:
+          - owner
+          - editor
+          - viewer
+          - custom
+        already_member:
+          type: boolean
+    HandoffRecentEvent:
+      type: object
+      additionalProperties: false
+      required:
+      - seq
+      - event_type
+      - actor_type
+      - created_at
+      - summary
+      properties:
+        seq:
+          type: integer
+        event_type:
+          type: string
+          enum:
+          - object.created
+          - object.state_changed
+          - object.derived
+        actor_type:
+          type: string
+          enum:
+          - user
+          - personal_ai
+          - system
+        created_at:
+          type: string
+          format: date-time
+        summary:
+          type: string
+          maxLength: 280
+    HandoffProvenance:
+      type: object
+      additionalProperties: false
+      required:
+      - field
+      - source
+      - object_version
+      properties:
+        field:
+          type: string
+        source:
+          type: string
+        object_version:
+          type: integer
+        truncated:
+          type: boolean
+    Handoff:
+      type: object
+      additionalProperties: false
+      required:
+      - handoff_id
+      - issued_at
+      - expires_at
+      - object_id
+      - object_version
+      - object_type
+      - permitted_object_context
+      - permitted_actions
+      - data_provenance
+      - context_schema_version
+      - truncated
+      properties:
+        handoff_id:
+          type: string
+          format: uuid
+        issued_at:
+          type: string
+          format: date-time
+        expires_at:
+          type: string
+          format: date-time
+        object_id:
+          type: string
+          format: uuid
+        object_version:
+          type: integer
+          minimum: 1
+        object_type:
+          type: string
+          enum:
+          - collaborative
+          - interactive
+        permitted_object_context:
+          type: object
+          additionalProperties: false
+          required:
+          - state
+          - shared_context
+          - recent_events
+          properties:
+            state:
+              type: object
+              additionalProperties: true
+            shared_context:
+              type: object
+              additionalProperties: true
+            recent_events:
+              type: array
+              maxItems: 20
+              items:
+                $ref: '#/components/schemas/HandoffRecentEvent'
+        permitted_actions:
+          type: array
+          items:
+            type: string
+            enum:
+            - read
+            - contribute
+            - derive
+        data_provenance:
+          type: array
+          items:
+            $ref: '#/components/schemas/HandoffProvenance'
+        context_schema_version:
+          type: integer
+          const: 1
+        truncated:
+          type: boolean
+    Proposal:
+      type: object
+      additionalProperties: false
+      required:
+      - id
+      - object_id
+      - actor_user_id
+      - ai_profile_id
+      - delegation_id
+      - capability_id
+      - action
+      - input
+      - base_version
+      - status
+      - created_at
+      properties:
+        id:
+          type: string
+          format: uuid
+        object_id:
+          type: string
+          format: uuid
+        actor_user_id:
+          type: string
+          format: uuid
+        ai_profile_id:
+          type: string
+          format: uuid
+        delegation_id:
+          type: string
+          format: uuid
+        capability_id:
+          type: string
+          const: object.propose_change
+        action:
+          type: string
+        input:
+          type: object
+          additionalProperties: true
+        base_version:
+          type: integer
+          minimum: 1
+        status:
+          type: string
+          enum:
+          - pending
+          - applied
+          - denied
+          - expired
+        created_at:
+          type: string
+          format: date-time
+        decided_at:
+          type:
+          - string
+          - 'null'
+          format: date-time
+        applied_event_id:
+          type:
+          - string
+          - 'null'
+          format: uuid
+    ProposalList:
+      type: object
+      additionalProperties: false
+      required:
+      - items
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/Proposal'
+    ApplyProposalRequest:
+      type: object
+      additionalProperties: false
+      required:
+      - expected_version
+      properties:
+        expected_version:
+          type: integer
+          minimum: 1
+    ApplyProposalResponse:
+      type: object
+      additionalProperties: false
+      required:
+      - proposal
+      - object
+      properties:
+        proposal:
+          $ref: '#/components/schemas/Proposal'
+        object:
+          $ref: '#/components/schemas/ObjectView'
+    Profile:
+      type: object
+      additionalProperties: false
+      required:
+      - id
+      - name
+      - persona
+      - created_at
+      - updated_at
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+          minLength: 1
+          maxLength: 80
+        persona:
+          type: string
+          maxLength: 2000
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+        usage:
+          $ref: "#/components/schemas/PersonalAIUsage"
+    PersonalAIUsage:
+      type: object
+      additionalProperties: false
+      required:
+      - calls
+      - input_chars
+      - daily_calls_limit
+      - daily_input_chars_limit
+      - model_mode
+      - model_name
+      properties:
+        calls:
+          type: integer
+        input_chars:
+          type: integer
+        daily_calls_limit:
+          type: integer
+        daily_input_chars_limit:
+          type: integer
+        model_mode:
+          type: string
+          enum: [fixture, real]
+        model_name:
+          type: string
+    UpdateProfileRequest:
+      type: object
+      additionalProperties: false
+      properties:
+        name:
+          type: string
+          minLength: 1
+          maxLength: 80
+        persona:
+          type: string
+          maxLength: 2000
+    PrivateContext:
+      type: object
+      additionalProperties: false
+      required:
+      - content
+      - updated_at
+      properties:
+        content:
+          type: string
+          maxLength: 8192
+        updated_at:
+          type: string
+          format: date-time
+    UpdateContextRequest:
+      type: object
+      additionalProperties: false
+      required:
+      - content
+      properties:
+        content:
+          type: string
+          maxLength: 8192
+    Conversation:
+      type: object
+      additionalProperties: false
+      required:
+      - id
+      - user_id
+      - object_id
+      - title
+      - created_at
+      - updated_at
+      - deleted_at
+      properties:
+        id:
+          type: string
+          format: uuid
+        user_id:
+          type: string
+          format: uuid
+        object_id:
+          type:
+          - string
+          - 'null'
+          format: uuid
+        title:
+          type: string
+          minLength: 1
+          maxLength: 120
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+        deleted_at:
+          type:
+          - string
+          - 'null'
+          format: date-time
+    Message:
+      type: object
+      additionalProperties: false
+      required:
+      - id
+      - conversation_id
+      - role
+      - content
+      - model_mode
+      - parse_status
+      - created_at
+      properties:
+        id:
+          type: string
+          format: uuid
+        conversation_id:
+          type: string
+          format: uuid
+        role:
+          type: string
+          enum:
+          - user
+          - assistant
+          - system
+        content:
+          type: string
+        model_mode:
+          type: string
+          enum:
+          - fixture
+          - real
+        parse_status:
+          type:
+          - string
+          - 'null'
+          enum:
+          - structured
+          - fallback
+          - null
+        created_at:
+          type: string
+          format: date-time
+    ConversationDetail:
+      type: object
+      additionalProperties: false
+      required:
+      - conversation
+      - messages
+      properties:
+        conversation:
+          $ref: '#/components/schemas/Conversation'
+        messages:
+          type: array
+          items:
+            $ref: '#/components/schemas/Message'
+    ConversationList:
+      type: object
+      additionalProperties: false
+      required:
+      - items
+      - next_cursor
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/Conversation'
+        next_cursor:
+          type:
+          - string
+          - 'null'
+    CreateConversationRequest:
+      type: object
+      additionalProperties: false
+      required:
+      - title
+      properties:
+        title:
+          type: string
+          minLength: 1
+          maxLength: 120
+        object_id:
+          type: string
+          format: uuid
+    SendMessageRequest:
+      type: object
+      additionalProperties: false
+      required:
+      - content
+      properties:
+        content:
+          type: string
+          minLength: 1
+          maxLength: 16384
+    AcceptedAction:
+      type: object
+      additionalProperties: false
+      required:
+      - kind
+      - action
+      properties:
+        kind:
+          type: string
+          enum:
+          - proposal
+          - confirmation
+        proposal_id:
+          type: string
+          format: uuid
+        confirmation_id:
+          type: string
+          format: uuid
+        action:
+          type: string
+    SendMessageResult:
+      type: object
+      additionalProperties: false
+      required:
+      - user_message
+      - assistant_message
+      - model_mode
+      - parse_status
+      - proposed_actions
+      - usage
+      properties:
+        user_message:
+          $ref: '#/components/schemas/Message'
+        assistant_message:
+          $ref: '#/components/schemas/Message'
+        model_mode:
+          type: string
+          enum:
+          - fixture
+          - real
+        parse_status:
+          type: string
+          enum:
+          - structured
+          - fallback
+        proposed_actions:
+          type: array
+          items:
+            $ref: '#/components/schemas/AcceptedAction'
+        context_stale:
+          type: boolean
+        usage:
+          type: object
+          additionalProperties: false
+          required:
+          - input_tokens
+          - output_tokens
+          properties:
+            input_tokens:
+              type: integer
+            output_tokens:
+              type: integer
+    Delegation:
+      type: object
+      additionalProperties: false
+      required:
+      - id
+      - user_id
+      - ai_profile_id
+      - object_id
+      - permissions
+      - constraints
+      - expires_at
+      - revoked_at
+      - created_at
+      - status
+      properties:
+        id:
+          type: string
+          format: uuid
+        user_id:
+          type: string
+          format: uuid
+        ai_profile_id:
+          type: string
+          format: uuid
+        object_id:
+          type:
+          - string
+          - 'null'
+          format: uuid
+        permissions:
+          type: array
+          items:
+            type: string
+            enum:
+            - read
+            - contribute
+            - derive
+        constraints:
+          type: object
+          additionalProperties: true
+        expires_at:
+          type:
+          - string
+          - 'null'
+          format: date-time
+        revoked_at:
+          type:
+          - string
+          - 'null'
+          format: date-time
+        created_at:
+          type: string
+          format: date-time
+        status:
+          type: string
+          enum:
+          - active
+          - expired
+          - revoked
+    DelegationList:
+      type: object
+      additionalProperties: false
+      required:
+      - items
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/Delegation'
+    CreateDelegationRequest:
+      type: object
+      additionalProperties: false
+      required:
+      - permissions
+      properties:
+        ai_profile_id:
+          type: string
+          format: uuid
+        object_id:
+          type: string
+          format: uuid
+        permissions:
+          type: array
+          minItems: 1
+          uniqueItems: true
+          items:
+            type: string
+            enum:
+            - read
+            - contribute
+            - derive
+        constraints:
+          type: object
+          additionalProperties: false
+          properties:
+            require_confirmation:
+              type: array
+              uniqueItems: true
+              items:
+                type: string
+                enum:
+                - derive.create
+                - capability.invoke
+                - invitation.create
+            max_ai_actions_per_hour:
+              type: integer
+              minimum: 1
+              maximum: 200
+        expires_in_days:
+          type: integer
+          minimum: 1
+          maximum: 365
+    CreateTokenRequest:
+      type: object
+      additionalProperties: false
+      required:
+      - name
+      - scopes
+      properties:
+        name:
+          type: string
+          minLength: 1
+          maxLength: 64
+        scopes:
+          type: array
+          minItems: 1
+          uniqueItems: true
+          items:
+            type: string
+            enum:
+            - objects:read
+            - objects:write
+            - derive:create
+            - capabilities:invoke
+        expires_in_days:
+          type: integer
+          minimum: 1
+          maximum: 365
+    TokenMetadata:
+      type: object
+      additionalProperties: false
+      required:
+      - id
+      - name
+      - token_prefix
+      - scopes
+      - expires_at
+      - last_used_at
+      - revoked_at
+      - created_at
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+        token_prefix:
+          type: string
+        scopes:
+          type: array
+          items:
+            type: string
+        expires_at:
+          type:
+          - string
+          - 'null'
+          format: date-time
+        last_used_at:
+          type:
+          - string
+          - 'null'
+          format: date-time
+        revoked_at:
+          type:
+          - string
+          - 'null'
+          format: date-time
+        created_at:
+          type: string
+          format: date-time
+    CreatedToken:
+      type: object
+      additionalProperties: false
+      required:
+      - id
+      - name
+      - token_prefix
+      - scopes
+      - expires_at
+      - last_used_at
+      - revoked_at
+      - created_at
+      - plaintext
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+        token_prefix:
+          type: string
+        scopes:
+          type: array
+          items:
+            type: string
+        expires_at:
+          type:
+          - string
+          - 'null'
+          format: date-time
+        last_used_at:
+          type:
+          - string
+          - 'null'
+          format: date-time
+        revoked_at:
+          type:
+          - string
+          - 'null'
+          format: date-time
+        created_at:
+          type: string
+          format: date-time
+        plaintext:
+          type: string
+    TokenList:
+      type: object
+      additionalProperties: false
+      required:
+      - items
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/TokenMetadata'
+    Confirmation:
+      type: object
+      additionalProperties: false
+      required:
+      - id
+      - action
+      - resource_type
+      - resource_id
+      - status
+      - expires_at
+      - created_at
+      - decided_at
+      - payload_hash_prefix
+      - target_object_title
+      - target_object_version
+      - target_object_type
+      - permission_summary
+      properties:
+        id:
+          type: string
+          format: uuid
+        action:
+          type: string
+          enum:
+          - derive.create
+          - invitation.create
+          - capability.invoke
+        resource_type:
+          type: string
+          enum:
+          - living_object
+          - capability_invocation
+        resource_id:
+          type: string
+          format: uuid
+        status:
+          type: string
+          enum:
+          - pending
+          - approved
+          - denied
+          - expired
+        expires_at:
+          type: string
+          format: date-time
+        created_at:
+          type: string
+          format: date-time
+        decided_at:
+          type:
+          - string
+          - 'null'
+          format: date-time
+        payload_hash_prefix:
+          type: string
+        target_object_id:
+          type: string
+          format: uuid
+          description: Present only while the caller can still read the target object.
+        target_object_title:
+          type: string
+        target_object_version:
+          type: integer
+        target_object_type:
+          type: string
+        bound_version:
+          type: integer
+          description: The object version the pending action is bound to.
+        effect:
+          $ref: '#/components/schemas/ConfirmationEffect'
+        permission_summary:
+          type: string
+    ConfirmationEffect:
+      type: object
+      additionalProperties: false
+      properties:
+        title:
+          type: string
+        inheritance_fields:
+          type: array
+          items:
+            type: string
+        source_version:
+          type: integer
+    ConfirmationList:
+      type: object
+      additionalProperties: false
+      required:
+      - items
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/Confirmation'

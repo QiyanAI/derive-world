@@ -1,0 +1,177 @@
+/* SPDX-License-Identifier: Apache-2.0 */
+
+/* G03 Personal AI, invitations, handoff, and confirmations */
+.ai-panel {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+.ai-messages {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  max-height: 360px;
+  overflow-y: auto;
+  padding-right: var(--space-1);
+}
+
+.ai-message {
+  border-radius: var(--radius-sm);
+  padding: var(--space-2) var(--space-3);
+  background: var(--color-surface-muted);
+}
+
+.ai-message small {
+  color: var(--color-muted);
+  font-size: 0.7rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.ai-message p {
+  margin: var(--space-1) 0 0;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.ai-assistant {
+  background: #eef3f8;
+}
+
+.ai-compose textarea {
+  width: 100%;
+  min-height: 70px;
+}
+
+.proposal-card {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  padding: var(--space-3);
+  background: var(--color-surface);
+}
+
+.proposal-card small {
+  color: var(--color-muted);
+}
+
+.proposal-card .code-block {
+  max-height: 180px;
+  overflow: auto;
+  margin: 0;
+  font-size: 0.75rem;
+}
+
+.confirmation-card {
+  border-left: 4px solid var(--color-accent);
+}
+
+.permission-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+  gap: var(--space-2);
+  border: 0;
+  margin: 0;
+  padding: 0;
+}
+
+.permission-grid legend {
+  font-weight: 600;
+  margin-bottom: var(--space-2);
+}
+
+.invitation-list,
+.token-list,
+.delegation-list,
+.confirmation-list {
+  list-style: none;
+  margin: var(--space-3) 0 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.invitation-list li,
+.token-list li,
+.delegation-list li,
+.confirmation-list li {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: var(--space-3);
+  padding: var(--space-2) 0;
+  border-bottom: 1px solid var(--color-border);
+}
+
+.invitation-list li > div,
+.token-list li > div,
+.delegation-list li > div,
+.confirmation-list li > div {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.invitation-list small,
+.token-list small,
+.delegation-list small,
+.confirmation-list small {
+  color: var(--color-muted);
+  overflow-wrap: anywhere;
+}
+
+.confirmation-list p {
+  margin: var(--space-1) 0 0;
+  color: var(--color-muted);
+  font-size: 0.85rem;
+}
+
+.link-once {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  padding: var(--space-3);
+  border: 1px dashed var(--color-accent);
+  border-radius: var(--radius-sm);
+  margin-top: var(--space-3);
+}
+
+.link-once label {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+
+.link-once input {
+  width: 100%;
+  font-family: var(--font-mono);
+  font-size: 0.8rem;
+}
+
+.handoff-preview {
+  max-height: 320px;
+  overflow: auto;
+  font-size: 0.75rem;
+}
+
+@media (max-width: 720px) {
+  .ai-messages {
+    max-height: 260px;
+  }
+}
+
+.card > textarea {
+  width: 100%;
+  min-height: 110px;
+  padding: var(--space-2) var(--space-3);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  background: var(--color-surface);
+  color: var(--color-ink);
+  resize: vertical;
+}

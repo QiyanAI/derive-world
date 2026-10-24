@@ -1,0 +1,51 @@
+name: Bug report
+description: Report a reproducible defect in the repository
+title: "[Bug]: "
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Do not report security vulnerabilities here. Use the private vulnerability
+        reporting link in SECURITY.md.
+  - type: textarea
+    id: summary
+    attributes:
+      label: Summary
+      description: What happened, and what did you expect?
+    validations:
+      required: true
+  - type: textarea
+    id: reproduce
+    attributes:
+      label: Reproduction steps
+      description: Include commands, configuration (without secrets), and observed output.
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: Version or commit
+      description: Output of `server version` or the commit SHA.
+  - type: dropdown
+    id: mode
+    attributes:
+      label: Model mode
+      options:
+        - fixture
+        - real
+        - not applicable
+  - type: textarea
+    id: environment
+    attributes:
+      label: Environment
+      description: OS, Docker/Compose version, browser, and anything else relevant.
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: Checklist
+      options:
+        - label: I removed secrets, tokens, and personal data from this report.
+          required: true
+        - label: This is not a security vulnerability.
+          required: true

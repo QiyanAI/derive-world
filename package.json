@@ -1,0 +1,26 @@
+{
+  "name": "derive-world",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Derive World OSS MVP — Living Objects, Personal AI, Derive, and the Reference World",
+  "license": "Apache-2.0",
+  "workspaces": [
+    "web",
+    "sdk/typescript"
+  ],
+  "engines": {
+    "node": ">=24 <25",
+    "npm": ">=11"
+  },
+  "scripts": {
+    "build": "npm run -w web build && npm run -w sdk/typescript build",
+    "typecheck": "npm run -w web typecheck && npm run -w sdk/typescript typecheck",
+    "test:e2e": "playwright test --config=tests/e2e/playwright.config.ts"
+  },
+  "devDependencies": {
+    "@playwright/test": "1.64.1",
+    "@types/node": "24.19.2",
+    "typescript": "5.9.3"
+  }
+}

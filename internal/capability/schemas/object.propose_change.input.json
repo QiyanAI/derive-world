@@ -1,0 +1,27 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://derive.world/schemas/capability/object.propose_change.input.json",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["object_id", "action", "input", "expected_version"],
+  "properties": {
+    "object_id": { "$ref": "#/$defs/object_id" },
+    "action": {
+      "type": "string",
+      "enum": [
+        "set_title", "set_summary", "set_body",
+        "add_checklist_item", "toggle_checklist_item", "remove_checklist_item",
+        "add_tag", "remove_tag", "cast_vote"
+      ]
+    },
+    "input": { "type": "object" },
+    "expected_version": { "type": "integer", "minimum": 1 }
+  },
+  "$defs": {
+    "object_id": {
+      "type": "string",
+      "format": "uuid",
+      "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
+    }
+  }
+}

@@ -1,0 +1,48 @@
+# Changelog
+
+All notable changes to this project are documented in this file.
+
+The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
+and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
+
+## [Unreleased]
+
+### Added
+
+- Living Objects with immutable, versioned snapshots and explicit ownership.
+- Two object experiences in the Reference World, with invitation and Handoff
+  flows between Personal AI identities.
+- Derive, lineage, event history, and audit views over derived objects.
+- Personal AI conversations with proposals, human confirmation, and a
+  deny-by-default Trust Kernel.
+- A provider-neutral model adapter: deterministic fixture mode by default, or
+  one operator-configured OpenAI-compatible provider.
+- Capability providers over HTTP with HMAC-signed requests and responses.
+- A Go HTTP API, a zero-dependency TypeScript SDK, and an OpenAPI 1.0 contract.
+- A bilingual (English and Simplified Chinese) responsive web client.
+- Single-host self-hosting with Docker Compose, PostgreSQL 17, and migrations.
+- Apache-2.0 licensing, NOTICE, trademark policy, third-party notices, and
+  Developer Certificate of Origin contribution checks.
+
+### Security
+
+- Argon2id password hashing, cookie and CSRF protection, and personal access
+  tokens with scoped authority.
+- Membership and delegation checks on every object action.
+- Idempotency, cursor signing, rate limits, and audit records for state changes.
+- Provider transport with response signing, TLS verification, key rotation, and
+  per-user and deployment-wide model budgets.
+- Secret scanning, dependency vulnerability scanning, license checks, and
+  reproducible release builds in CI.
+
+### Known limitations
+
+- Single-instance deployment; no horizontal scaling or real-time collaboration.
+- One active model adapter per deployment; no multi-provider routing.
+- No email, password reset, OAuth, email verification, or account deletion.
+- No historical object-state read endpoint; derive from an older version uses an
+  immutable snapshot.
+- Fixture output is deterministic demo data, not real AI.
+- No prebuilt container images; Compose builds from source.
+
+[Unreleased]: https://github.com/QiyanAI/derive-world/commits/main

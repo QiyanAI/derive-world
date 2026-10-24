@@ -1,0 +1,44 @@
+{
+  "responses": [
+    {
+      "match": "hello",
+      "reply": "Fixture reply: hello. This is deterministic demo output, not real AI."
+    },
+    {
+      "match": "propose",
+      "reply": "{\"reply\": \"Fixture structured turn: I propose a body edit and a derive.\", \"proposed_actions\": [{\"capability_id\": \"object.propose_change\", \"input\": {\"action\": \"set_body\", \"input\": {\"body\": \"Fixture proposed body\"}, \"expected_version\": 1}}, {\"capability_id\": \"object.derive\", \"input\": {\"title\": \"Fixture derived child\", \"inheritance_fields\": [\"body\"]}}]}"
+    },
+    {
+      "match": "propose_change",
+      "reply": "{\"reply\": \"Fixture structured turn: I propose one body edit for you to review.\", \"proposed_actions\": [{\"capability_id\": \"object.propose_change\", \"input\": {\"action\": \"set_body\", \"input\": {\"body\": \"Fixture proposed body\"}}}]}"
+    },
+    {
+      "match": "propose_derive",
+      "reply": "{\"reply\": \"Fixture structured turn: I propose one independent derived branch for your approval.\", \"proposed_actions\": [{\"capability_id\": \"object.derive\", \"input\": {\"title\": \"Fixture derived child\", \"inheritance_fields\": [\"body\"]}}]}"
+    },
+    {
+      "match": "Ask AI to propose a body edit",
+      "reply": "{\"reply\": \"Fixture structured turn: I propose one body edit for you to review.\", \"proposed_actions\": [{\"capability_id\": \"object.propose_change\", \"input\": {\"action\": \"set_body\", \"input\": {\"body\": \"Fixture proposed body\"}}}]}"
+    },
+    {
+      "match": "Ask AI to propose a derive",
+      "reply": "{\"reply\": \"Fixture structured turn: I propose one independent derived branch for your approval.\", \"proposed_actions\": [{\"capability_id\": \"object.derive\", \"input\": {\"title\": \"Fixture derived child\", \"inheritance_fields\": [\"body\"]}}]}"
+    },
+    {
+      "match": "Say hello",
+      "reply": "Fixture reply: hello. This is deterministic demo output, not real AI."
+    },
+    {
+      "match": "让 AI 提议修改正文",
+      "reply": "{\"reply\": \"Fixture 结构化回合：我提议修改一次正文，等待你审核。\", \"proposed_actions\": [{\"capability_id\": \"object.propose_change\", \"input\": {\"action\": \"set_body\", \"input\": {\"body\": \"Fixture proposed body\"}}}]}"
+    },
+    {
+      "match": "让 AI 提议衍生",
+      "reply": "{\"reply\": \"Fixture 结构化回合：我提议创建一个独立衍生分支，等待你批准。\", \"proposed_actions\": [{\"capability_id\": \"object.derive\", \"input\": {\"title\": \"Fixture derived child\", \"inheritance_fields\": [\"body\"]}}]}"
+    },
+    {
+      "match": "打个招呼",
+      "reply": "Fixture 回复：你好。这是确定性演示输出，不是真实 AI。"
+    }
+  ]
+}

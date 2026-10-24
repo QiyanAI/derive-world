@@ -1,0 +1,42 @@
+# Build outputs
+bin/
+web/dist/
+sdk/typescript/dist/
+
+# Dependencies
+node_modules/
+
+# Local configuration and secrets
+.env
+.env.*
+!.env.example
+
+# Logs and test artifacts
+*.log
+test-results/
+playwright-report/
+coverage/
+snapshot.json
+report.md
+
+# Editor / OS
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+*.swp
+
+# Local database data
+tmp/
+
+# Playwright session material
+tests/.auth/
+*.storageState.json
+
+# Local independent Provider build
+/examples/capability-provider/capability-provider
+/examples/capability-provider/capability-provider.exe
+
+# Python bytecode
+__pycache__/
+*.pyc

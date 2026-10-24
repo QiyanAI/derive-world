@@ -1,0 +1,57 @@
+title = "Derive World secret rules"
+
+[extend]
+useDefault = true
+
+[[rules]]
+id = "dw-pat"
+description = "Derive World personal access token"
+regex = '''dw_pat_[A-Za-z0-9_-]{20,}'''
+tags = ["token", "derive-world"]
+
+[[rules]]
+id = "dw-session"
+description = "Derive World session cookie or leaked session value"
+regex = '''dw_session=[A-Za-z0-9_-]{20,}'''
+tags = ["token", "derive-world"]
+
+[[rules]]
+id = "dw-invitation"
+description = "Derive World invitation token in URL path"
+regex = '''/invitations/[A-Za-z0-9_-]{20,}'''
+tags = ["token", "derive-world"]
+
+[[rules]]
+id = "dw-signature"
+description = "Capability provider HMAC signature header"
+regex = '''X-DW-Signature:\s*[a-f0-9]{64}'''
+tags = ["secret", "derive-world"]
+
+[[rules]]
+id = "dw-hmac"
+description = "Capability HMAC secret assignment"
+regex = '''CAPABILITY_HMAC_SECRET\s*=\s*[0-9a-fA-F]{64}'''
+tags = ["secret", "derive-world"]
+
+[[rules]]
+id = "dw-model-key"
+description = "Model API key assignment"
+regex = '''MODEL_API_KEY\s*=\s*\S{16,}'''
+tags = ["secret", "derive-world"]
+
+[allowlist]
+description = "Documented placeholders and test-only values; no file-level path exemptions"
+regexes = [
+  '''sk-\.\.\.''',
+  '''<your[-_ ].*>''',
+  '''dw_local_only''',
+  '''dw_dev_only_[a-z_]+''',
+  '''YOUR_[A-Z_]+''',
+  # Historical CI-only placeholders (not production secrets).
+  '''0123456789abcdef0123456789abcdef''',
+  '''abcdef0123456789abcdef0123456789''',
+  '''fedcba9876543210fedcba9876543210''',
+  # Documented integration-test credential; never a deployment secret.
+  '''correct horse battery staple''',
+  '''test-only-[a-z-]+-[0-9]+'''
+]
