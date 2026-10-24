@@ -7,21 +7,31 @@ versioned objects that people and their personal AI can read, contribute to,
 derive from, and trace through an explicit lineage. The first release targets a
 small, self-hostable OSS MVP (`v0.1.0`) rather than a complete platform.
 
-> **Status: G00–G06 — accepted/closed (G06 final acceptance recorded
-> 2026-10-24). G07 — engineering complete; Owner review pending; release NO-GO.
-> Real AI — VERIFIED_REAL only for the approved two-call API-level run at
-> `e90f23a`/`9fd32c1` (DeepSeek `deepseek-flash`, synthetic data); it was not
-> re-run on the final closure SHA, and no general model/provider claim is made.**
-> This tree is the `v0.1.0`
-> release candidate. The release evidence records the final main SHA,
-> the CI runs (including real PostgreSQL and Chromium/Firefox/mobile browser
-> acceptance), the planned `v0.1.0-rc.1` label (**not created**), and the
-> dry-run artifact hashes. **No Git tag or GitHub Release exists for this
-> candidate.** The repository remains private; the public-launch gate requires
-> explicit owner authorization. See the [release notes](docs/en/release-notes.md)
+**Why it is different:** most AI tools treat chat as the product. Derive World
+treats the *object* as the product: a Living Object has versions, members,
+permissions, and a traceable lineage. A Personal AI can propose changes and
+derive children, but only a human can approve; derived objects are independent,
+not live pointers. The result is a small, auditable foundation you can run
+yourself.
+
+## See it in action
+
+![17-second Derive World demo](docs/assets/demo-preview.gif)
+
+A 17-second tour of the reference world: a Living Object, its version history
+and lineage, and an interactive poll. The full recording is
+[`demo-17s.webm`](docs/assets/demo-17s.webm). Fixture mode, no model API key.
+[Showcase](SHOWCASE.md) has three launch examples and a voluntary way to share
+what you build.
+
+> **Status: public OSS MVP — `v0.1.0`.** This is the first public release of
+> Derive World: a self-hostable foundation for Living Objects, not a production
+> platform. **Real AI is VERIFIED_REAL only for the approved two-call API-level
+> run (DeepSeek `deepseek-flash`, synthetic data); it was not re-run on the
+> release SHA, and no general model/provider claim is made. Fixture mode calls
+> no model and is not real AI.** The frozen 22-table schema and the five
+> capability descriptors are unchanged. See the [release notes](docs/en/release-notes.md)
 > and [CHANGELOG](CHANGELOG.md).
-> Fixture output is still not real AI. The frozen 22-table schema and the five
-> capability descriptors are unchanged. Nothing here is a production release.
 
 ## The Reference World
 
@@ -67,7 +77,7 @@ docker compose ps
 curl -fsS http://127.0.0.1:8080/readyz
 ```
 
-The Compose build identifies as `0.1.0-rc.1`; `DW_COMMIT` and `DW_BUILD_TIME`
+The Compose build identifies as `0.1.0`; `DW_COMMIT` and `DW_BUILD_TIME`
 remain `unknown` unless you set them. Release archives inject the tagged commit
 and commit-derived build time.
 
@@ -155,6 +165,10 @@ a positive global call cap even when the variable is unset or zero.
 npm ci
 npm run -w web build
 npm run -w sdk/typescript build
+# Start a local PostgreSQL first, for example:
+# docker run --rm -d --name dw-dev-db -p 5432:5432 #   -e POSTGRES_USER=derive -e POSTGRES_PASSWORD=dw_local_only #   -e POSTGRES_DB=derive_world postgres:17-alpine
+cp .env.example .env
+set -a; . ./.env; set +a
 go run ./cmd/server migrate
 go run ./cmd/server serve
 ```
@@ -194,7 +208,8 @@ depending only on the standard library (plus their frozen dependencies).
 - PostgreSQL and the reference capability provider are on internal networks.
 - The `app` and `capability-provider` containers run as non-root (UID/GID
   10001) with a read-only root filesystem and dropped capabilities; the
-  PostgreSQL and one-shot migration containers use their standard images.
+  PostgreSQL container uses its standard image; the one-shot migration
+  container runs the same built server image as the app.
 - No production secrets are committed. `.env` is ignored.
 - CSP, nosniff, no-referrer, and Permissions-Policy headers are set by the app.
 - Object content is untrusted. The server never treats model text or object
@@ -239,10 +254,10 @@ depending only on the standard library (plus their frozen dependencies).
 - `timeout` and `unknown` capability results are never reported as success;
   unknown results never carry output.
 
-Report vulnerabilities privately as described in [SECURITY.md](SECURITY.md).
-This release candidate is not yet public; GitHub Private Vulnerability
-Reporting will be enabled at the public-release gate. Until then, contact the
-repository owner through a private GitHub channel. Do not open a public issue.
+Report vulnerabilities privately through GitHub Private Vulnerability
+Reporting as described in [SECURITY.md](SECURITY.md): open the repository's
+**Security** tab and choose **Report a vulnerability**. Do not open a public
+issue.
 
 ## Limitations
 
@@ -254,9 +269,8 @@ repository owner through a private GitHub channel. Do not open a public issue.
   `content.structure` Provider runs as a separate process on an internal
   network. There is no runtime capability registration or arbitrary provider
   URL.
-- Real AI is VERIFIED_REAL only for the approved two-call API-level run at
-  `e90f23a`/`9fd32c1` (DeepSeek `deepseek-flash`, synthetic data). It was not
-  re-run on the final closure SHA and is not a general claim that every model
+- Real AI is VERIFIED_REAL only for the approved two-call API-level run (DeepSeek `deepseek-flash`, synthetic data). It was not
+  re-run on the release SHA and is not a general claim that every model
   or provider is accepted. One adapter is active per deployment.
 - Fixture mode does not call a model. Deterministic structured fixture replies
   are demo data, never real AI.
@@ -272,9 +286,8 @@ repository owner through a private GitHub channel. Do not open a public issue.
   and version summary, and derive-from-an-older-version uses immutable
   snapshots. The UI states this limitation.
 - Compose is a reference deployment, not a production orchestrator.
-- The `v0.1.0` release candidate is not yet publicly released; the repository
-  remains private until the public-release gate. No GitHub Release has been
-  published.
+- `v0.1.0` is the first public OSS MVP release. It is not a production
+  platform, and no production use is supported or claimed.
 
 ## Documentation
 
@@ -288,6 +301,7 @@ repository owner through a private GitHub channel. Do not open a public issue.
 - [Security](docs/en/security.md)
 - [Limitations](docs/en/limitations.md)
 - [Release notes](docs/en/release-notes.md)
+- [Showcase and sharing](SHOWCASE.md)
 - [中文 README](README.zh-CN.md)
 
 ## License

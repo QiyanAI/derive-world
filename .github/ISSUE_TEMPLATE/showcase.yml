@@ -1,0 +1,82 @@
+name: Showcase submission
+description: Share a public, reproducible Living Object, derivation, or integration you built
+title: "[Showcase]: "
+labels: ["showcase"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for sharing. This issue is public. Submit only work you intend to
+        publish, and remove private context, conversations, Handoff projections,
+        tokens, personal data, and third-party material you cannot share. See
+        [SHOWCASE.md](https://github.com/QiyanAI/derive-world/blob/main/SHOWCASE.md)
+        for the full checklist. You do not have to star or share anything to use
+        Derive World.
+  - type: input
+    id: built
+    attributes:
+      label: What did you build?
+      description: A one-line summary of your Living Object, derivation, integration, or example.
+      placeholder: "A collaborative research checklist that derives a per-quarter plan"
+    validations:
+      required: true
+  - type: textarea
+    id: story
+    attributes:
+      label: The story
+      description: What problem did it solve? What did the human and the Personal AI each contribute?
+    validations:
+      required: true
+  - type: textarea
+    id: derivation
+    attributes:
+      label: Derivation and lineage
+      description: What did you derive from, and what is the resulting child? Describe the ancestry or attach a public link.
+  - type: dropdown
+    id: mode
+    attributes:
+      label: Model mode
+      description: Label the work accurately. Fixture is deterministic demo data, not real AI.
+      options:
+        - Fixture (no model call)
+        - Real AI (my own OpenAI-compatible endpoint and key)
+        - Both
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: Version or commit
+      description: The Derive World version, tag, or commit you used.
+      placeholder: "v0.1.0 or a commit SHA"
+    validations:
+      required: true
+  - type: textarea
+    id: reproduce
+    attributes:
+      label: How can someone reproduce it?
+      description: Public steps, commands, or a repository link. Do not include secrets.
+    validations:
+      required: true
+  - type: input
+    id: link
+    attributes:
+      label: Public link
+      description: A link that works without authentication, if you have one.
+      placeholder: "https://..."
+  - type: textarea
+    id: media
+    attributes:
+      label: Screenshots or recording
+      description: Optional public images or a video. Confirm you have the rights to share them.
+  - type: checkboxes
+    id: safety
+    attributes:
+      label: Public-safety confirmation
+      options:
+        - label: This submission contains no private context, conversations, Handoff projections, tokens, personal data, or third-party material I cannot share.
+          required: true
+        - label: The linked artifact is public and reproducible, and the Fixture/Real AI label is accurate.
+          required: true
+        - label: I consent to the maintainers linking to this public issue from the project showcase. My content remains mine; the repository's Apache-2.0 license covers the software, not my submission.
+          required: true

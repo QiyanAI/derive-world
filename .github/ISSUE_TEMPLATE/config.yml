@@ -1,8 +1,14 @@
 blank_issues_enabled: false
 contact_links:
   - name: Security report
-    url: https://github.com/QiyanAI/derive-world/blob/main/SECURITY.md
-    about: Read the private reporting process. GitHub PVR is not yet enabled; do not open a public issue.
+    url: https://github.com/QiyanAI/derive-world/security/policy
+    about: Report a vulnerability privately through GitHub Private Vulnerability Reporting. Do not open a public issue.
+  - name: Showcase submission
+    url: https://github.com/QiyanAI/derive-world/issues/new?template=showcase.yml
+    about: Share a public, reproducible Living Object, derivation, or integration.
+  - name: Community discussions
+    url: https://github.com/QiyanAI/derive-world/discussions
+    about: Ask questions and see what other people built.
   - name: Documentation
     url: https://github.com/QiyanAI/derive-world/tree/main/docs
     about: Read the quick start, architecture, API, and self-hosting docs.

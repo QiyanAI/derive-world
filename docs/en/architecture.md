@@ -32,12 +32,12 @@ audit -> store
 frozen dependencies. `internal/arch/TestModuleBoundaries` enforces the forbidden
 edges, cycle freedom, submodule isolation, and the table-ownership matrix.
 
-## G04 scope
+## Capability scope
 
-G04 keeps the frozen 22-table schema and activates the Capability Broker, the
+This scope keeps the frozen 22-table schema and activates the Capability Broker, the
 five frozen capabilities, `capability_definitions` synchronization, invocation
 recording, Open API endpoints, the TypeScript SDK, and the independent
-`content.structure` Provider. The Broker composes the G02/G03 object, Handoff,
+`content.structure` Provider. The Broker composes the object, Handoff,
 proposal, derive, Trust Kernel, and confirmation paths; it does not create a
 second authorization, object-write, derive, or confirmation mechanism.
 

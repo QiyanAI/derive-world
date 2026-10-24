@@ -19,7 +19,7 @@ budgets.
 | GET | `/api/v1/meta` | Build version, commit, build time, and `model_mode`. |
 | GET | `/api/v1/openapi.yaml` | This contract. |
 
-## G03 endpoints
+## Object endpoints
 
 | Method | Path | Authentication | Notes |
 |---|---|---|---|
@@ -60,7 +60,7 @@ budgets.
 | POST | `/api/v1/confirmations/{id}/deny` | Session | Deny a pending confirmation. |
 | GET | `/api/v1/me/export` | Session | Self-only JSON export, one per hour. |
 
-## G04 capability endpoints
+## Capability endpoints
 
 | Method | Path | Authentication | Notes |
 |---|---|---|---|
@@ -107,9 +107,9 @@ A synchronous success returns the validated output:
 
 `object.propose_change` returns `{"proposal_id":"...","status":"pending"}` and
 does not modify the object. Proposal input is limited to 64 KiB of canonical
-JSON (G04 correction C-G04-03), matching the object-state ceiling. Apply is
+JSON, matching the object-state ceiling. Apply is
 governed by the 64 KiB object state and, for `object.state_changed`, the
-132,352-byte event payload (G04 correction C-G04-04); all other events remain
+132,352-byte event payload; all other events remain
 at 96 KiB, and the capability input itself remains 64 KiB. A proposal can
 therefore be created successfully while apply returns 413 for a body that fits
 the 64 KiB proposal input but cannot fit the 64 KiB state (for example a
@@ -264,7 +264,7 @@ canonical JSON body. Proposal apply uses proposal status instead of a key.
 }
 ```
 
-The closed code set and HTTP mapping are frozen by G00 contract §A.4.5:
+The closed code set and HTTP mapping are frozen by the API contract §A.4.5:
 `invalid_request` (400), `unauthenticated` (401), `forbidden` (403),
 `not_found`/`invitation_invalid` (404), `conflict`/`version_conflict`/
 `idempotency_conflict`/`request_in_progress` (409),

@@ -5,6 +5,7 @@
   "type": "module",
   "description": "Derive World OSS MVP — Living Objects, Personal AI, Derive, and the Reference World",
   "license": "Apache-2.0",
+  "packageManager": "npm@11.9.0",
   "workspaces": [
     "web",
     "sdk/typescript"

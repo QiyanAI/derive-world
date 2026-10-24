@@ -5,13 +5,10 @@ is not a marketing site and it is not a mock: every screen below is driven by
 the same Go API, PostgreSQL schema, authorization chain, and browser test suite
 that ship in this repository.
 
-> **Status:** G00–G06 are accepted/closed (G06 final acceptance recorded
-> 2026-10-24). This tree is the `v0.1.0` release candidate; G07 is engineering
-> complete with Owner review pending and release NO-GO; no public Release has
-> been published. Fixture mode is deterministic demo output, not model
-> intelligence. Real AI is VERIFIED_REAL only for the approved two-call API-level
-> run at `e90f23a`/`9fd32c1` (DeepSeek `deepseek-flash`); it was not re-run on
-> the final closure SHA.
+> **Status:** `v0.1.0` is the first public
+> release. Fixture mode is deterministic demo output, not model intelligence.
+> Real AI is VERIFIED_REAL only for the approved two-call API-level run (DeepSeek `deepseek-flash`); it was not re-run on the
+> release SHA.
 
 ![Reference World landing](../assets/g05-landing.png)
 

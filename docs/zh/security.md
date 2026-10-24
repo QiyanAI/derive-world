@@ -2,7 +2,7 @@
 
 ## 报告
 
-长期渠道为 GitHub 私密漏洞报告。本发布候选尚未启用；将在公开发布门禁启用。在此之前，请通过 GitHub 私密渠道联系仓库负责人。不要为疑似漏洞开公开 Issue。范围与流程见 `SECURITY.md`。
+GitHub 私密漏洞报告已对本公开仓库启用。请在仓库的 Security 页面选择 Report a vulnerability。不要为疑似漏洞开公开 Issue。范围与流程见 `SECURITY.zh-CN.md`。
 
 ## 本构建的默认值
 
@@ -15,7 +15,7 @@
 - 访问日志只记录路由模板、加盐 IP 哈希，不记录 Cookie、Authorization、正文或对象内容。
 - 模型 API Key 只来自 `MODEL_API_KEY`，不入库、不入日志、不下发浏览器。
 
-## G04 已实现的控制
+## 能力与 Provider 控制
 
 - 密码使用 Argon2id（`m=64 MiB, t=3, p=2`，16 字节 salt，32 字节 key），永不写日志、审计或响应。
 - 会话与 CSRF 令牌为 32 字节随机值，数据库只存 SHA-256 摘要。登录轮换会话，退出同步撤销。
@@ -38,7 +38,7 @@
 - `/me/export` 仅导出本人数据，排除密码哈希、令牌哈希、其他用户数据与私人内容。
 - 凭据、CSRF 值、私人上下文、消息内容与 AI 输入不会写入对象事件或审计 metadata；审计 metadata 按键脱敏并限制 4 KiB。
 
-## G06 已实现的控制
+## Real AI 与预算控制
 
 - `http_hmac_v2` Provider 传输校验响应 HMAC：覆盖请求时间戳、invocation id、HTTP 状态与响应体精确字节的 SHA-256。缺失、畸形、密钥错误、跨 Invocation、重放或被篡改的签名一律产生未知结果，输出绝不入库，审计原因为 `provider_integrity_failed`。
 - 响应校验使用常量时间比较。Provider 回显请求 key id 且必须匹配，因此签名响应不能被移动到其他 Invocation 或密钥。
@@ -50,7 +50,7 @@
 
 ## 尚未实现
 
-G00–G06 已验收/关闭（G06 最终验收记录于 2026-10-24）。已批准的双 Personal AI 两次 API 级调用（`e90f23a`/`9fd32c1`，DeepSeek `deepseek-flash`）已完成，Real AI 仅对该范围记为 **VERIFIED_REAL**；未在最终收口 SHA 上重跑，不构成普遍模型/Provider 验收。G07 工程完成，Owner 复核待定，发布 NO-GO；尚未发布公开 Release。旧 `http_hmac` 传输仅保留用于内部兼容，不签名响应，不得用于公网 Provider。
+`v0.1.0` 是首个公开版本。已批准的双 Personal AI 两次 API 级调用（DeepSeek `deepseek-flash`）已完成，Real AI 仅对该范围记为 **VERIFIED_REAL**；未在发布 SHA 上重跑，不构成普遍模型/Provider 验收。旧 `http_hmac` 传输仅保留用于内部兼容，不签名响应，不得用于公网 Provider。
 
 ## 能力安全控制
 

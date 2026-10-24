@@ -1,6 +1,6 @@
 # 独立能力 Provider
 
-参考 Provider 在独立进程中执行 `content.structure`。它是仅使用标准库的 Go module（`examples/capability-provider`），实现冻结的 D06 HTTP+HMAC 协议。它不导入 Derive World 主模块、不连接 PostgreSQL，也不会接收用户 Cookie、PAT、CSRF 令牌、私人 AI 上下文或数据库凭据。
+参考 Provider 在独立进程中执行 `content.structure`。它是仅使用标准库的 Go module（`examples/capability-provider`），实现冻结的 HTTP+HMAC 协议。它不导入 Derive World 主模块、不连接 PostgreSQL，也不会接收用户 Cookie、PAT、CSRF 令牌、私人 AI 上下文或数据库凭据。
 
 ## 拓扑
 
@@ -65,7 +65,7 @@ LISTEN_ADDR="10.0.0.12:8081" \
 | `LISTEN_ADDR` | 否 | `:8081` | 私有网络内监听地址。 |
 | `PROVIDER_ID` | 否 | `reference.content-structure` | 其他值启动失败。 |
 | `CONTRACT_VERSION` | 否 | `1.0` | 其他值启动失败。 |
-| `MAX_BODY_BYTES` | 否 | `65536` | 业务输入上限，1..65536。HTTP 正文上限为 `MAX_BODY_BYTES + 126`，即精确的 D06 信封开销。 |
+| `MAX_BODY_BYTES` | 否 | `65536` | 业务输入上限，1..65536。HTTP 正文上限为 `MAX_BODY_BYTES + 126`，即精确的签名信封开销。 |
 | `REPLAY_CACHE_SIZE` | 否 | `4096` | 正整数 LRU 容量。 |
 
 修改 `capabilities.yaml`（或 `CAPABILITIES_CONFIG` 指定的文件）并重启 app：
@@ -135,7 +135,7 @@ User-Agent: derive-world-broker/0.1.0
 
 ### 响应签名（`http_hmac_v2`）
 
-`http_hmac_v2` 保留冻结的 D06 1.0 请求信封，并增加响应签名。请求带
+`http_hmac_v2` 保留冻结的 1.0 请求信封，并增加响应签名。请求带
 `X-DW-Response-Signature-Version: v2` 时，Provider 在验签后对所有响应（成功或
 错误）增加：
 
@@ -158,7 +158,7 @@ Broker 将未签名、被篡改或不匹配的 v2 响应视为 `capability_unkno
 返回其输出。`REQUIRE_RESPONSE_SIGNING=true`（默认）时，未协商 v2 的请求被拒绝。
 
 公开的 `contract_version` 仍为 `1.0`；`http_hmac_v2` 是可加的传输配置，不改变
-D06 请求契约。旧 `http_hmac` 仅用于内部兼容且不签名响应；公网 Provider 必须使用
+请求契约。旧 `http_hmac` 仅用于内部兼容且不签名响应；公网 Provider 必须使用
 `http_hmac_v2`。
 
 ## 安全边界

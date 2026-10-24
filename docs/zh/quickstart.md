@@ -1,6 +1,6 @@
 # 快速开始
 
-Derive World `v0.1.0` 是 OSS MVP 的工程基础。本指南先用 Fixture 模式启动 G05 开放参考世界，走通两种活对象、两个独立用户、Handoff → 个人 AI → 人类确认 → 衍生闭环、错误状态与浏览器验收，再说明如何切换到真实 OpenAI-compatible 模型。
+Derive World `v0.1.0` 是 OSS MVP 的工程基础。本指南先用 Fixture 模式启动开放参考世界，走通两种活对象、两个独立用户、Handoff → 个人 AI → 人类确认 → 衍生闭环、错误状态与浏览器验收，再说明如何切换到真实 OpenAI-compatible 模型。
 
 ## 前置条件
 
@@ -23,7 +23,7 @@ curl -fsS http://127.0.0.1:8080/readyz
 
 打开 <http://127.0.0.1:8080>。顶部显示 `FIXTURE`；此模式下所有 AI 输出都是确定性演示数据，不是真实模型输出。
 
-## G05 参考世界走查
+## 参考世界走查
 
 1. 选择“创建账户”。注册在同一事务内创建用户、个人 AI 资料、空私人上下文、默认授权与会话。**欢迎页**确认这些真实状态。
 2. 打开**世界**。第一使用清单来自服务端状态。创建**协作对象**或**互动对象**。
@@ -56,7 +56,7 @@ RATE_LIMIT_API_PER_MIN=600
 
 CI 在工作流内应用同样覆盖，并断言 `model_mode` 为 `fixture`；生产默认值不变。
 
-## G04 能力走查
+## 能力走查
 
 同一栈运行 Capability Broker 与独立 `content.structure` Provider。Provider 仅在 `capnet` 内可达，不发布宿主端口。
 
@@ -105,7 +105,7 @@ docker compose up -d --force-recreate app
 curl -fsS http://127.0.0.1:8080/api/v1/meta
 ```
 
-响应必须为 `"model_mode":"real"`。Real 模式缺少配置时进程启动失败，不会静默降级为 Fixture。
+响应必须为 `"model_mode":"real"`。Real 模式缺少配置时进程启动失败，不会静默降级为 Fixture。Real AI 使用你自己的 Provider 账户：端点与 Key 由你提供，费用由 Provider 直接向你计费。绝不要提交 Key。
 
 ## 本地开发
 
@@ -113,6 +113,10 @@ curl -fsS http://127.0.0.1:8080/api/v1/meta
 npm ci
 npm run -w web build
 npm run -w sdk/typescript build
+# 先启动一个本地 PostgreSQL，例如：
+# docker run --rm -d --name dw-dev-db -p 5432:5432 #   -e POSTGRES_USER=derive -e POSTGRES_PASSWORD=dw_local_only #   -e POSTGRES_DB=derive_world postgres:17-alpine
+cp .env.example .env
+set -a; . ./.env; set +a
 go run ./cmd/server migrate
 go run ./cmd/server serve
 ```
@@ -127,10 +131,10 @@ npm run -w web dev
 
 - **8080 端口被占用：** 同时修改 `compose.yaml` 的 loopback 映射与 `PUBLIC_BASE_URL`。
 - **`migrate` 非零退出：** 查看 `docker compose logs migrate`；迁移失败时 app 不会启动。
-- **`/readyz` 返回 503：** PostgreSQL 未就绪或 `DATABASE_URL` 错误。
+- **`/readyz` 返回 503：** 某个必需依赖（通常是 PostgreSQL）未就绪，或 `DATABASE_URL` 错误；请检查 `docker compose logs migrate app`。
 - **Real 模式启动失败：** 会打印缺失的变量名，不打印值。
 - **浏览器显示 `UNKNOWN` 模式：** Web 客户端无法访问 `/api/v1/meta`，确认 app 容器运行中。
 
-## 范围与后续 Gate
+## 范围与后续版本
 
-账号、会话、Living Object、对象授权、版本化动作、事件历史、Derive、来源链、邀请/Derive Link、Handoff、Personal AI 会话、提议、确认、PAT、Capability Broker、五项能力、Open API、TypeScript SDK、独立 Provider、响应签名传输、TLS 校验、模型预算控制、双语参考世界与 Chromium + Firefox 验收套件已实现。G00–G06 已验收/关闭（G06 最终验收记录于 2026-10-24）。本树是 `v0.1.0` 发布候选；G07 工程完成，Owner 复核待定，发布 NO-GO；尚未发布公开 Release。Real AI 仅对已批准的双 Personal AI 两次 API 级调用（`e90f23a`/`9fd32c1`，DeepSeek `deepseek-flash`）记为 VERIFIED_REAL；未在最终收口 SHA 上重跑，不代表所有模型或 Provider。没有路由伪造成功。
+账号、会话、Living Object、对象授权、版本化动作、事件历史、Derive、来源链、邀请/Derive Link、Handoff、Personal AI 会话、提议、确认、PAT、Capability Broker、五项能力、Open API、TypeScript SDK、独立 Provider、响应签名传输、TLS 校验、模型预算控制、双语参考世界与 Chromium + Firefox 验收套件已实现。`v0.1.0` 是首个公开版本。Real AI 仅对已批准的双 Personal AI 两次 API 级调用（DeepSeek `deepseek-flash`）记为 VERIFIED_REAL；未在发布 SHA 上重跑，不代表所有模型或 Provider。没有路由伪造成功。作品展示与分享见[展示页](../../SHOWCASE.md)。

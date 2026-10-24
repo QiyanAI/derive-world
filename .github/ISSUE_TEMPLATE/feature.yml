@@ -6,8 +6,9 @@ body:
   - type: markdown
     attributes:
       value: |
-        The first release is intentionally small. Explain which Gate or frozen
-        contract the request belongs to. Requests outside the MVP are recorded as P2.
+        The first release is intentionally small. Explain the user or developer
+        problem and why it belongs in the OSS MVP. Requests outside the MVP are
+        recorded for future consideration.
   - type: textarea
     id: problem
     attributes:

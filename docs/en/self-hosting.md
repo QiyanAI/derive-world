@@ -43,7 +43,7 @@ the variables. The standalone binary reads process environment variables; it
 does not load `.env` itself:
 
 ```bash
-cd derive-world_0.1.0-rc.1_linux_amd64
+cd derive-world_0.1.0_linux_amd64
 cp .env.example .env
 set -a; . ./.env; set +a
 ./derive-world migrate

@@ -2,7 +2,7 @@
 
 Derive World `v0.1.0` 是一个可自托管的活对象参考世界。它不是营销站点，也不是模拟：下面的每个界面都由仓库内同一套 Go API、PostgreSQL Schema、授权链和浏览器测试驱动。
 
-> **状态：** G00–G06 已验收/关闭（G06 最终验收记录于 2026-10-24）。本树是 `v0.1.0` 发布候选；G07 工程完成，Owner 复核待定，发布 NO-GO；尚未发布公开 Release。固定演示模式是确定性演示输出，不是模型智能。Real AI 仅对已批准的双 Personal AI 两次 API 级调用（`e90f23a`/`9fd32c1`，DeepSeek `deepseek-flash`）记为 VERIFIED_REAL；未在最终收口 SHA 上重跑。
+> **状态：** `v0.1.0` 是首个公开版本。固定演示模式是确定性演示输出，不是模型智能。Real AI 仅对已批准的双 Personal AI 两次 API 级调用（DeepSeek `deepseek-flash`）记为 VERIFIED_REAL；未在发布 SHA 上重跑。
 
 ![参考世界首页](../assets/g05-landing.png)
 

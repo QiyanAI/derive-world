@@ -1,7 +1,9 @@
 # Contributing to Derive World
 
-Thank you for your interest. This repository is the `v0.1.0` release
-candidate. It includes Digital Self sessions, Living Objects, object
+[中文](CONTRIBUTING.zh-CN.md) | English
+
+Thank you for your interest. This repository is the public `v0.1.0` OSS MVP.
+It includes Digital Self sessions, Living Objects, object
 authorization, versioned actions, event history, Derive, Lineage, audit,
 idempotency, invitations and Derive Links, Handoff, Personal AI conversations,
 the Trust Kernel, proposals and human confirmations, personal access tokens,
@@ -29,8 +31,9 @@ certify the DCO at <https://developercertificate.org/>.
 ### History
 
 This repository starts from a clean, DCO-compliant initial commit. The
-pre-public development history is retained in a private repository and is not
-part of this repository's Git history. No DCO exception applies here.
+pre-public development history is retained in a separate private development
+archive and is not part of this repository's Git history. No DCO exception
+applies here.
 
 ## Workflow
 

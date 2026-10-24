@@ -12,7 +12,7 @@
 | GET | `/api/v1/meta` | 版本、commit、构建时间与 `model_mode`。 |
 | GET | `/api/v1/openapi.yaml` | 本契约文件。 |
 
-## G03 端点
+## 对象端点
 
 | 方法 | 路径 | 认证 | 说明 |
 |---|---|---|---|
@@ -53,7 +53,7 @@
 | POST | `/api/v1/confirmations/{id}/deny` | 会话 | 拒绝待确认动作。 |
 | GET | `/api/v1/me/export` | 会话 | 仅本人 JSON 导出，每小时一次。 |
 
-## G04 能力端点
+## 能力端点
 
 | 方法 | 路径 | 认证 | 说明 |
 |---|---|---|---|
@@ -97,7 +97,7 @@ Content-Type: application/json
 }
 ```
 
-`object.propose_change` 返回 `{"proposal_id":"...","status":"pending"}`，不修改对象；人类继续通过现有提议端点应用或拒绝。提议 input 上限为 64 KiB 规范化 JSON（G04 补正 C-G04-03），与对象状态上限一致。应用受 64 KiB 对象状态限制；`object.state_changed` 事件 payload 上限为 132,352 字节（G04 补正 C-G04-04），其他事件仍为 96 KiB，能力输入本身仍为 64 KiB。因此提议可以创建成功，但能装入 64 KiB 提议输入、却超出 64 KiB 状态容量的正文（例如 65,467 字节的 20,000 字符混合正文）在 apply 时返回 413，此时对象不变。V1 的两个上限同时生效：正文最多 20,000 个 Unicode code point，且完整状态最多 65,536 字节。20,000 个四字节字符（约 80,000 字节）在提议创建阶段即被 64 KiB 输入上限拒绝。
+`object.propose_change` 返回 `{"proposal_id":"...","status":"pending"}`，不修改对象；人类继续通过现有提议端点应用或拒绝。提议 input 上限为 64 KiB 规范化 JSON，与对象状态上限一致。应用受 64 KiB 对象状态限制；`object.state_changed` 事件 payload 上限为 132,352 字节，其他事件仍为 96 KiB，能力输入本身仍为 64 KiB。因此提议可以创建成功，但能装入 64 KiB 提议输入、却超出 64 KiB 状态容量的正文（例如 65,467 字节的 20,000 字符混合正文）在 apply 时返回 413，此时对象不变。V1 的两个上限同时生效：正文最多 20,000 个 Unicode code point，且完整状态最多 65,536 字节。20,000 个四字节字符（约 80,000 字节）在提议创建阶段即被 64 KiB 输入上限拒绝。
 
 AI 发起的 `object.derive` 在等待人工确认时返回 `202`：
 
@@ -192,7 +192,7 @@ Broker 调用 `POST /v1/invoke`，请求带固定信封，签名覆盖 `timestam
 }
 ```
 
-错误码与 HTTP 映射由 G00 契约 §A.4.5 冻结：`invalid_request`（400）、`unauthenticated`（401）、`forbidden`（403）、`not_found`/`invitation_invalid`（404）、`conflict`/`version_conflict`/`idempotency_conflict`/`request_in_progress`（409）、`confirmation_expired`（410）、`payload_too_large`（413）、`unsupported_media_type`（415）、`rate_limited`/`budget_exceeded`（429）、`model_unavailable`/`model_invalid_output`/`capability_failed`/`capability_unknown`（502）、`model_timeout`/`capability_timeout`（504）、`capability_denied`（403）、`internal`（500）。`confirmation_required` 是 202 结果，不是错误。
+错误码与 HTTP 映射由 API 契约 §A.4.5 冻结：`invalid_request`（400）、`unauthenticated`（401）、`forbidden`（403）、`not_found`/`invitation_invalid`（404）、`conflict`/`version_conflict`/`idempotency_conflict`/`request_in_progress`（409）、`confirmation_expired`（410）、`payload_too_large`（413）、`unsupported_media_type`（415）、`rate_limited`/`budget_exceeded`（429）、`model_unavailable`/`model_invalid_output`/`capability_failed`/`capability_unknown`（502）、`model_timeout`/`capability_timeout`（504）、`capability_denied`（403）、`internal`（500）。`confirmation_required` 是 202 结果，不是错误。
 
 ## 通用约定
 

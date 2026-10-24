@@ -1,16 +1,14 @@
 # 限制
 
-本仓库是 `v0.1.0` 发布候选。G00–G06 已验收/关闭（G06 最终验收记录于 2026-10-24）；G07 为
-**工程完成，Owner 复核待定，发布 NO-GO**。已批准的双 Personal AI 两次 API 级调用
-（`e90f23a`/`9fd32c1`，DeepSeek `deepseek-flash`）仅对该范围记为 **VERIFIED_REAL**；
-未在最终收口 SHA 上重跑，不构成普遍模型/Provider 验收。数字自我会话、Living Object、对象授权、版本化动作、事件历史、
+这是 `v0.1.0` 公开 OSS MVP，也是首个公开版本。已批准的双 Personal AI 两次 API 级调用
+（DeepSeek `deepseek-flash`）仅对该范围记为 **VERIFIED_REAL**；
+未在发布 SHA 上重跑，不构成普遍模型/Provider 验收。数字自我会话、Living Object、对象授权、版本化动作、事件历史、
 Derive、来源链、审计、幂等、邀请与 Derive Link、Handoff、Personal AI 会话、
 Trust Kernel、AI 提议/确认、PAT、本人导出、Capability Broker、五项首发能力、
 Open API、TypeScript SDK、独立 `content.structure` Provider、响应签名传输、
-TLS 校验、HMAC 密钥轮换与模型预算控制已实现。仓库仍为私有，尚未发布公开
-Release。
+TLS 校验、HMAC 密钥轮换与模型预算控制已实现。这是可自托管的 OSS MVP，不是生产平台。
 
-## 已实现至 G06
+## v0.1.0 已实现
 
 - 本地注册、登录、会话轮换、退出与会话绑定 CSRF。
 - 注册时同事务创建 Personal AI 档案与空私人上下文。
@@ -43,8 +41,7 @@ Release。
 
 ## 尚未实现
 
-- G07 为等待负责人验收的发布候选。尚未发布公开 Release；仓库在公开发布门前保持私有。
-- 普遍的多 Provider 验收。Real AI 仅对已批准的双 Personal AI 两次 API 级调用（`e90f23a`/`9fd32c1`，DeepSeek `deepseek-flash`）记为 VERIFIED_REAL；未在最终收口 SHA 上重跑，不代表所有模型或 Provider 均已验收。
+- 普遍的多 Provider 验收。Real AI 仅对已批准的双 Personal AI 两次 API 级调用（DeepSeek `deepseek-flash`）记为 VERIFIED_REAL；未在发布 SHA 上重跑，不代表所有模型或 Provider 均已验收。
 - 多 Provider 并发路由、按用户或按 Personal AI 选择模型、本地模型托管。
 
 参考客户端展示可用的界面。没有伪造成功的占位路由；Real AI 仍是发布前硬门禁。
@@ -62,15 +59,15 @@ Release。
 - 旧 `http_hmac` 传输不签名响应，仅为内部兼容保留。
 - 模型预算使用单实例内存计数，在每个 UTC 日首次调用时从 `model_invocations` 重新载入。实际尝试 Provider 调用前会写入持久预占行并计入预算；进程崩溃、业务回滚或最终更新失败都不会漏记可能产生费用的调用。多个 app 副本仍不共享内存并发/计数状态；持久行防止漏记费用，但不提供多副本协调。
 - `v0.1.0` 没有历史对象状态读取端点；历史是事件与版本摘要，从旧版本衍生使用不可变快照。
-- 私有计划不提供 GitHub Dependency review；要求的检查覆盖 govulncheck、gitleaks、npm audit 与 License。仓库公开后运行 Dependency review。
+- GitHub Dependency Review 在公开 Pull Request 上运行，是发布门禁的一部分；要求的检查同时覆盖 govulncheck、gitleaks、npm audit 与 License。
 - 不发布预构建容器镜像；Compose 从源码构建。
-- `v0.1.0` 发布候选尚未公开发布，且不存在任何 Git Tag 或 GitHub Release。本私有候选未生成 GitHub 构建来源证明；公开发布工作流已准备但尚未运行。当前未验证、不声称。
+- `v0.1.0` 发行资产由公开发布工作流生成 GitHub 构建来源证明；请使用 `gh attestation verify` 针对本仓库、Tag 与工作流验签。
 
 ## 数据限制
 
 - 冻结的 22 表 Schema 未变；能力定义与调用表已启用。
 - 对象状态上限 64 KiB；`shared_context` 上限 8 KiB。
-- AI 提议 input 存储上限 64 KiB（G04 补正 C-G04-03）。提议创建与应用适用不同限额：应用受 64 KiB 状态约束；`object.state_changed` 事件 payload 上限为 132,352 字节（G04 补正 C-G04-04），其他事件仍为 96 KiB。
+- AI 提议 input 存储上限 64 KiB。提议创建与应用适用不同限额：应用受 64 KiB 状态约束；`object.state_changed` 事件 payload 上限为 132,352 字节，其他事件仍为 96 KiB。
 - 20,000 是 Unicode **code point** 上限，不是字节保证。按负责人 V1 解释，20,000 code point 的正文上限与 65,536 字节的完整状态上限**同时生效**。能装入状态的 20,000 个 ASCII、中文或混合字符可以应用；20,000 个四字节 Emoji（约 80,000 字节）超出状态上限，返回 `413 payload_too_large` 且无副作用。20,001 个 ASCII 即使字节数低于 64 KiB，也返回 `400 invalid_request`。
 - 大小限额按 PostgreSQL `jsonb` 文本计量；包含 `&`、`<`、`>` 或 U+2028/U+2029 的合法正文不会因 JSON HTML 转义而被错误拒绝。
 - 能力输入上限 64 KiB；外部 Provider 的 HTTP 正文上限为该输入加精确的 126 字节签名信封。
@@ -81,4 +78,4 @@ Release。
 
 ## 诚实状态
 
-不声称生产就绪、安全认证、用户采用、Star、下载量或融资。G00–G06 已验收/关闭（G06 最终验收记录于 2026-10-24）；G07 为 **工程完成，Owner 复核待定，发布 NO-GO**。发布证据与产品树分开保存；本树只包含产品与发布文档。已批准的双 Personal AI 两次 API 级调用（`e90f23a`/`9fd32c1`，DeepSeek `deepseek-flash`）完成了恰好两次调用（A 764/51 Token，B 804/49 Token；非高峰约 US$0.00030，高峰上界 US$0.00059），仅对该范围记为 VERIFIED_REAL；未在最终收口 SHA 上重跑。公开释放需要负责人明确授权。
+不声称生产就绪、安全认证、用户采用、Star、下载量或融资。`v0.1.0` 是首个公开版本。发布证据保存在独立的私有研发档案中；本树只包含产品与发布文档。已批准的双 Personal AI 两次 API 级调用（DeepSeek `deepseek-flash`）完成了恰好两次调用（A 764/51 Token，B 804/49 Token；非高峰约 US$0.00030，高峰上界 US$0.00059），仅对该范围记为 VERIFIED_REAL；未在发布 SHA 上重跑。
