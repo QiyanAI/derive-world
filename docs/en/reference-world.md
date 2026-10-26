@@ -143,7 +143,7 @@ reachable, lineage indentation is capped, and the Playwright suite asserts that
   controlled mode, verified only for the approved two-call run.
 - Real-time collaboration; the workspace polls while visible.
 - Email, password recovery, OAuth, or account deletion.
-- A hosted service, payment system, agent market, or third implementation of
+- A hosted service, payment system, or third implementation of
   identity, objects, permissions, derivation, or confirmations.
 
 See [Demo guide](demo-guide.md) for the two-user walkthrough and

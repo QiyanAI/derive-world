@@ -86,7 +86,7 @@ scope.
   visible and offers explicit refresh.
 - No email, password reset, OAuth, email verification, or account deletion in
   `v0.1.0`.
-- No public website, mobile app, Agent Market, or Hiyan integration.
+- No standalone product website or native mobile client is provided in `v0.1.0`.
 - Fixture mode is deterministic demo output and must never be presented as real
   AI.
 - Compose is a reference deployment, not production orchestration.
