@@ -107,8 +107,8 @@ production secrets.
 
 The Go server binary is **not** a standalone double-click desktop app: it needs
 PostgreSQL, the embedded migrations to run, a built `WEB_DIST_DIR`, and a
-configured provider for Real AI. A prebuilt container image avoids compiling
-the project, but it does not remove the database requirement.
+configured provider for Real AI. A container image built once avoids repeated
+compilation, but it does not remove the database requirement.
 
 ### Diagnostics
 

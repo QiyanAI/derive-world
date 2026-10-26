@@ -40,8 +40,8 @@ mode is deterministic demo data, not real model output.
 | Self-hoster | Yes | Run PostgreSQL, migrations, the Go service, the capability provider, and the web build. |
 
 The Go binary is not a standalone desktop app. It needs PostgreSQL, a built
-`WEB_DIST_DIR`, and (for Real AI) a configured provider. A prebuilt image skips
-compilation, not the database.
+`WEB_DIST_DIR`, and (for Real AI) a configured provider. A container image
+built once skips repeated compilation, not the database.
 
 ### Diagnostics
 
