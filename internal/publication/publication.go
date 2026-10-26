@@ -689,7 +689,16 @@ SELECT object_id, source_version, object_type, presentation_template, snapshot,
 			return nil, fmt.Errorf("%w: inheritance_fields", ErrInvalidRequest)
 		}
 	}
-	childState, err := derive.AssembleFromState(objectType, title, snapshot, inheritanceFields)
+	var snapshotEnvelope struct {
+		State json.RawMessage `json:"state"`
+	}
+	if err := json.Unmarshal(snapshot, &snapshotEnvelope); err != nil {
+		return nil, fmt.Errorf("%w: snapshot", ErrInvalidRequest)
+	}
+	if len(snapshotEnvelope.State) == 0 {
+		return nil, fmt.Errorf("%w: snapshot.state", ErrInvalidRequest)
+	}
+	childState, err := derive.AssembleFromState(objectType, title, snapshotEnvelope.State, inheritanceFields)
 	if err != nil {
 		return nil, err
 	}

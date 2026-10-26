@@ -689,6 +689,111 @@ func TestDWSystemStatusReportsNonSecretFacts(t *testing.T) {
 	}
 }
 
+func TestLivingWorldAuditCoverage(t *testing.T) {
+	env := newTestEnv(t)
+	owner := env.register(t, "audit-owner")
+	friend := env.register(t, "audit-friend")
+	scene := owner.createObject(t, "living_scene", "Audit scene", map[string]any{
+		"purpose": "project", "premise": "Audit every write.",
+	})
+	status, body, _ := owner.postAction(t, scene.ID, "add_element",
+		map[string]any{"kind": "idea", "text": "One real element."}, scene.Version)
+	if status != http.StatusOK {
+		t.Fatalf("scene action status = %d body = %s", status, body)
+	}
+	status, body, _ = owner.call(t, http.MethodPost, "/api/v1/objects/"+scene.ID+"/derive", callOptions{
+		IdempotencyKey: newIdempotencyKey(),
+		Body: map[string]any{
+			"title": "Audit child", "inheritance_fields": []string{"premise", "elements"},
+		},
+	})
+	if status != http.StatusCreated {
+		t.Fatalf("derive status = %d body = %s", status, body)
+	}
+	status, body, _ = owner.call(t, http.MethodPost, "/api/v1/objects/"+scene.ID+"/discussions", callOptions{
+		Body: map[string]any{"body": "Human note.", "client_message_id": uuid.NewString()},
+	})
+	if status != http.StatusCreated {
+		t.Fatalf("discussion status = %d body = %s", status, body)
+	}
+
+	status, body, _ = owner.call(t, http.MethodPost, "/api/v1/social/friend-requests", callOptions{
+		Body: map[string]any{"handle": friend.handle},
+	})
+	if status != http.StatusCreated {
+		t.Fatalf("friend request status = %d body = %s", status, body)
+	}
+	var request struct {
+		ID string `json:"id"`
+	}
+	if err := json.Unmarshal(body, &request); err != nil {
+		t.Fatalf("decode request: %v", err)
+	}
+	status, body, _ = friend.call(t, http.MethodPost,
+		"/api/v1/social/friend-requests/"+request.ID+"/accept", callOptions{})
+	if status != http.StatusOK {
+		t.Fatalf("accept status = %d body = %s", status, body)
+	}
+	status, body, _ = owner.call(t, http.MethodPost, "/api/v1/social/messages", callOptions{
+		Body: map[string]any{
+			"to_user_id": friend.id.String(), "body": "Audit message.",
+			"client_message_id": uuid.NewString(),
+		},
+	})
+	if status != http.StatusCreated {
+		t.Fatalf("message status = %d body = %s", status, body)
+	}
+
+	status, body, _ = owner.call(t, http.MethodPost, "/api/v1/objects/"+scene.ID+"/publications",
+		callOptions{
+			IdempotencyKey: newIdempotencyKey(),
+			Body:           map[string]any{"derive_allowed": true, "license": "cc_by_4.0"},
+		})
+	if status != http.StatusCreated {
+		t.Fatalf("publication status = %d body = %s", status, body)
+	}
+	var publication struct {
+		ID string `json:"id"`
+	}
+	if err := json.Unmarshal(body, &publication); err != nil {
+		t.Fatalf("decode publication: %v", err)
+	}
+	status, body, _ = friend.call(t, http.MethodPost,
+		"/api/v1/public/worlds/"+publication.ID+"/derive", callOptions{
+			IdempotencyKey: newIdempotencyKey(),
+			Body: map[string]any{
+				"title": "Audit public child", "inheritance_fields": []string{"premise"},
+			},
+		})
+	if status != http.StatusCreated {
+		t.Fatalf("public derive status = %d body = %s", status, body)
+	}
+	status, body, _ = friend.call(t, http.MethodPost,
+		"/api/v1/public/worlds/"+publication.ID+"/report", callOptions{
+			Body: map[string]any{"reason": "Audit report."},
+		})
+	if status != http.StatusNoContent {
+		t.Fatalf("report status = %d body = %s", status, body)
+	}
+	status, body, _ = owner.call(t, http.MethodDelete,
+		"/api/v1/publications/"+publication.ID, callOptions{})
+	if status != http.StatusNoContent {
+		t.Fatalf("revoke status = %d body = %s", status, body)
+	}
+
+	required := []string{
+		"object.create", "object.action", "object.derive",
+		"social.friend_request", "social.friend_accept", "social.message_send",
+		"social.discussion_post", "publication.create", "publication.activate",
+		"publication.derive", "publication.report", "publication.revoke",
+	}
+	for _, action := range required {
+		if count := env.count(t, `SELECT count(*) FROM audit_events WHERE action = $1`, action); count < 1 {
+			t.Errorf("audit action %s has no rows", action)
+		}
+	}
+}
+
 func TestDWWorldStageAndPulseUseRealState(t *testing.T) {
 	env := newTestEnv(t)
 	user := env.register(t, "stage")
