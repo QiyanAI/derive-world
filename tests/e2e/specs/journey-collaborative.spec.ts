@@ -21,7 +21,7 @@ test.describe("two independent users, collaborative Derive Loop", () => {
 
     await register(page, actorA);
     await expect(page.getByRole("heading", { name: "Your Digital Self is live" })).toBeVisible();
-    await page.getByRole("link", { name: "Create your first object" }).click();
+    await page.goto("/objects/new");
     await expect(page).toHaveURL(/\/objects\/new/);
 
     const objectID = await createCollaborative(page, {

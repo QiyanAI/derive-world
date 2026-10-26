@@ -3,9 +3,12 @@ package model
 
 import (
 	"context"
+	"crypto/tls"
 	"errors"
 	"fmt"
+	"net"
 	"net/http"
+	"net/url"
 	"strings"
 	"time"
 )
@@ -17,6 +20,10 @@ var (
 	ErrCheckUnauthorized = errors.New("model credentials were rejected")
 	ErrCheckUnreachable  = errors.New("model endpoint is unreachable")
 	ErrCheckStatus       = errors.New("model endpoint returned an unexpected status")
+	ErrCheckInvalidURL   = errors.New("model endpoint URL is invalid")
+	ErrCheckTLS          = errors.New("model endpoint TLS verification failed")
+	ErrCheckRateLimited  = errors.New("model endpoint is rate limiting checks")
+	ErrCheckUnavailable  = errors.New("model endpoint is temporarily unavailable")
 )
 
 // CheckConnection verifies that a Real provider endpoint answers a models
@@ -28,7 +35,11 @@ func CheckConnection(ctx context.Context, options AdapterOptions) error {
 	}
 	baseURL := normalizeBaseURL(options.BaseURL)
 	if baseURL == "" {
-		return ErrCheckUnreachable
+		return ErrCheckInvalidURL
+	}
+	parsed, err := url.Parse(baseURL)
+	if err != nil || !parsed.IsAbs() || (parsed.Scheme != "http" && parsed.Scheme != "https") || parsed.Host == "" {
+		return ErrCheckInvalidURL
 	}
 	timeout := options.Timeout
 	if timeout <= 0 || timeout > 15*time.Second {
@@ -39,15 +50,35 @@ func CheckConnection(ctx context.Context, options AdapterOptions) error {
 
 	request, err := http.NewRequestWithContext(checkCtx, http.MethodGet, baseURL+"/v1/models", nil)
 	if err != nil {
-		return ErrCheckUnreachable
+		return ErrCheckInvalidURL
 	}
 	request.Header.Set("Accept", "application/json")
 	if options.APIKey != "" {
 		request.Header.Set("Authorization", "Bearer "+options.APIKey)
 	}
-	client := &http.Client{Timeout: timeout}
+	transport := &http.Transport{
+		// Match the completion client: no environment proxy, TLS 1.2 minimum,
+		// and no redirects that could forward the API key to another host.
+		Proxy:                  nil,
+		DialContext:            (&net.Dialer{Timeout: 5 * time.Second, KeepAlive: 30 * time.Second}).DialContext,
+		TLSClientConfig:        &tls.Config{MinVersion: tls.VersionTLS12},
+		TLSHandshakeTimeout:    10 * time.Second,
+		ResponseHeaderTimeout:  timeout,
+		MaxResponseHeaderBytes: 64 << 10,
+	}
+	client := &http.Client{
+		Transport: transport,
+		Timeout:   timeout,
+		CheckRedirect: func(*http.Request, []*http.Request) error {
+			return http.ErrUseLastResponse
+		},
+	}
 	response, err := client.Do(request)
 	if err != nil {
+		message := strings.ToLower(err.Error())
+		if strings.Contains(message, "tls") || strings.Contains(message, "x509") {
+			return ErrCheckTLS
+		}
 		return ErrCheckUnreachable
 	}
 	defer response.Body.Close()
@@ -56,6 +87,10 @@ func CheckConnection(ctx context.Context, options AdapterOptions) error {
 		return nil
 	case response.StatusCode == http.StatusUnauthorized || response.StatusCode == http.StatusForbidden:
 		return ErrCheckUnauthorized
+	case response.StatusCode == http.StatusTooManyRequests:
+		return ErrCheckRateLimited
+	case response.StatusCode >= 500:
+		return ErrCheckUnavailable
 	default:
 		return fmt.Errorf("%w: %d", ErrCheckStatus, response.StatusCode)
 	}

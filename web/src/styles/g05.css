@@ -1006,6 +1006,33 @@ textarea {
   margin-bottom: 0;
 }
 
+.welcome-start {
+  margin: var(--space-5) 0;
+}
+
+.welcome-start-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--space-4);
+  margin: var(--space-3) 0 var(--space-4);
+}
+
+.welcome-entry {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  text-decoration: none;
+}
+
+.welcome-entry strong {
+  font-family: var(--font-display);
+  font-size: 1.1rem;
+}
+
+.welcome-entry small {
+  color: var(--color-muted);
+}
+
 .welcome-note {
   margin-top: var(--space-4);
 }
@@ -1696,7 +1723,8 @@ textarea {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
-  .welcome-steps {
+  .welcome-steps,
+  .welcome-start-grid {
     grid-template-columns: 1fr;
   }
 

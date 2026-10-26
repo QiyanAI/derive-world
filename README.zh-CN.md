@@ -56,6 +56,15 @@ Compose 构建标识为 `0.1.0`；除非显式设置，`DW_COMMIT` 与 `DW_BUILD
 
 打开 <http://127.0.0.1:8080>。确定性适配器启用时，顶部显示 `FIXTURE`。注册本地账号，创建协作或互动对象，邀请第二个人，应用 AI 提议，批准衍生并查看谱系。`.env.example` 中的值是仅限开发的占位值，不是生产密钥。
 
+### Windows：双击启动
+
+Windows 自托管管理员可以使用本地启动器，无需输入 Compose 命令：
+
+1. 安装并启动 Docker Desktop（含 Compose v2）。
+2. 双击 **`Start Derive World.cmd`**。
+
+启动器检查 Docker、Docker Engine、Compose、8080 端口、实例目录、`.env`、数据库卷和产品健康状态；随后启动服务、等待 `/readyz` 就绪并打开浏览器。同一菜单可停止和重启（保留数据）、打开并应用 AI 设置，以及查看已脱敏的诊断信息。详见 [launcher/README.md](launcher/README.md) 和 [Windows 自托管指南](docs/zh/windows.md)。启动器不开放网络监听、不通过命令行传递密钥、不删除数据库卷。其他系统继续使用上文的 Compose 方式。
+
 停止：
 
 ```bash

@@ -1,14 +1,17 @@
 // SPDX-License-Identifier: Apache-2.0
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Link } from "react-router";
 import {
+  getObject,
   getWorldStage,
   listConfirmations,
   type Confirmation,
+  type ObjectView,
   type StageObject,
   type WorldStage
 } from "../api";
 import PulsePanel from "../components/PulsePanel";
+import StageInspector, { type StageInspectorTab } from "../components/StageInspector";
 import { ErrorNotice } from "../errors";
 import { actionKey, eventKey } from "../humanize";
 import { useAuth } from "../auth";
@@ -21,6 +24,14 @@ export default function WorldStagePage() {
   const [confirmations, setConfirmations] = useState<Confirmation[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<unknown>(null);
+  const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [selected, setSelected] = useState<ObjectView | null>(null);
+  const [selectedLoading, setSelectedLoading] = useState(false);
+  const [selectedError, setSelectedError] = useState<unknown>(null);
+  const [inspectorOpen, setInspectorOpen] = useState(false);
+  const [inspectorTab, setInspectorTab] = useState<StageInspectorTab>("work");
+  const [draggingId, setDraggingId] = useState<string | null>(null);
+  const selectRequest = useRef(0);
 
   const load = useCallback(async (signal?: AbortSignal) => {
     setError(null);
@@ -93,6 +104,86 @@ export default function WorldStagePage() {
     };
   }, [load]);
 
+  const loadSelected = useCallback(async (objectID: string) => {
+    const request = selectRequest.current + 1;
+    selectRequest.current = request;
+    setSelectedLoading(true);
+    setSelectedError(null);
+    try {
+      const object = await getObject(objectID);
+      if (selectRequest.current === request) {
+        setSelected(object);
+        setSelectedId(objectID);
+      }
+    } catch (failure) {
+      if (selectRequest.current === request) {
+        setSelectedError(failure);
+        setSelectedId(objectID);
+      }
+    } finally {
+      if (selectRequest.current === request) {
+        setSelectedLoading(false);
+      }
+    }
+  }, []);
+
+  const openInspector = useCallback(
+    (objectID: string, tab: StageInspectorTab) => {
+      setInspectorOpen(true);
+      setInspectorTab(tab);
+      setSelectedId(objectID);
+      void loadSelected(objectID);
+    },
+    [loadSelected]
+  );
+
+  const closeInspector = useCallback(() => {
+    const previousID = selectedId;
+    selectRequest.current += 1;
+    setInspectorOpen(false);
+    setSelected(null);
+    setSelectedId(null);
+    if (previousID) {
+      window.setTimeout(() => {
+        const trigger = document.querySelector<HTMLElement>(
+          `[data-stage-object="${previousID}"]`
+        );
+        trigger?.focus();
+      }, 50);
+    }
+  }, [selectedId]);
+
+  const handleObjectUpdated = useCallback(
+    async (updated: ObjectView) => {
+      setSelected(updated);
+      await load();
+    },
+    [load]
+  );
+
+  const handleObjectReload = useCallback(async () => {
+    if (selectedId) {
+      await loadSelected(selectedId);
+    }
+  }, [loadSelected, selectedId]);
+
+  const handleDerived = useCallback((child: ObjectView) => {
+    setSelected(child);
+    setSelectedId(child.id);
+    setInspectorTab("work");
+    setInspectorOpen(true);
+  }, []);
+
+  useEffect(() => {
+    if (!selectedId || selectedLoading || !selected || !stage) {
+      return;
+    }
+    const stageObject = stage.objects.find((object) => object.id === selectedId);
+    if (stageObject && stageObject.version !== selected.version) {
+      void loadSelected(selectedId);
+    }
+  }, [stage, selectedId, selected, selectedLoading, loadSelected]);
+
   const { roots, childrenOf } = useMemo(() => {
     const objects = stage?.objects ?? [];
     const edges = stage?.edges ?? [];
@@ -119,6 +210,18 @@ export default function WorldStagePage() {
     };
   }, [stage]);
 
+  const continueObject = useMemo(() => {
+    const objects = stage?.objects ?? [];
+    if (objects.length === 0) {
+      return null;
+    }
+    const preferred = objects.filter(
+      (object) => object.permissions.includes("contribute") || object.permissions.includes("manage")
+    );
+    const candidates = preferred.length > 0 ? preferred : objects;
+    return [...candidates].sort((left, right) => right.updated_at.localeCompare(left.updated_at))[0] ?? null;
+  }, [stage]);
+
   const branchCount = stage?.edges.length ?? 0;
   const displayName = user?.display_name ?? "";
 
@@ -141,7 +244,19 @@ export default function WorldStagePage() {
     const children = childrenOf.get(object.id) ?? [];
     return (
       <li key={object.id} className="stage-node-wrap">
-        <article className={`stage-node stage-node-${object.object_type}`}>
+        <article
+          className={`stage-node stage-node-${object.object_type}${
+            selectedId === object.id ? " stage-node-selected" : ""
+          }`}
+          aria-current={selectedId === object.id ? "true" : undefined}
+          draggable={object.permissions.includes("derive")}
+          onDragStart={(event) => {
+            event.dataTransfer.setData("text/x-derive-object", object.id);
+            event.dataTransfer.effectAllowed = "copy";
+            setDraggingId(object.id);
+          }}
+          onDragEnd={() => setDraggingId(null)}
+        >
           <div className="stage-node-top">
             <span className={`template-badge template-${object.object_type}`}>
               {typeLabel(object.object_type)}
@@ -149,7 +264,15 @@ export default function WorldStagePage() {
             <span className="version-badge">v{object.version}</span>
           </div>
           <h3>
-            <Link to={`/objects/${object.id}`}>{object.title || t("common.untitled")}</Link>
+            <button
+              className="stage-node-title-button"
+              type="button"
+              onClick={() => openInspector(object.id, "work")}
+              data-stage-object={object.id}
+              aria-label={t("stage.selectNamed", { title: object.title || t("common.untitled") })}
+            >
+              {object.title || t("common.untitled")}
+            </button>
           </h3>
           <p className="stage-node-meta">
             {object.member_count > 1
@@ -167,18 +290,43 @@ export default function WorldStagePage() {
             </p>
           ) : null}
           <div className="stage-node-actions">
-            <Link className="button button-small" to={`/objects/${object.id}`}>
-              {t("stage.open")}
-            </Link>
+            <button
+              className="button button-small"
+              type="button"
+              onClick={() => openInspector(object.id, "work")}
+            >
+              {t("stage.workHere")}
+            </button>
             {object.permissions.includes("derive") ? (
-              <Link className="button button-ghost button-small" to={`/objects/${object.id}/derive`}>
-                {t("stage.derive")}
-              </Link>
+              <button
+                className="button button-ghost button-small"
+                type="button"
+                onClick={() => openInspector(object.id, "branch")}
+              >
+                {t("stage.branchHere")}
+              </button>
             ) : null}
-            <Link className="button button-ghost button-small" to={`/objects/${object.id}?tab=ai`}>
-              {t("stage.ai")}
+            <button
+              className="button button-ghost button-small"
+              type="button"
+              onClick={() => openInspector(object.id, "lens")}
+            >
+              {t("stage.lensHere")}
+            </button>
+            <button
+              className="button button-ghost button-small"
+              type="button"
+              onClick={() => openInspector(object.id, "ai")}
+            >
+              {t("stage.aiHere")}
+            </button>
+            <Link className="text-link" to={`/objects/${object.id}`}>
+              {t("stage.openPage")}
             </Link>
           </div>
+          {object.permissions.includes("derive") ? (
+            <p className="stage-drag-hint">{t("stage.dragHint")}</p>
+          ) : null}
         </article>
         {children.length > 0 ? (
           <ul className="stage-children">
@@ -228,18 +376,42 @@ export default function WorldStagePage() {
       </div>
 
       <div className="stage-layout">
-        <section className="stage-board" aria-label={t("stage.boardLabel")}>
+        <section
+          className={`stage-board${draggingId ? " stage-board-dragging" : ""}`}
+          aria-label={t("stage.boardLabel")}
+          onDragOver={(event) => {
+            if (Array.from(event.dataTransfer.types).includes("text/x-derive-object")) {
+              event.preventDefault();
+              event.dataTransfer.dropEffect = "copy";
+            }
+          }}
+          onDrop={(event) => {
+            const droppedID = event.dataTransfer.getData("text/x-derive-object");
+            setDraggingId(null);
+            if (droppedID) {
+              event.preventDefault();
+              openInspector(droppedID, "branch");
+            }
+          }}
+        >
+          {draggingId ? <div className="stage-drop-target">{t("stage.dropBranch")}</div> : null}
           {loading && !stage ? <p className="muted">{t("common.loading")}</p> : null}
           {!loading && (stage?.objects.length ?? 0) === 0 ? (
             <div className="stage-empty">
               <h2>{t("stage.emptyTitle")}</h2>
               <p>{t("stage.emptyBody")}</p>
               <div className="stage-empty-actions">
-                <Link className="card stage-entry" to="/objects/new?template=living_scene&purpose=project">
+                <Link
+                  className="card stage-entry"
+                  to="/objects/new?template=living_scene&purpose=project&first=1"
+                >
                   <strong>{t("stage.entryProject")}</strong>
                   <small>{t("stage.entryProjectHint")}</small>
                 </Link>
-                <Link className="card stage-entry" to="/objects/new?template=living_scene&purpose=story">
+                <Link
+                  className="card stage-entry"
+                  to="/objects/new?template=living_scene&purpose=story&first=1"
+                >
                   <strong>{t("stage.entryStory")}</strong>
                   <small>{t("stage.entryStoryHint")}</small>
                 </Link>
@@ -254,7 +426,40 @@ export default function WorldStagePage() {
           )}
         </section>
         <aside className="stage-side">
-          <PulsePanel compact />
+          {continueObject ? (
+            <section className="card stage-continue" data-testid="stage-continue">
+              <p className="eyebrow">{t("stage.continueEyebrow")}</p>
+              <h2>{continueObject.title || t("common.untitled")}</h2>
+              <p className="muted">
+                {t("stage.continueHint")} · v{continueObject.version}
+                {continueObject.latest_event?.actor_name
+                  ? ` · ${continueObject.latest_event.actor_name}`
+                  : ""}
+              </p>
+              <Link
+                className="button button-small"
+                to={`/objects/${continueObject.id}?tab=work`}
+              >
+                {t("stage.continueAction")}
+              </Link>
+            </section>
+          ) : null}
+          {inspectorOpen ? (
+            <StageInspector
+              key={selected?.id ?? "none"}
+              object={selected}
+              tab={inspectorTab}
+              loading={selectedLoading}
+              error={selectedError}
+              onTab={setInspectorTab}
+              onClose={closeInspector}
+              onUpdated={handleObjectUpdated}
+              onReload={handleObjectReload}
+              onRefresh={() => load()}
+              onDerived={handleDerived}
+            />
+          ) : null}
+          <PulsePanel compact refreshKey={stage?.generated_at ?? ""} />
           <section className="card">
             <h2>{t("stage.approvals")}</h2>
             {confirmations.length === 0 ? (
@@ -280,6 +485,7 @@ export default function WorldStagePage() {
             <Link to="/objects">{t("nav.objects")}</Link>
             <Link to="/friends">{t("nav.friends")}</Link>
             <Link to="/ai">{t("nav.ai")}</Link>
+            <Link to="/welcome">{t("nav.welcome")}</Link>
             <Link to="/settings">{t("nav.settings")}</Link>
           </section>
         </aside>

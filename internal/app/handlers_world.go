@@ -4,7 +4,6 @@ package app
 import (
 	"context"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"net/http"
 	"strconv"
@@ -14,7 +13,6 @@ import (
 
 	"github.com/QiyanAI/derive-world/internal/derive"
 	"github.com/QiyanAI/derive-world/internal/httpx"
-	"github.com/QiyanAI/derive-world/internal/model"
 	"github.com/QiyanAI/derive-world/internal/objects"
 	"github.com/QiyanAI/derive-world/internal/publication"
 	"github.com/QiyanAI/derive-world/internal/social"
@@ -95,13 +93,29 @@ func (a *App) getLens(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	principal := principalFrom(r.Context())
-	lineage, err := a.objects.LineageForObject(r.Context(), principal.User.ID, object.ID)
-	if err != nil {
-		a.writeDomainError(w, r, err)
-		return
+	var (
+		lineage     *objects.DeriveLineage
+		err         error
+		publicChild = false
+	)
+	if a.publication != nil {
+		var source *objects.PublicSource
+		source, err = a.publication.PublicSourceForChild(r.Context(), object.ID)
+		if err != nil {
+			a.writeDomainError(w, r, err)
+			return
+		}
+		publicChild = source != nil
+		if source != nil && source.Active {
+			lineage, err = a.publication.PublicLineageForChild(r.Context(), object.ID)
+			if err != nil {
+				a.writeDomainError(w, r, err)
+				return
+			}
+		}
 	}
-	if lineage == nil && a.publication != nil {
-		lineage, err = a.publication.PublicLineageForChild(r.Context(), object.ID)
+	if !publicChild {
+		lineage, err = a.objects.LineageForObject(r.Context(), principal.User.ID, object.ID)
 		if err != nil {
 			a.writeDomainError(w, r, err)
 			return
@@ -324,41 +338,17 @@ func (a *App) modelCheck(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	mode := a.config.Model.Mode
-	status := "ok"
-	detail := ""
-	if mode == "fixture" {
-		status = "fixture"
-		detail = "fixture mode is deterministic; no provider was contacted"
-	} else {
-		err := model.CheckConnection(r.Context(), model.AdapterOptions{
-			Mode: mode, BaseURL: a.config.Model.BaseURL,
-			APIKey: a.config.Model.APIKey, Timeout: a.config.Model.Timeout,
-		})
-		switch {
-		case err == nil:
-			status = "ok"
-			detail = "the provider answered the models endpoint"
-		case errors.Is(err, model.ErrCheckUnauthorized):
-			status = "unauthorized"
-			detail = "the provider rejected the configured credentials"
-		case errors.Is(err, model.ErrCheckUnreachable):
-			status = "unreachable"
-			detail = "the provider endpoint could not be reached"
-		default:
-			status = "error"
-			detail = "the provider returned an unexpected response"
-		}
-		if err != nil {
-			a.logger.Warn("model_check_failed",
-				"request_id", httpx.RequestIDFromContext(r.Context()), "status", status)
-		}
+	result := CheckModelConnection(r.Context(), a.config)
+	if result.Status != "fixture" && result.Status != "ok" && result.Status != "unverified_model" {
+		a.logger.Warn("model_check_failed",
+			"request_id", httpx.RequestIDFromContext(r.Context()), "status", result.Status)
 	}
 	httpx.WriteJSON(w, http.StatusOK, struct {
 		Status    string `json:"status"`
 		Mode      string `json:"mode"`
 		ModelName string `json:"model_name"`
 		Detail    string `json:"detail"`
-	}{Status: status, Mode: mode, ModelName: a.config.Model.Name, Detail: detail})
+	}{Status: result.Status, Mode: mode, ModelName: a.config.Model.Name, Detail: result.Detail})
 }
 
 // streamEvents is an authenticated refresh signal. It carries no state.

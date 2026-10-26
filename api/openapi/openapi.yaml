@@ -2832,6 +2832,16 @@ components:
           minItems: 1
           items:
             type: string
+        publication_id:
+          type: string
+          format: uuid
+          description: Present only when the source is an active public publication.
+        publication_title:
+          type: string
+          description: Present only when the source is an active public publication.
+        public:
+          type: boolean
+          description: True when the source is projected at the publication level.
     ObjectListItem:
       type: object
       additionalProperties: false
@@ -3042,6 +3052,8 @@ components:
           type: integer
         truncated:
           type: boolean
+        source:
+          $ref: "#/components/schemas/DeriveLineage"
     Descendant:
       type: object
       additionalProperties: false

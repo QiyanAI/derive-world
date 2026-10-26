@@ -319,6 +319,7 @@ export interface Lineage {
   descendants: LineageDescendant[];
   max_depth: number;
   truncated: boolean;
+  source?: ObjectView["lineage"];
 }
 
 export interface CreateObjectInput {

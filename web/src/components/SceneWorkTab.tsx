@@ -54,6 +54,10 @@ export default function SceneWorkTab({
     setPremiseDraft(sceneString(object, "premise"));
   }, [object]);
 
+  useEffect(() => {
+    setNewKind(sceneString(object, "purpose") === "story" ? "scene" : "idea");
+  }, [object.id]);
+
   async function run(action: string, input: Record<string, unknown>) {
     setBusy(action);
     setError(null);
@@ -116,13 +120,16 @@ export default function SceneWorkTab({
   }
 
   return (
-    <section className="card object-panel scene-panel" data-testid="scene-work-panel">
+    <section id="object-work-panel" className="card object-panel scene-panel" data-testid="scene-work-panel">
       <div className="section-heading">
         <div>
           <h2>{t("scene.title")}</h2>
           <p className="muted">
-            {t("scene.progress", { done, total: elements.length })} ·{" "}
-            {t(`scene.kind.${purpose}` as MessageKey)}
+            {t(purpose === "story" ? "scene.progressStory" : "scene.progress", {
+              done,
+              total: elements.length
+            })}{" "}
+            · {t(`scene.kind.${purpose}` as MessageKey)}
           </p>
         </div>
         {canContribute ? (
@@ -259,25 +266,25 @@ export default function SceneWorkTab({
             ) : (
               <p className="scene-element-text">{element.text}</p>
             )}
-            {element.kind === "step" ? (
-              <label className="check-row scene-step-check">
-                <input
-                  type="checkbox"
-                  checked={element.status === "done"}
-                  disabled={!canContribute || busy !== ""}
-                  onChange={() =>
-                    void run("update_element", {
-                      element_id: element.id,
-                      status: element.status === "done" ? "open" : "done"
-                    })
-                  }
-                />
-                <span>{t("scene.stepDone")}</span>
-              </label>
-            ) : null}
+            <label className="check-row scene-step-check">
+              <input
+                type="checkbox"
+                checked={element.status === "done"}
+                disabled={!canContribute || busy !== ""}
+                onChange={() =>
+                  void run("update_element", {
+                    element_id: element.id,
+                    status: element.status === "done" ? "open" : "done"
+                  })
+                }
+              />
+              <span>{t(purpose === "story" ? "scene.markResolved" : "scene.stepDone")}</span>
+            </label>
           </li>
         ))}
-        {elements.length === 0 ? <li className="muted">{t("scene.empty")}</li> : null}
+        {elements.length === 0 ? (
+          <li className="muted">{t(purpose === "story" ? "scene.emptyStory" : "scene.empty")}</li>
+        ) : null}
       </ol>
 
       {canContribute ? (

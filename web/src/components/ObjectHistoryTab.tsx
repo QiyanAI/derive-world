@@ -123,6 +123,15 @@ export default function ObjectHistoryTab({
             {t("object.viewLineage")}
           </Link>
         </div>
+        {lineage?.source?.publication_id ? (
+          <p>
+            <Link className="text-link" to={`/explore/${lineage.source.publication_id}`}>
+              {t("workspace.publicSource", {
+                title: lineage.source.publication_title || t("common.unknown")
+              })}
+            </Link>
+          </p>
+        ) : null}
         <h3>{t("lineage.ancestors")}</h3>
         {lineage && lineage.ancestors.length > 0 ? (
           <ol className="lineage-list">
@@ -176,6 +185,18 @@ export default function ObjectHistoryTab({
               </p>
               {eventAction(event) ? (
                 <p className="event-action">{t(actionKey(eventAction(event)))}</p>
+              ) : null}
+              {event.event_type === "object.derived" && typeof event.payload.publication_id === "string" ? (
+                <p className="event-action">
+                  <Link className="text-link" to={`/explore/${event.payload.publication_id}`}>
+                    {t("workspace.publicSource", {
+                      title:
+                        typeof event.payload.publication_title === "string"
+                          ? event.payload.publication_title
+                          : t("common.unknown")
+                    })}
+                  </Link>
+                </p>
               ) : null}
               <button
                 type="button"

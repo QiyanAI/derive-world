@@ -103,6 +103,9 @@ export interface ObjectSummary {
 export interface DeriveLineage {
   parent: { object_id: string; version: number };
   inherited_fields: string[];
+  publication_id?: string;
+  publication_title?: string;
+  public?: boolean;
 }
 
 export interface ObjectView {
@@ -164,6 +167,7 @@ export interface LineageResponse {
   descendants: LineageDescendant[];
   max_depth: number;
   truncated: boolean;
+  source?: DeriveLineage;
 }
 
 export interface LineageDescendant {

@@ -2,6 +2,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   createInvitation,
+  getSystemStatus,
   listInvitations,
   revokeInvitation,
   type Invitation,
@@ -43,6 +44,7 @@ export default function InvitationsPanel({ objectID, canInvite, canManage }: Pro
   const [notice, setNotice] = useState("");
   const [error, setError] = useState<unknown>(null);
   const [busy, setBusy] = useState(false);
+  const [publicBaseURL, setPublicBaseURL] = useState("");
 
   const timeFormatter = useMemo(
     () =>
@@ -65,6 +67,9 @@ export default function InvitationsPanel({ objectID, canInvite, canManage }: Pro
   useEffect(() => {
     if (canInvite || canManage) {
       void refresh();
+      getSystemStatus()
+        .then((status) => setPublicBaseURL(status.public_base_url))
+        .catch(() => setPublicBaseURL(""));
     }
   }, [canInvite, canManage, refresh]);
 
@@ -85,7 +90,8 @@ export default function InvitationsPanel({ objectID, canInvite, canManage }: Pro
         expires_in_days: days
       });
       if (invitation.token) {
-        setCreatedLink(`${window.location.origin}/invite/${invitation.token}`);
+        const origin = publicBaseURL !== "" ? publicBaseURL.replace(/\/+$/, "") : window.location.origin;
+        setCreatedLink(`${origin}/invite/${invitation.token}`);
         setNotice(t("workspace.inviteCreated"));
       }
       await refresh();

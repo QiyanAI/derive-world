@@ -220,6 +220,9 @@ func New(options Options) (*App, error) {
 		application.derive = derive.NewService(options.Store.Pool(), application.objects, application.idem)
 		application.social = social.NewService(options.Store.Pool(), application.audit)
 		application.publication = publication.NewService(options.Store.Pool(), application.objects, application.audit, application.idem)
+		// Event timelines use the publication-level source for public-derived
+		// children instead of exposing the private parent object id.
+		application.objects.SetPublicSourceResolver(application.publication.PublicSourceForChild)
 		application.world = world.NewService(options.Store.Pool())
 		identityService, identityErr := identity.NewService(options.Store.Pool(), application.audit, absoluteTTL, idleTTL)
 		if identityErr != nil {

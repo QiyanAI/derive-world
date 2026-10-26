@@ -40,12 +40,60 @@ func run(args []string, stdout, stderr io.Writer) int {
 		return runServe(stdout, stderr)
 	case "migrate":
 		return runMigrate(stdout, stderr)
+	case "check-config":
+		return runCheckConfig(stdout, stderr)
+	case "check-model":
+		return runCheckModel(stdout, stderr)
 	case "version":
 		fmt.Fprintf(stdout, "derive-world %s (commit %s, built %s)\n", version, commit, buildTime)
 		return 0
 	default:
-		fmt.Fprintf(stderr, "usage: server [serve|migrate|version]\n")
+		fmt.Fprintf(stderr, "usage: server [serve|migrate|check-config|check-model|version]\n")
 		return 2
+	}
+}
+
+// runCheckConfig validates exactly the environment the server will load. It
+// does not connect to the database and does not print secret values.
+func runCheckConfig(stdout, stderr io.Writer) int {
+	cfg, err := config.Load()
+	if err != nil {
+		fmt.Fprintf(stderr, "invalid configuration: %v\n", err)
+		return 2
+	}
+	fmt.Fprintf(stdout, "configuration ok (model_mode=%s)\n", cfg.Model.Mode)
+	return 0
+}
+
+// runCheckModel performs the same non-completion provider check as the
+// authenticated settings page. It never sends a prompt and never prints the
+// API key. A successful models listing is reported as unverified, not as proof
+// that the configured model name is callable.
+func runCheckModel(stdout, stderr io.Writer) int {
+	cfg, err := config.Load()
+	if err != nil {
+		fmt.Fprintf(stderr, "invalid configuration: %v\n", err)
+		return 2
+	}
+	result := app.CheckModelConnection(context.Background(), cfg)
+	fmt.Fprintf(stdout, "model check: %s - %s\n", result.Status, result.Detail)
+	switch result.Status {
+	case "fixture", "unverified_model":
+		return 0
+	case "unauthorized":
+		return 3
+	case "rate_limited":
+		return 4
+	case "unavailable", "error":
+		return 5
+	case "tls_failure":
+		return 6
+	case "invalid_url":
+		return 7
+	case "unreachable":
+		return 8
+	default:
+		return 5
 	}
 }
 

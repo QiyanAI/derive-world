@@ -27,18 +27,40 @@ type DelegationRevalidator interface {
 	ProposalApplyAllowedTx(ctx context.Context, tx pgx.Tx, delegationID, userID, profileID, objectID uuid.UUID, permission string) (bool, error)
 }
 
+// PublicSource is the publication-level projection of a public derivation's
+// source. Event readers who cannot read the private parent object receive this
+// projection instead of the parent object id.
+type PublicSource struct {
+	PublicationID string
+	Title         string
+	Active        bool
+}
+
+// PublicSourceResolver resolves the active publication that authorized a
+// public-derived child. The composition root injects it so package objects
+// never imports package publication (same dependency direction as
+// DelegationRevalidator).
+type PublicSourceResolver func(ctx context.Context, childID uuid.UUID) (*PublicSource, error)
+
 // Service is the controlled write path for the object aggregate.
 type Service struct {
-	db          *pgxpool.Pool
-	audit       *audit.Writer
-	idem        *store.Idempotency
-	delegations DelegationRevalidator
+	db            *pgxpool.Pool
+	audit         *audit.Writer
+	idem          *store.Idempotency
+	delegations   DelegationRevalidator
+	publicSources PublicSourceResolver
 }
 
 // NewService assembles the object service. The audit writer must fail closed:
 // an audit error rolls the business transaction back.
 func NewService(db *pgxpool.Pool, auditWriter *audit.Writer, idem *store.Idempotency, delegations DelegationRevalidator) *Service {
 	return &Service{db: db, audit: auditWriter, idem: idem, delegations: delegations}
+}
+
+// SetPublicSourceResolver wires the publication-level source projection used
+// by the event timeline. It is set once at composition time.
+func (s *Service) SetPublicSourceResolver(resolver PublicSourceResolver) {
+	s.publicSources = resolver
 }
 
 type queryer interface {
@@ -646,6 +668,32 @@ RETURNING deleted_at`, objectID.String()).Scan(&deletedAt)
 // Events returns the visibility-filtered timeline. cursor is the last seen
 // seq (0 for the first page).
 func (s *Service) Events(ctx context.Context, actorID, objectID uuid.UUID, permissions []string, cursor int64, limit int) ([]Event, *int64, error) {
+	// The private source relationship stays in the database and in the audit
+	// trail, but the read projection must not reveal the private parent to a
+	// reader who cannot currently read that parent. Public-derived children get
+	// the publication-level source instead. This is a server-side projection;
+	// hiding the field in the web client would not be a security boundary.
+	// A public-derived child keeps the publication-level projection even if the
+	// viewer later gains access to the private parent, and it never falls back
+	// to the private relation after the publication is withdrawn.
+	var (
+		publicSource *PublicSource
+		err          error
+	)
+	if s.publicSources != nil {
+		publicSource, err = s.publicSources(ctx, objectID)
+		if err != nil {
+			return nil, nil, err
+		}
+	}
+	privateSourceVisible := false
+	if publicSource == nil {
+		lineage, err := s.LineageForObject(ctx, actorID, objectID)
+		if err != nil {
+			return nil, nil, err
+		}
+		privateSourceVisible = lineage != nil
+	}
 	rows, err := s.db.Query(ctx, `
 SELECT e.id, e.seq, e.object_version, e.event_type, e.actor_type,
        e.actor_user_id, e.payload, e.created_at, u.display_name
@@ -695,6 +743,21 @@ SELECT e.id, e.seq, e.object_version, e.event_type, e.actor_type,
 			_ = json.Unmarshal(payloadRaw, &event.Payload)
 		}
 		delete(event.Payload, "state_after")
+		if event.EventType == "object.derived" && !privateSourceVisible {
+			delete(event.Payload, "parent_object_id")
+			if publicSource != nil {
+				parentVersion := event.Payload["parent_version"]
+				delete(event.Payload, "parent_version")
+				if publicSource.Active {
+					event.Payload["publication_id"] = publicSource.PublicationID
+					event.Payload["publication_title"] = publicSource.Title
+					if parentVersion != nil {
+						event.Payload["publication_version"] = parentVersion
+					}
+					event.Payload["public"] = true
+				}
+			}
+		}
 		items = append(items, event)
 	}
 	if err := rows.Err(); err != nil {

@@ -750,6 +750,32 @@ VALUES ($1,$2)`, childID.String(), publicationID.String()); err != nil {
 	return view, nil
 }
 
+// PublicSourceForChild reports whether a child was created by public derive and
+// whether its publication is still active. A withdrawn publication returns
+// Active=false rather than nil: callers must keep the private source masked
+// after withdrawal instead of falling back to the private parent relation.
+func (s *Service) PublicSourceForChild(ctx context.Context, childID uuid.UUID) (*objects.PublicSource, error) {
+	var (
+		source objects.PublicSource
+		status string
+	)
+	err := s.db.QueryRow(ctx, `
+SELECT p.id, p.title, p.status
+  FROM publication_derivations pd
+  JOIN publications p ON p.id = pd.publication_id
+ WHERE pd.child_object_id = $1
+ ORDER BY p.created_at DESC
+ LIMIT 1`, childID.String()).Scan(&source.PublicationID, &source.Title, &status)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	source.Active = status == "active"
+	return &source, nil
+}
+
 // PublicLineageForChild returns an active public source relation for a child
 // created by public derive. The private parent object id is never exposed;
 // Parent.ObjectID carries the publication id instead.

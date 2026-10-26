@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: Apache-2.0
-import { useState, type FormEvent } from "react";
+import { useEffect, useRef, useState, type FormEvent } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router";
 import { createObject, type ObjectType } from "../api";
 import { ErrorNotice } from "../errors";
@@ -51,6 +51,39 @@ export default function ObjectNewPage() {
       ]);
     }
   }
+
+  function applySceneStarter(kind: "project" | "story") {
+    setObjectType("living_scene");
+    setPurpose(kind);
+    if (kind === "project") {
+      setTitle(t("object.create.starter.projectTitle"));
+      setPremise(t("object.create.starter.projectPremise"));
+      setElements([
+        { kind: "step", text: t("object.create.starter.projectStep") },
+        { kind: "outcome", text: t("object.create.starter.projectOutcome") }
+      ]);
+    } else {
+      setTitle(t("object.create.starter.storyTitle"));
+      setPremise(t("object.create.starter.storyPremise"));
+      setElements([
+        { kind: "scene", text: t("object.create.starter.storyScene") },
+        { kind: "choice", text: t("object.create.starter.storyChoice") }
+      ]);
+    }
+  }
+
+  const firstUse = searchParams.get("first") === "1";
+  const starterApplied = useRef(false);
+
+  useEffect(() => {
+    if (!firstUse || starterApplied.current || initialType !== "living_scene") {
+      return;
+    }
+    starterApplied.current = true;
+    applySceneStarter(purpose);
+    // The first-use entry pre-fills a real starter once; the user can edit it.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   async function submit(event: FormEvent) {
     event.preventDefault();
@@ -105,7 +138,7 @@ export default function ObjectNewPage() {
         content,
         shared_context: shared
       });
-      navigate(`/objects/${created.id}?tab=work&created=1`);
+      navigate(`/objects/${created.id}?tab=work&created=1${firstUse ? "&first=1" : ""}`);
     } catch (failure) {
       setError(failure);
     } finally {
@@ -174,12 +207,33 @@ export default function ObjectNewPage() {
 
         <div className="example-row">
           <span>{t("object.create.examples")}</span>
-          <button type="button" className="chip-button" onClick={() => applyExample("notes")}>
-            {t("object.create.example.notes")}
-          </button>
-          <button type="button" className="chip-button" onClick={() => applyExample("poll")}>
-            {t("object.create.example.poll")}
-          </button>
+          {objectType === "living_scene" ? (
+            <>
+              <button
+                type="button"
+                className="chip-button"
+                onClick={() => applySceneStarter("project")}
+              >
+                {t("object.create.starter.project")}
+              </button>
+              <button
+                type="button"
+                className="chip-button"
+                onClick={() => applySceneStarter("story")}
+              >
+                {t("object.create.starter.story")}
+              </button>
+            </>
+          ) : (
+            <>
+              <button type="button" className="chip-button" onClick={() => applyExample("notes")}>
+                {t("object.create.example.notes")}
+              </button>
+              <button type="button" className="chip-button" onClick={() => applyExample("poll")}>
+                {t("object.create.example.poll")}
+              </button>
+            </>
+          )}
           <small>{t("object.create.examplesHint")}</small>
         </div>
 

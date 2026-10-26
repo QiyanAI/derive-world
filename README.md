@@ -97,6 +97,24 @@ lineage. Friends can talk directly without going through Personal AI. The
 `.env.example` values are development-only placeholders; they are not
 production secrets.
 
+### Windows: double-click launcher
+
+On Windows, the self-hosting administrator can use the local launcher instead
+of typing Compose commands:
+
+1. Install and start Docker Desktop (with Compose v2).
+2. Double-click **`Start Derive World.cmd`**.
+
+The launcher checks Docker, the Docker Engine, Compose, port 8080, the
+instance directory, `.env`, the database volume, and product health. It starts
+the stack, waits for `/readyz`, and opens the browser. The same menu stops and
+restarts with data preserved, opens and applies AI settings, and shows
+diagnostics with secrets redacted. See
+[launcher/README.md](launcher/README.md) and the
+[Windows self-hosting guide](docs/en/windows.md). It opens no network listener,
+passes no secret on a command line, and never deletes the database volume.
+Other platforms keep the Compose path above.
+
 ### Who needs what
 
 | Entry point | Needs Docker or a database? | What it can do |

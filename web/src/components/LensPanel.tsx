@@ -3,12 +3,25 @@ import { useCallback, useEffect, useState } from "react";
 import { Link } from "react-router";
 import {
   getLens,
+  getObject,
   getObjectVersion,
   type DeriveLens,
+  type ObjectView,
   type ObjectVersion
 } from "../api";
 import { ErrorNotice } from "../errors";
 import { useI18n } from "../i18n";
+
+function changedFields(current: Record<string, unknown>, historical: Record<string, unknown>): string[] {
+  const keys = new Set([...Object.keys(current), ...Object.keys(historical)]);
+  const changed: string[] = [];
+  for (const key of keys) {
+    if (JSON.stringify(current[key]) !== JSON.stringify(historical[key])) {
+      changed.push(key);
+    }
+  }
+  return changed.sort();
+}
 
 function statePreview(version: ObjectVersion | null): string {
   if (!version) {
@@ -27,11 +40,27 @@ function statePreview(version: ObjectVersion | null): string {
   return "—";
 }
 
+function statePreviewFromObject(object: ObjectView): string {
+  const state = object.state;
+  for (const key of ["premise", "summary", "prompt", "body", "title"]) {
+    const value = state[key];
+    if (typeof value === "string" && value.trim()) {
+      return value;
+    }
+  }
+  if (Array.isArray(state.elements)) {
+    return `${state.elements.length}`;
+  }
+  return "—";
+}
+
 export default function LensPanel({ objectID }: { objectID: string }) {
   const { t, lang } = useI18n();
   const [lens, setLens] = useState<DeriveLens | null>(null);
   const [historical, setHistorical] = useState<ObjectVersion | null>(null);
   const [loadingVersion, setLoadingVersion] = useState(0);
+  const [branchPreview, setBranchPreview] = useState<{ id: string; object: ObjectView } | null>(null);
+  const [previewingBranch, setPreviewingBranch] = useState("");
   const [error, setError] = useState<unknown>(null);
   const [loading, setLoading] = useState(true);
 
@@ -80,6 +109,18 @@ export default function LensPanel({ objectID }: { objectID: string }) {
     }
   }
 
+  async function previewBranch(childID: string) {
+    setPreviewingBranch(childID);
+    setError(null);
+    try {
+      setBranchPreview({ id: childID, object: await getObject(childID) });
+    } catch (failure) {
+      setError(failure);
+    } finally {
+      setPreviewingBranch("");
+    }
+  }
+
   if (loading && !lens) {
     return <p className="muted">{t("common.loading")}</p>;
   }
@@ -104,19 +145,32 @@ export default function LensPanel({ objectID }: { objectID: string }) {
         <h3>{t("lens.source")}</h3>
         {lens.lineage ? (
           <p>
-            {lens.lineage.public && lens.lineage.publication_title
-              ? t("lens.publicSource", { title: lens.lineage.publication_title })
-              : t("lens.privateSource", {
-                  title: lens.lineage.publication_title ?? t("common.unknown"),
+            {lens.lineage.public && lens.lineage.publication_id ? (
+              <Link className="text-link" to={`/explore/${lens.lineage.publication_id}`}>
+                {t("lens.publicSource", {
+                  title: lens.lineage.publication_title || t("common.unknown")
+                })}
+              </Link>
+            ) : (
+              <Link className="text-link" to={`/objects/${lens.lineage.parent.object_id}`}>
+                {t("lens.privateSource", {
+                  title: t("lens.openSource"),
                   version: lens.lineage.parent.version
                 })}
+              </Link>
+            )}
             <span className="muted"> · v{lens.lineage.parent.version}</span>
           </p>
         ) : (
           <p className="muted">{t("lens.noSource")}</p>
         )}
         <p className="muted">
-          {t("lens.inherit")}: {lens.inheritance_fields.join(", ") || t("lens.none")}
+          {t("lens.inherit")}:{" "}
+          {lens.inheritance_fields.length > 0
+            ? lens.inheritance_fields
+                .map((field) => t(`branch.field.${field}` as never))
+                .join(", ")
+            : t("lens.none")}
         </p>
       </div>
 
@@ -150,6 +204,16 @@ export default function LensPanel({ objectID }: { objectID: string }) {
               })}
             </p>
             <p className="lens-preview-text">{statePreview(historical)}</p>
+            {historical.version !== historical.current_version ? (
+              <p className="muted">
+                {t("lens.changedFields", {
+                  fields:
+                    changedFields(lens.object.state, historical.state)
+                      .map((field) => t(`branch.field.${field}` as never) || field)
+                      .join(", ") || t("lens.none")
+                })}
+              </p>
+            ) : null}
           </div>
         ) : null}
       </div>
@@ -166,6 +230,17 @@ export default function LensPanel({ objectID }: { objectID: string }) {
                 <small>
                   v{child.version} · {t("lens.fromVersion", { version: child.source_version })}
                 </small>
+                <button
+                  className="text-link"
+                  type="button"
+                  disabled={previewingBranch === child.object_id}
+                  onClick={() => void previewBranch(child.object_id)}
+                >
+                  {previewingBranch === child.object_id ? t("common.loading") : t("lens.previewBranch")}
+                </button>
+                {branchPreview?.id === child.object_id ? (
+                  <p className="lens-preview-text">{statePreviewFromObject(branchPreview.object)}</p>
+                ) : null}
               </li>
             ))}
           </ul>

@@ -15,6 +15,7 @@ import {
 } from "../api";
 import AIPanel from "../components/AIPanel";
 import DiscussionsPanel from "../components/DiscussionsPanel";
+import FirstLoopGuide from "../components/FirstLoopGuide";
 import LensPanel from "../components/LensPanel";
 import ObjectAccessTab from "../components/ObjectAccessTab";
 import ObjectHistoryTab from "../components/ObjectHistoryTab";
@@ -75,6 +76,8 @@ export default function ObjectPage() {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const activeTab = normalizeTab(searchParams.get("tab"));
+  const firstUse = searchParams.get("created") === "1" && searchParams.get("first") === "1";
+  const [guideDismissed, setGuideDismissed] = useState(false);
 
   const [object, setObject] = useState<ObjectView | null>(null);
   const [events, setEvents] = useState<EventView[]>([]);
@@ -429,6 +432,15 @@ export default function ObjectPage() {
 
       <SectionNav objectID={object.id} tabs={tabs} active={activeTab} />
 
+      {firstUse && !guideDismissed ? (
+        <FirstLoopGuide
+          object={object}
+          hasBranch={(lineage?.descendants.length ?? 0) > 0}
+          canDerive={canDerive}
+          onDismiss={() => setGuideDismissed(true)}
+        />
+      ) : null}
+
       <div className="object-layout">
         <div className="object-content">
           {activeTab === "work" ? (
@@ -531,10 +543,15 @@ export default function ObjectPage() {
             <h2>{t("lineage.title")}</h2>
             {object.lineage ? (
               <p>
-                {t("object.derivedFrom", {
-                  title: parentAncestor?.title || t("common.unknown"),
-                  version: object.lineage.parent.version
-                })}
+                {object.lineage.public && object.lineage.publication_title
+                  ? t("object.derivedFromPublic", {
+                      title: object.lineage.publication_title,
+                      version: object.lineage.parent.version
+                    })
+                  : t("object.derivedFrom", {
+                      title: parentAncestor?.title || t("common.unknown"),
+                      version: object.lineage.parent.version
+                    })}
               </p>
             ) : (
               <p className="muted">{t("lineage.none")}</p>

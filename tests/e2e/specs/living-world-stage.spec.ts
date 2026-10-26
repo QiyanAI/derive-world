@@ -39,7 +39,7 @@ test("Living world: one person creates a scene, inspects the lens, publishes, an
       .fill("Write the release note");
     await scenePanel.getByRole("button", { name: "Add element" }).click();
     await expect(scenePanel.getByText("Write the release note")).toBeVisible();
-    await scenePanel.getByRole("checkbox", { name: "Completed" }).click();
+    await scenePanel.getByRole("checkbox", { name: "Completed" }).last().click();
     await expect(scenePanel.getByText(/1 of 2 steps done/)).toBeVisible();
 
     await page.getByRole("link", { name: "Lens" }).click();

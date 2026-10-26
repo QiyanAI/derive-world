@@ -246,13 +246,29 @@ func (a *App) getObject(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	view := object.View()
-	lineage, err := a.objects.LineageForObject(r.Context(), principalFrom(r.Context()).User.ID, object.ID)
-	if err != nil {
-		a.writeDomainError(w, r, err)
-		return
+	var (
+		lineage *objects.DeriveLineage
+		err     error
+	)
+	publicDerived := false
+	if a.publication != nil {
+		var source *objects.PublicSource
+		source, err = a.publication.PublicSourceForChild(r.Context(), object.ID)
+		if err != nil {
+			a.writeDomainError(w, r, err)
+			return
+		}
+		publicDerived = source != nil
+		if source != nil && source.Active {
+			lineage, err = a.publication.PublicLineageForChild(r.Context(), object.ID)
+			if err != nil {
+				a.writeDomainError(w, r, err)
+				return
+			}
+		}
 	}
-	if lineage == nil && a.publication != nil {
-		lineage, err = a.publication.PublicLineageForChild(r.Context(), object.ID)
+	if !publicDerived {
+		lineage, err = a.objects.LineageForObject(r.Context(), principalFrom(r.Context()).User.ID, object.ID)
 		if err != nil {
 			a.writeDomainError(w, r, err)
 			return
@@ -524,6 +540,29 @@ func (a *App) getLineage(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		a.writeDomainError(w, r, err)
 		return
+	}
+	if a.publication != nil {
+		var source *objects.PublicSource
+		source, err = a.publication.PublicSourceForChild(r.Context(), object.ID)
+		if err != nil {
+			a.writeDomainError(w, r, err)
+			return
+		}
+		if source != nil {
+			// A public-derived child never projects its private parent, even
+			// when the viewer also has parent access or after withdrawal.
+			lineage.Ancestors = make([]objects.LineageAncestor, 0)
+			if source.Active {
+				publicLineage, publicErr := a.publication.PublicLineageForChild(r.Context(), object.ID)
+				if publicErr != nil {
+					a.writeDomainError(w, r, publicErr)
+					return
+				}
+				lineage.Source = publicLineage
+			} else {
+				lineage.Ancestors = append(lineage.Ancestors, objects.LineageAncestor{Depth: 1, Redacted: true})
+			}
+		}
 	}
 	httpx.WriteJSON(w, http.StatusOK, lineage)
 }

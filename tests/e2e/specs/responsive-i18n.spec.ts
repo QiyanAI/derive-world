@@ -33,7 +33,7 @@ test.describe("EN/ZH and 390px responsive reference world", () => {
     await expect(page.getByRole("heading", { name: "你的数字自我已就绪" })).toBeVisible();
     await expectNoHorizontalOverflow(page);
 
-    await page.getByRole("link", { name: "创建第一个对象" }).click();
+    await page.goto("/objects/new");
     await page.getByRole("radio", { name: /协作对象/ }).check();
     await page.getByLabel("标题", { exact: true }).fill("中文响应式对象");
     await page.getByLabel("摘要", { exact: true }).fill("在手机宽度下仍可完整操作。");

@@ -25,7 +25,9 @@ func TestCheckConnectionRealStatuses(t *testing.T) {
 		{"ok", http.StatusOK, nil},
 		{"unauthorized", http.StatusUnauthorized, ErrCheckUnauthorized},
 		{"forbidden", http.StatusForbidden, ErrCheckUnauthorized},
-		{"unexpected", http.StatusInternalServerError, ErrCheckStatus},
+		{"rate_limited", http.StatusTooManyRequests, ErrCheckRateLimited},
+		{"unavailable", http.StatusInternalServerError, ErrCheckUnavailable},
+		{"unexpected", http.StatusBadRequest, ErrCheckStatus},
 	}
 	for _, testCase := range cases {
 		t.Run(testCase.name, func(t *testing.T) {
@@ -50,6 +52,38 @@ func TestCheckConnectionRealStatuses(t *testing.T) {
 				t.Fatalf("check = %v, want %v", err, testCase.wantErr)
 			}
 		})
+	}
+}
+
+func TestCheckConnectionDoesNotFollowRedirects(t *testing.T) {
+	targetHit := false
+	target := httptest.NewServer(http.HandlerFunc(func(http.ResponseWriter, *http.Request) {
+		targetHit = true
+	}))
+	defer target.Close()
+	redirect := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		http.Redirect(w, r, target.URL, http.StatusFound)
+	}))
+	defer redirect.Close()
+	err := CheckConnection(context.Background(), AdapterOptions{
+		Mode: "real", BaseURL: redirect.URL, APIKey: "test-key", Timeout: 2 * time.Second,
+	})
+	if !errors.Is(err, ErrCheckStatus) {
+		t.Fatalf("check = %v, want unexpected status for a redirect", err)
+	}
+	if targetHit {
+		t.Fatal("model check followed a redirect and could have forwarded the API key")
+	}
+}
+
+func TestCheckConnectionInvalidURL(t *testing.T) {
+	for _, value := range []string{"", "not-a-url", "ftp://example.test", "https://"} {
+		err := CheckConnection(context.Background(), AdapterOptions{
+			Mode: "real", BaseURL: value, APIKey: "test-key", Timeout: time.Second,
+		})
+		if !errors.Is(err, ErrCheckInvalidURL) {
+			t.Fatalf("check(%q) = %v, want invalid URL", value, err)
+		}
 	}
 }
 

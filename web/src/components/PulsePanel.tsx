@@ -11,7 +11,28 @@ import { ErrorNotice } from "../errors";
 import { actionKey, eventKey } from "../humanize";
 import { useI18n } from "../i18n";
 
-export default function PulsePanel({ compact = false }: { compact?: boolean }) {
+function pulseTarget(item: { object_id: string; event_type?: string }): string {
+  const base = `/objects/${item.object_id}`;
+  switch (item.event_type) {
+    case "object.state_changed":
+      return `${base}?tab=work`;
+    case "object.derived":
+      return `${base}?tab=lens`;
+    case "ai.proposal_created":
+    case "ai.proposal_applied":
+      return `${base}?tab=ai`;
+    default:
+      return base;
+  }
+}
+
+export default function PulsePanel({
+  compact = false,
+  refreshKey = ""
+}: {
+  compact?: boolean;
+  refreshKey?: string;
+}) {
   const { t, lang } = useI18n();
   const [pulse, setPulse] = useState<LivingPulse | null>(null);
   const [error, setError] = useState<unknown>(null);
@@ -47,6 +68,12 @@ export default function PulsePanel({ compact = false }: { compact?: boolean }) {
     void load(controller.signal);
     return () => controller.abort();
   }, [load]);
+
+  useEffect(() => {
+    if (refreshKey !== "") {
+      void load();
+    }
+  }, [load, refreshKey]);
 
   async function act(key: string, action: () => Promise<unknown>) {
     setBusy(key);
@@ -174,7 +201,7 @@ export default function PulsePanel({ compact = false }: { compact?: boolean }) {
             {pulse.items.slice(0, compact ? 6 : 30).map((item, index) => (
               <li key={`${item.object_id}-${item.occurred_at}-${index}`}>
                 <div>
-                  <Link to={`/objects/${item.object_id}`}>{item.title || t("common.untitled")}</Link>
+                  <Link to={pulseTarget(item)}>{item.title || t("common.untitled")}</Link>
                   <small>
                     {item.action ? t(actionKey(item.action)) : t(eventKey(item.event_type ?? ""))}
                     {item.actor_name ? ` · ${item.actor_name}` : ""}

@@ -382,6 +382,26 @@ func TestDWPublicationPublicReadDeriveAndRevoke(t *testing.T) {
 
 	anonymous := newClient(t)
 	status, body, _ = env.call(t, anonymous, http.MethodGet,
+		"/api/v1/public/worlds", callOptions{})
+	if status != http.StatusOK || !strings.Contains(string(body), publication.ID) {
+		t.Fatalf("anonymous public list status = %d body = %s", status, body)
+	}
+	status, body, _ = env.call(t, anonymous, http.MethodGet,
+		"/api/v1/public/worlds/"+publication.ID+"/lineage", callOptions{})
+	if status != http.StatusOK {
+		t.Fatalf("anonymous public lineage status = %d body = %s", status, body)
+	}
+	status, _, _ = env.call(t, anonymous, http.MethodPost,
+		"/api/v1/public/worlds/"+publication.ID+"/derive", callOptions{
+			IdempotencyKey: newIdempotencyKey(),
+			Body: map[string]any{
+				"title": "Anonymous branch", "inheritance_fields": []string{"summary"},
+			},
+		})
+	if status != http.StatusUnauthorized {
+		t.Fatalf("anonymous public derive status = %d, want 401", status)
+	}
+	status, body, _ = env.call(t, anonymous, http.MethodGet,
 		"/api/v1/public/worlds/"+publication.ID, callOptions{})
 	if status != http.StatusOK {
 		t.Fatalf("anonymous public read status = %d body = %s", status, body)
@@ -442,6 +462,20 @@ func TestDWPublicationPublicReadDeriveAndRevoke(t *testing.T) {
 SELECT count(*) FROM publication_reports WHERE publication_id = $1`,
 		publication.ID); reports != 1 {
 		t.Fatalf("report rows = %d, want 1", reports)
+	}
+	// The report limiter allows a burst of two per user; the third is refused
+	// without creating another row.
+	status, body, _ = visitor.call(t, http.MethodPost,
+		"/api/v1/public/worlds/"+publication.ID+"/report", callOptions{
+			Body: map[string]any{"reason": "A third report."},
+		})
+	if status != http.StatusTooManyRequests {
+		t.Fatalf("third report status = %d body = %s, want 429", status, body)
+	}
+	if reports := env.count(t, `
+SELECT count(*) FROM publication_reports WHERE publication_id = $1`,
+		publication.ID); reports != 1 {
+		t.Fatalf("rate-limited report created rows = %d, want 1", reports)
 	}
 	status, _, _ = env.call(t, anonymous, http.MethodPost,
 		"/api/v1/public/worlds/"+publication.ID+"/report", callOptions{
@@ -834,5 +868,98 @@ func TestDWWorldStageAndPulseUseRealState(t *testing.T) {
 	}
 	if pulse.Items[0]["object_id"] != object.ID {
 		t.Fatalf("pulse object = %v, want %s", pulse.Items[0]["object_id"], object.ID)
+	}
+}
+
+func TestDWPublicationMultiContributorConsent(t *testing.T) {
+	env := newTestEnv(t)
+	owner := env.register(t, "multi-owner")
+	first := env.register(t, "multi-first")
+	second := env.register(t, "multi-second")
+	intruder := env.register(t, "multi-intruder")
+
+	object := owner.createObject(t, "collaborative", "Multi-contributor work", map[string]any{
+		"summary": "Owner start.",
+	})
+	objectUUID, _ := uuid.Parse(object.ID)
+	firstUUID, _ := uuid.Parse(first.id.String())
+	secondUUID, _ := uuid.Parse(second.id.String())
+	env.addMembership(t, objectUUID, firstUUID, []string{"read", "contribute"})
+	env.addMembership(t, objectUUID, secondUUID, []string{"read", "contribute"})
+	status, body, _ := first.postAction(t, object.ID, "set_summary",
+		map[string]any{"summary": "First contributor."}, object.Version)
+	requireStatus(t, status, http.StatusOK, body)
+	var updated objectResponse
+	if err := json.Unmarshal(body, &updated); err != nil {
+		t.Fatalf("decode first update: %v", err)
+	}
+	status, body, _ = second.postAction(t, object.ID, "set_summary",
+		map[string]any{"summary": "Second contributor."}, updated.Version)
+	requireStatus(t, status, http.StatusOK, body)
+
+	status, body, _ = owner.call(t, http.MethodPost,
+		"/api/v1/objects/"+object.ID+"/publications", callOptions{
+			IdempotencyKey: newIdempotencyKey(),
+			Body: map[string]any{
+				"derive_allowed": false, "license": "all_rights_reserved",
+			},
+		})
+	requireStatus(t, status, http.StatusCreated, body)
+	var publication struct {
+		ID     string `json:"id"`
+		Status string `json:"status"`
+	}
+	if err := json.Unmarshal(body, &publication); err != nil {
+		t.Fatalf("decode publication: %v", err)
+	}
+	if publication.Status != "pending_consent" {
+		t.Fatalf("publication status = %s, want pending_consent", publication.Status)
+	}
+
+	consentFor := func(user *testUser) string {
+		t.Helper()
+		status, body, _ := user.call(t, http.MethodGet, "/api/v1/publication-consents", callOptions{})
+		requireStatus(t, status, http.StatusOK, body)
+		var list struct {
+			Items []struct {
+				ID string `json:"id"`
+			} `json:"items"`
+		}
+		if err := json.Unmarshal(body, &list); err != nil {
+			t.Fatalf("decode consents: %v", err)
+		}
+		if len(list.Items) != 1 {
+			t.Fatalf("consents for user = %d, want 1", len(list.Items))
+		}
+		return list.Items[0].ID
+	}
+	firstConsent := consentFor(first)
+	secondConsent := consentFor(second)
+
+	// A different member cannot answer another contributor's consent.
+	for _, method := range []string{"approve", "decline"} {
+		status, body, _ = intruder.call(t, http.MethodPost,
+			"/api/v1/publication-consents/"+firstConsent+"/"+method, callOptions{})
+		if status != http.StatusNotFound && status != http.StatusForbidden {
+			t.Fatalf("foreign %s status = %d body = %s", method, status, body)
+		}
+	}
+
+	anonymous := newClient(t)
+	status, body, _ = first.call(t, http.MethodPost,
+		"/api/v1/publication-consents/"+firstConsent+"/approve", callOptions{})
+	requireStatus(t, status, http.StatusOK, body)
+	status, _, _ = env.call(t, anonymous, http.MethodGet,
+		"/api/v1/public/worlds/"+publication.ID, callOptions{})
+	if status != http.StatusNotFound {
+		t.Fatalf("one of two approvals exposed the publication: status = %d", status)
+	}
+	status, body, _ = second.call(t, http.MethodPost,
+		"/api/v1/publication-consents/"+secondConsent+"/approve", callOptions{})
+	requireStatus(t, status, http.StatusOK, body)
+	status, body, _ = env.call(t, anonymous, http.MethodGet,
+		"/api/v1/public/worlds/"+publication.ID, callOptions{})
+	if status != http.StatusOK {
+		t.Fatalf("both approvals did not activate the publication: status = %d body = %s", status, body)
 	}
 }
