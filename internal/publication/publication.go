@@ -33,7 +33,10 @@ var (
 	ErrInvalidRequest = errors.New("invalid publication request")
 )
 
-const maxTitleRunes = 200
+const (
+	maxTitleRunes    = 200
+	maxSnapshotBytes = 66560
+)
 
 var allowedLicenses = map[string]bool{
 	"all_rights_reserved": true,
@@ -815,7 +818,7 @@ func buildSnapshot(objectType, template string, state json.RawMessage) (json.Raw
 	if err != nil {
 		return nil, "", "", err
 	}
-	if size > 64*1024 {
+	if size > maxSnapshotBytes {
 		return nil, "", "", fmt.Errorf("%w: snapshot", ErrInvalidRequest)
 	}
 	return encoded, title, summary, nil

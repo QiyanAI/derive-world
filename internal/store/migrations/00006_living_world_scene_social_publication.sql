@@ -182,7 +182,9 @@ CREATE TABLE publications (
      OR (object_type = 'living_scene'  AND presentation_template = 'living_scene_v1')
     ),
     CONSTRAINT publications_snapshot_object CHECK (jsonb_typeof(snapshot) = 'object'),
-    CONSTRAINT publications_snapshot_size CHECK (octet_length(snapshot::text) <= 65536),
+    -- 64 KiB object state plus the small public envelope (title, type,
+    -- template); the object state CHECK remains the binding content limit.
+    CONSTRAINT publications_snapshot_size CHECK (octet_length(snapshot::text) <= 66560),
     CONSTRAINT publications_status_domain
         CHECK (status IN ('pending_consent', 'active', 'declined', 'revoked')),
     CONSTRAINT publications_license_domain
