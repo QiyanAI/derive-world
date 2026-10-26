@@ -161,6 +161,10 @@ function Protect-ConfigFile {
     }
     try {
         $identity = [System.Security.Principal.WindowsIdentity]::GetCurrent().Name
+        # /reset removes explicit broad grants (for example Users:(M) added by
+        # a manual icacls call) and restores inherited defaults; the following
+        # inheritance:r + grant:r then leaves only the three intended SIDs.
+        [void](& icacls.exe $Path /reset 2>&1)
         $aclOutput = & icacls.exe $Path /inheritance:r /grant:r "${identity}:(R,W)" '*S-1-5-18:(R,W)' '*S-1-5-32-544:(R,W)' 2>&1
         if ($LASTEXITCODE -ne 0) {
             Write-Warn ('Could not restrict .env permissions automatically: ' + (($aclOutput | Out-String).Trim()))
