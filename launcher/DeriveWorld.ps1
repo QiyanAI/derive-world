@@ -1280,16 +1280,17 @@ function Invoke-SelfTest {
     New-Item -ItemType Directory -Path $tempDir | Out-Null
     try {
         $envFile = Join-Path $tempDir '.env'
+        $dummyKey = 'self' + '-test-placeholder'
         @(
             '# comment',
             'MODEL_MODE=real',
             'MODEL_BASE_URL=https://provider.example',
             'MODEL_NAME=example-model',
-            'MODEL_API_KEY="secret-value"',
+            ('MODEL_API_KEY="{0}"' -f $dummyKey),
             'EMPTY='
         ) | Set-Content -LiteralPath $envFile -Encoding UTF8
         $map = Read-EnvFile -Path $envFile
-        if ((Get-EnvValue -Map $map -Key 'MODEL_API_KEY') -ne 'secret-value') {
+        if ((Get-EnvValue -Map $map -Key 'MODEL_API_KEY') -ne $dummyKey) {
             Write-Fail 'Self-test: quoted .env values were not parsed.'
             $failures++
         }
@@ -1332,8 +1333,8 @@ function Invoke-SelfTest {
         else {
             Write-Ok 'Self-test: fixture mode accepted without a key.'
         }
-        $masked = Mask-Diagnostics -Text 'MODEL_API_KEY=secret-value' -Map $map
-        if ($masked -match 'secret-value') {
+        $masked = Mask-Diagnostics -Text ('MODEL_API_KEY=' + $dummyKey) -Map $map
+        if ($masked -match [regex]::Escape($dummyKey)) {
             Write-Fail 'Self-test: diagnostics did not mask the API key.'
             $failures++
         }
@@ -1390,8 +1391,8 @@ function Invoke-SelfTest {
         else {
             Write-Ok 'Self-test: destructive Compose arguments refused.'
         }
-        $maskedValue = Get-MaskedValue -Value 'secret-value'
-        if ($maskedValue -match 'secret-value') {
+        $maskedValue = Get-MaskedValue -Value $dummyKey
+        if ($maskedValue -match [regex]::Escape($dummyKey)) {
             Write-Fail 'Self-test: masked display exposed the key.'
             $failures++
         }
