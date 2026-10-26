@@ -27,6 +27,9 @@ function publicPreview(world: PublicWorld): { title: string; body: string; eleme
   } else if (typeof snapshot.body === "string") {
     body = snapshot.body;
   }
+  if (!body && typeof world.summary === "string") {
+    body = world.summary;
+  }
   const elements = Array.isArray(snapshot.elements)
     ? (snapshot.elements as Array<Record<string, unknown>>)
         .map((element) => String(element.text ?? ""))

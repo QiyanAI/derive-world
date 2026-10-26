@@ -689,6 +689,9 @@ SELECT object_id, source_version, object_type, presentation_template, snapshot,
 			return nil, fmt.Errorf("%w: inheritance_fields", ErrInvalidRequest)
 		}
 	}
+	if objectType == objects.TypeInteractive && !contains(inheritanceFields, "options") {
+		return nil, fmt.Errorf("%w: inheritance_fields.options", ErrInvalidRequest)
+	}
 	var snapshotEnvelope struct {
 		State json.RawMessage `json:"state"`
 	}
