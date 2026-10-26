@@ -109,7 +109,11 @@ const fieldKeys = {
   tag: "workspace.tags",
   option: "object.create.options",
   shared_context: "workspace.sharedContext",
-  input: "workspace.eventPayload"
+  input: "workspace.eventPayload",
+  premise: "scene.premise",
+  kind: "scene.elements",
+  element: "scene.elements",
+  position: "scene.moveDown"
 } satisfies Record<string, MessageKey>;
 
 function field(label: keyof typeof fieldKeys, value: string) {
@@ -173,6 +177,37 @@ export function proposalPreview(proposal: Proposal, object: ObjectView | null): 
       return {
         action: proposal.action,
         fields: [field("shared_context", JSON.stringify(input.shared_context ?? {}))]
+      };
+    case "set_premise":
+      return { action: proposal.action, fields: [field("premise", String(input.premise ?? ""))] };
+    case "add_element":
+      return {
+        action: proposal.action,
+        fields: [
+          field("kind", String(input.kind ?? "")),
+          field("text", String(input.text ?? ""))
+        ]
+      };
+    case "update_element":
+      return {
+        action: proposal.action,
+        fields: [
+          field("element", String(input.element_id ?? "")),
+          field("text", String(input.text ?? input.status ?? input.kind ?? ""))
+        ]
+      };
+    case "remove_element":
+      return {
+        action: proposal.action,
+        fields: [field("element", String(input.element_id ?? ""))]
+      };
+    case "move_element":
+      return {
+        action: proposal.action,
+        fields: [
+          field("element", String(input.element_id ?? "")),
+          field("position", String(input.position ?? ""))
+        ]
       };
     default:
       return {
