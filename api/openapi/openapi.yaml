@@ -1405,6 +1405,810 @@ paths:
           $ref: "#/components/responses/NotFound"
         "429":
           $ref: "#/components/responses/RateLimited"
+  /api/v1/world/stage:
+    get:
+      operationId: getWorldStage
+      summary: Read the visible World Stage projection
+      description: Returns authorized objects, visible derivation edges, and the latest visible real event. This is a projection, not a second state store.
+      responses:
+        '200':
+          description: The visible stage.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WorldStage'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+  /api/v1/pulse:
+    get:
+      operationId: getLivingPulse
+      summary: Read real recent changes
+      description: Only real object, social, and publication records are returned. Nothing is synthesized.
+      parameters:
+      - name: limit
+        in: query
+        required: false
+        schema:
+          type: integer
+          minimum: 1
+          maximum: 50
+          default: 30
+      responses:
+        '200':
+          description: Recent real changes.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LivingPulse'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+  /api/v1/system/status:
+    get:
+      operationId: getSystemStatus
+      summary: Read non-secret service and quota diagnostics
+      responses:
+        '200':
+          description: Runtime diagnostics without secrets.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SystemStatus'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+  /api/v1/system/model-check:
+    get:
+      operationId: checkModelConnection
+      summary: Check the configured model provider connection
+      description: Fixture mode performs no network call. Real mode checks the provider models endpoint without sending a prompt or consuming completion tokens.
+      responses:
+        '200':
+          description: The non-secret connection status.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ModelCheck'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+  /api/v1/stream:
+    get:
+      operationId: streamRefreshEvents
+      summary: Authenticated SSE refresh signal
+      description: The stream carries only refresh signals and heartbeats. It never carries object state, messages, or identities.
+      responses:
+        '200':
+          description: A text/event-stream of refresh signals.
+          content:
+            text/event-stream:
+              schema:
+                type: string
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+  /api/v1/objects/{id}/lens:
+    parameters:
+    - $ref: '#/components/parameters/ObjectID'
+    get:
+      operationId: getDeriveLens
+      summary: Read the Derive Lens projection
+      responses:
+        '200':
+          description: Authorized source, versions, visible branches, and inheritance fields.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DeriveLens'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+  /api/v1/objects/{id}/versions/{version}:
+    parameters:
+    - $ref: '#/components/parameters/ObjectID'
+    - name: version
+      in: path
+      required: true
+      schema:
+        type: integer
+        minimum: 1
+    get:
+      operationId: getObjectVersion
+      summary: Read one authorized historical snapshot
+      responses:
+        '200':
+          description: The verified historical state.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ObjectVersion'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+  /api/v1/objects/{id}/discussions:
+    parameters:
+    - $ref: '#/components/parameters/ObjectID'
+    get:
+      operationId: listObjectDiscussions
+      summary: List human discussion posts
+      parameters:
+      - name: limit
+        in: query
+        required: false
+        schema:
+          type: integer
+          minimum: 1
+          maximum: 100
+          default: 30
+      - name: cursor
+        in: query
+        required: false
+        schema:
+          type: string
+      responses:
+        '200':
+          description: Discussion posts.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DiscussionList'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+    post:
+      operationId: postObjectDiscussion
+      summary: Post a human discussion message
+      parameters:
+      - $ref: '#/components/parameters/CSRFToken'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PostDiscussionRequest'
+      responses:
+        '201':
+          description: The created discussion post.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Discussion'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '413':
+          $ref: '#/components/responses/PayloadTooLarge'
+        '415':
+          $ref: '#/components/responses/UnsupportedMediaType'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+  /api/v1/social/friends:
+    get:
+      operationId: listFriends
+      summary: List accepted friends and unread counts
+      responses:
+        '200':
+          description: Accepted friends.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FriendList'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+  /api/v1/social/friend-requests:
+    get:
+      operationId: listFriendRequests
+      summary: List pending friend requests
+      parameters:
+      - name: direction
+        in: query
+        required: false
+        schema:
+          type: string
+          enum: [incoming, outgoing]
+          default: incoming
+      responses:
+        '200':
+          description: Pending requests.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FriendRequestList'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+    post:
+      operationId: sendFriendRequest
+      summary: Send a friend request by handle
+      parameters:
+      - $ref: '#/components/parameters/CSRFToken'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SendFriendRequest'
+      responses:
+        '201':
+          description: The pending request.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FriendRequest'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '413':
+          $ref: '#/components/responses/PayloadTooLarge'
+        '415':
+          $ref: '#/components/responses/UnsupportedMediaType'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+  /api/v1/social/friend-requests/{id}/accept:
+    parameters:
+    - name: id
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+    post:
+      operationId: acceptFriendRequest
+      summary: Accept a pending friend request
+      parameters:
+      - $ref: '#/components/parameters/CSRFToken'
+      responses:
+        '200':
+          description: The accepted request.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FriendRequest'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+  /api/v1/social/friend-requests/{id}/decline:
+    parameters:
+    - name: id
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+    post:
+      operationId: declineFriendRequest
+      summary: Decline a pending friend request
+      parameters:
+      - $ref: '#/components/parameters/CSRFToken'
+      responses:
+        '200':
+          description: The declined request.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FriendRequest'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+  /api/v1/social/friends/{user_id}:
+    parameters:
+    - name: user_id
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+    delete:
+      operationId: removeFriend
+      summary: Remove an accepted friendship
+      description: Object memberships are not changed. The client must explain and offer separate revocation.
+      parameters:
+      - $ref: '#/components/parameters/CSRFToken'
+      responses:
+        '204':
+          description: The friendship was removed.
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+  /api/v1/social/messages:
+    get:
+      operationId: listDirectMessages
+      summary: List a direct human message thread
+      parameters:
+      - name: with
+        in: query
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - name: limit
+        in: query
+        required: false
+        schema:
+          type: integer
+          minimum: 1
+          maximum: 100
+          default: 50
+      - name: cursor
+        in: query
+        required: false
+        schema:
+          type: string
+      responses:
+        '200':
+          description: The pairwise thread.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DirectMessageList'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+    post:
+      operationId: sendDirectMessage
+      summary: Send a direct human message
+      parameters:
+      - $ref: '#/components/parameters/CSRFToken'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SendDirectMessage'
+      responses:
+        '201':
+          description: The created or replayed message.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DirectMessage'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '413':
+          $ref: '#/components/responses/PayloadTooLarge'
+        '415':
+          $ref: '#/components/responses/UnsupportedMediaType'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+  /api/v1/social/messages/read:
+    post:
+      operationId: markDirectMessagesRead
+      summary: Mark messages from one sender as read
+      parameters:
+      - $ref: '#/components/parameters/CSRFToken'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/MarkMessagesRead'
+      responses:
+        '200':
+          description: The number of messages marked read.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MarkReadResult'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '413':
+          $ref: '#/components/responses/PayloadTooLarge'
+        '415':
+          $ref: '#/components/responses/UnsupportedMediaType'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+  /api/v1/social/blocks:
+    get:
+      operationId: listBlocks
+      summary: List active blocks
+      responses:
+        '200':
+          description: Active blocks.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BlockList'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+    post:
+      operationId: blockUser
+      summary: Block another user
+      parameters:
+      - $ref: '#/components/parameters/CSRFToken'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/BlockUserRequest'
+      responses:
+        '204':
+          description: The user is blocked.
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '413':
+          $ref: '#/components/responses/PayloadTooLarge'
+        '415':
+          $ref: '#/components/responses/UnsupportedMediaType'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+  /api/v1/social/blocks/{user_id}:
+    parameters:
+    - name: user_id
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+    delete:
+      operationId: unblockUser
+      summary: Revoke an active block
+      parameters:
+      - $ref: '#/components/parameters/CSRFToken'
+      responses:
+        '204':
+          description: The block was revoked.
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+  /api/v1/objects/{id}/publications:
+    parameters:
+    - $ref: '#/components/parameters/ObjectID'
+    get:
+      operationId: listPublications
+      summary: List publication records for an authorized object
+      responses:
+        '200':
+          description: Publication records.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PublicationList'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+    post:
+      operationId: createPublication
+      summary: Publish one object version
+      description: Other contributors must approve before the publication becomes public.
+      parameters:
+      - $ref: '#/components/parameters/IdempotencyKey'
+      - $ref: '#/components/parameters/CSRFToken'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreatePublicationRequest'
+      responses:
+        '201':
+          description: The publication record.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Publication'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '413':
+          $ref: '#/components/responses/PayloadTooLarge'
+        '415':
+          $ref: '#/components/responses/UnsupportedMediaType'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+  /api/v1/publications/{id}:
+    parameters:
+    - name: id
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+    delete:
+      operationId: revokePublication
+      summary: Revoke a publication
+      parameters:
+      - $ref: '#/components/parameters/CSRFToken'
+      responses:
+        '204':
+          description: The publication is revoked.
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+  /api/v1/publication-consents:
+    get:
+      operationId: listPublicationConsents
+      summary: List publication approvals waiting for the caller
+      responses:
+        '200':
+          description: Pending consents.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ConsentList'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+  /api/v1/publication-consents/{id}/approve:
+    parameters:
+    - name: id
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+    post:
+      operationId: approvePublicationConsent
+      summary: Approve a publication consent request
+      parameters:
+      - $ref: '#/components/parameters/CSRFToken'
+      responses:
+        '200':
+          description: The updated consent.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Consent'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+  /api/v1/publication-consents/{id}/decline:
+    parameters:
+    - name: id
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+    post:
+      operationId: declinePublicationConsent
+      summary: Decline a publication consent request
+      parameters:
+      - $ref: '#/components/parameters/CSRFToken'
+      responses:
+        '200':
+          description: The updated consent.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Consent'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+  /api/v1/public/worlds:
+    get:
+      operationId: listPublicWorlds
+      summary: Discover active public worlds
+      security: []
+      parameters:
+      - name: limit
+        in: query
+        required: false
+        schema:
+          type: integer
+          minimum: 1
+          maximum: 50
+          default: 20
+      - name: cursor
+        in: query
+        required: false
+        schema:
+          type: string
+      responses:
+        '200':
+          description: Active public worlds.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PublicWorldList'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+  /api/v1/public/worlds/{id}:
+    parameters:
+    - name: id
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+    get:
+      operationId: getPublicWorld
+      summary: Read one active public snapshot
+      security: []
+      responses:
+        '200':
+          description: The sanitized public snapshot.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PublicWorld'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+  /api/v1/public/worlds/{id}/lineage:
+    parameters:
+    - name: id
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+    get:
+      operationId: getPublicWorldLineage
+      summary: Read only actively published lineage
+      security: []
+      responses:
+        '200':
+          description: Public source and derived branches.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PublicLineage'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+  /api/v1/public/worlds/{id}/derive:
+    parameters:
+    - name: id
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+    post:
+      operationId: derivePublicWorld
+      summary: Create an independent private child from a public snapshot
+      parameters:
+      - $ref: '#/components/parameters/IdempotencyKey'
+      - $ref: '#/components/parameters/CSRFToken'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PublicDeriveRequest'
+      responses:
+        '201':
+          description: The independent private child object.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ObjectView'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '413':
+          $ref: '#/components/responses/PayloadTooLarge'
+        '415':
+          $ref: '#/components/responses/UnsupportedMediaType'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+  /api/v1/public/worlds/{id}/report:
+    parameters:
+    - name: id
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+    post:
+      operationId: reportPublicWorld
+      summary: Report a public world for abuse
+      parameters:
+      - $ref: '#/components/parameters/CSRFToken'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ReportRequest'
+      responses:
+        '204':
+          description: The report was recorded.
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '413':
+          $ref: '#/components/responses/PayloadTooLarge'
+        '415':
+          $ref: '#/components/responses/UnsupportedMediaType'
+        '429':
+          $ref: '#/components/responses/RateLimited'
 components:
   securitySchemes:
     cookieAuth:
@@ -3252,3 +4056,678 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/Confirmation'
+    StageEvent:
+      type: object
+      additionalProperties: false
+      properties:
+        event_type:
+          type: string
+        action:
+          type: string
+        actor_type:
+          type: string
+        actor_name:
+          type: string
+        occurred_at:
+          type: string
+          format: date-time
+    StageObject:
+      type: object
+      additionalProperties: false
+      required:
+      - id
+      - object_type
+      - presentation_template
+      - title
+      - version
+      - permissions
+      - role
+      - updated_at
+      properties:
+        id:
+          type: string
+          format: uuid
+        object_type:
+          type: string
+          enum: [collaborative, interactive, living_scene]
+        presentation_template:
+          type: string
+          enum: [collaborative_v1, interactive_v1, living_scene_v1]
+        title:
+          type: string
+        version:
+          type: integer
+        owner_id:
+          type: string
+          format: uuid
+        permissions:
+          type: array
+          items:
+            type: string
+        role:
+          type: string
+        updated_at:
+          type: string
+          format: date-time
+        member_count:
+          type: integer
+        branch_count:
+          type: integer
+        latest_event:
+          $ref: '#/components/schemas/StageEvent'
+    StageEdge:
+      type: object
+      additionalProperties: false
+      required: [parent_id, child_id]
+      properties:
+        parent_id:
+          type: string
+          format: uuid
+        child_id:
+          type: string
+          format: uuid
+    WorldStage:
+      type: object
+      additionalProperties: false
+      required: [objects, edges, generated_at]
+      properties:
+        objects:
+          type: array
+          items:
+            $ref: '#/components/schemas/StageObject'
+        edges:
+          type: array
+          items:
+            $ref: '#/components/schemas/StageEdge'
+        generated_at:
+          type: string
+          format: date-time
+    PulseItem:
+      type: object
+      additionalProperties: false
+      required: [kind, object_id, title, occurred_at]
+      properties:
+        kind:
+          type: string
+        object_id:
+          type: string
+          format: uuid
+        title:
+          type: string
+        event_type:
+          type: string
+        action:
+          type: string
+        actor_type:
+          type: string
+        actor_name:
+          type: string
+        summary:
+          type: string
+        occurred_at:
+          type: string
+          format: date-time
+    LivingPulse:
+      type: object
+      additionalProperties: false
+      required: [items, generated_at]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/PulseItem'
+        social:
+          type: object
+          additionalProperties: true
+        publication_consents:
+          type: array
+          items:
+            $ref: '#/components/schemas/Consent'
+        generated_at:
+          type: string
+          format: date-time
+    SystemStatus:
+      type: object
+      additionalProperties: false
+      properties:
+        version:
+          type: string
+        commit:
+          type: string
+        build_time:
+          type: string
+        model_mode:
+          type: string
+          enum: [fixture, real]
+        model_name:
+          type: string
+        public_base_url:
+          type: string
+        database_ok:
+          type: boolean
+        capabilities_ready:
+          type: boolean
+        quota:
+          type: object
+          additionalProperties: false
+          properties:
+            daily_calls:
+              type: integer
+            daily_input_chars:
+              type: integer
+            concurrency:
+              type: integer
+            global_daily_calls:
+              type: integer
+            kill_switch:
+              type: boolean
+        rate_limits:
+          type: object
+          additionalProperties: false
+          properties:
+            ai_per_hour:
+              type: integer
+            ai_burst:
+              type: integer
+            api_per_minute:
+              type: integer
+    LensVersion:
+      type: object
+      additionalProperties: false
+      properties:
+        version:
+          type: integer
+        event_type:
+          type: string
+        action:
+          type: string
+        actor:
+          $ref: '#/components/schemas/EventActor'
+        created_at:
+          type: string
+          format: date-time
+    BranchChild:
+      type: object
+      additionalProperties: false
+      properties:
+        object_id:
+          type: string
+          format: uuid
+        title:
+          type: string
+        version:
+          type: integer
+        source_version:
+          type: integer
+        created_at:
+          type: string
+          format: date-time
+    DeriveLens:
+      type: object
+      additionalProperties: false
+      required: [object, versions, children, inheritance_fields, proposals]
+      properties:
+        object:
+          $ref: '#/components/schemas/ObjectView'
+        lineage:
+          $ref: '#/components/schemas/DeriveLineage'
+        versions:
+          type: array
+          items:
+            $ref: '#/components/schemas/LensVersion'
+        children:
+          type: array
+          items:
+            $ref: '#/components/schemas/BranchChild'
+        inheritance_fields:
+          type: array
+          items:
+            type: string
+        proposals:
+          type: array
+          items:
+            $ref: '#/components/schemas/Proposal'
+    ObjectVersion:
+      type: object
+      additionalProperties: false
+      required: [object_id, object_type, version, current_version, state]
+      properties:
+        object_id:
+          type: string
+          format: uuid
+        object_type:
+          type: string
+        version:
+          type: integer
+        current_version:
+          type: integer
+        state:
+          type: object
+          additionalProperties: true
+    Discussion:
+      type: object
+      additionalProperties: false
+      properties:
+        id:
+          type: string
+          format: uuid
+        seq:
+          type: integer
+        object_id:
+          type: string
+          format: uuid
+        author_id:
+          type: string
+          format: uuid
+        author_name:
+          type: string
+        body:
+          type: string
+        client_message_id:
+          type: string
+          format: uuid
+        created_at:
+          type: string
+          format: date-time
+    DiscussionList:
+      type: object
+      additionalProperties: false
+      required: [items]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/Discussion'
+        next_cursor:
+          type: string
+    PostDiscussionRequest:
+      type: object
+      additionalProperties: false
+      required: [body, client_message_id]
+      properties:
+        body:
+          type: string
+          minLength: 1
+          maxLength: 4000
+        client_message_id:
+          type: string
+          format: uuid
+    Friend:
+      type: object
+      additionalProperties: false
+      properties:
+        user_id:
+          type: string
+          format: uuid
+        handle:
+          type: string
+        display_name:
+          type: string
+        since:
+          type: string
+          format: date-time
+        unread:
+          type: integer
+    FriendList:
+      type: object
+      additionalProperties: false
+      required: [items]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/Friend'
+    FriendRequest:
+      type: object
+      additionalProperties: false
+      properties:
+        id:
+          type: string
+          format: uuid
+        direction:
+          type: string
+          enum: [incoming, outgoing]
+        user_id:
+          type: string
+          format: uuid
+        handle:
+          type: string
+        display_name:
+          type: string
+        status:
+          type: string
+        created_at:
+          type: string
+          format: date-time
+    FriendRequestList:
+      type: object
+      additionalProperties: false
+      required: [items]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/FriendRequest'
+    SendFriendRequest:
+      type: object
+      additionalProperties: false
+      required: [handle]
+      properties:
+        handle:
+          type: string
+          pattern: "^[a-z0-9][a-z0-9_-]{2,31}$"
+    DirectMessage:
+      type: object
+      additionalProperties: false
+      properties:
+        id:
+          type: string
+          format: uuid
+        seq:
+          type: integer
+        sender_id:
+          type: string
+          format: uuid
+        recipient_id:
+          type: string
+          format: uuid
+        body:
+          type: string
+        client_message_id:
+          type: string
+          format: uuid
+        created_at:
+          type: string
+          format: date-time
+        read_at:
+          type: string
+          format: date-time
+    DirectMessageList:
+      type: object
+      additionalProperties: false
+      required: [items]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/DirectMessage'
+        next_cursor:
+          type: string
+    SendDirectMessage:
+      type: object
+      additionalProperties: false
+      required: [to_user_id, body, client_message_id]
+      properties:
+        to_user_id:
+          type: string
+          format: uuid
+        body:
+          type: string
+          minLength: 1
+          maxLength: 4000
+        client_message_id:
+          type: string
+          format: uuid
+    MarkMessagesRead:
+      type: object
+      additionalProperties: false
+      required: [with_user_id]
+      properties:
+        with_user_id:
+          type: string
+          format: uuid
+    MarkReadResult:
+      type: object
+      additionalProperties: false
+      required: [marked]
+      properties:
+        marked:
+          type: integer
+    Block:
+      type: object
+      additionalProperties: false
+      properties:
+        user_id:
+          type: string
+          format: uuid
+        handle:
+          type: string
+        display_name:
+          type: string
+        created_at:
+          type: string
+          format: date-time
+    BlockList:
+      type: object
+      additionalProperties: false
+      required: [items]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/Block'
+    BlockUserRequest:
+      type: object
+      additionalProperties: false
+      required: [blocked_user_id]
+      properties:
+        blocked_user_id:
+          type: string
+          format: uuid
+    Publication:
+      type: object
+      additionalProperties: false
+      properties:
+        id:
+          type: string
+          format: uuid
+        object_id:
+          type: string
+          format: uuid
+        source_version:
+          type: integer
+        publisher_id:
+          type: string
+          format: uuid
+        publisher_name:
+          type: string
+        title:
+          type: string
+        summary:
+          type: string
+        object_type:
+          type: string
+          enum: [collaborative, interactive, living_scene]
+        presentation_template:
+          type: string
+        status:
+          type: string
+          enum: [pending_consent, active, declined, revoked]
+        derive_allowed:
+          type: boolean
+        license:
+          type: string
+          enum: [all_rights_reserved, cc_by_4.0, cc_by_sa_4.0]
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+        revoked_at:
+          type: string
+          format: date-time
+    PublicationList:
+      type: object
+      additionalProperties: false
+      required: [items]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/Publication'
+    CreatePublicationRequest:
+      type: object
+      additionalProperties: false
+      required: [derive_allowed, license]
+      properties:
+        source_version:
+          type: integer
+          minimum: 1
+        derive_allowed:
+          type: boolean
+        license:
+          type: string
+          enum: [all_rights_reserved, cc_by_4.0, cc_by_sa_4.0]
+    Consent:
+      type: object
+      additionalProperties: false
+      properties:
+        id:
+          type: string
+          format: uuid
+        publication_id:
+          type: string
+          format: uuid
+        object_id:
+          type: string
+          format: uuid
+        title:
+          type: string
+        publisher_name:
+          type: string
+        status:
+          type: string
+          enum: [pending, approved, declined]
+        created_at:
+          type: string
+          format: date-time
+        responded_at:
+          type: string
+          format: date-time
+    ConsentList:
+      type: object
+      additionalProperties: false
+      required: [items]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/Consent'
+    PublicWorld:
+      type: object
+      additionalProperties: false
+      required: [id, title, object_type, source_version, derive_allowed, license, created_at]
+      properties:
+        id:
+          type: string
+          format: uuid
+        title:
+          type: string
+        summary:
+          type: string
+        object_type:
+          type: string
+          enum: [collaborative, interactive, living_scene]
+        presentation_template:
+          type: string
+        source_version:
+          type: integer
+        publisher_name:
+          type: string
+        snapshot:
+          type: object
+          additionalProperties: true
+        derive_allowed:
+          type: boolean
+        license:
+          type: string
+        created_at:
+          type: string
+          format: date-time
+    PublicWorldList:
+      type: object
+      additionalProperties: false
+      required: [items]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/PublicWorld'
+        next_cursor:
+          type: string
+    PublicSource:
+      type: object
+      additionalProperties: false
+      properties:
+        publication_id:
+          type: string
+          format: uuid
+        title:
+          type: string
+        source_version:
+          type: integer
+        inherited_fields:
+          type: array
+          items:
+            type: string
+    PublicBranch:
+      type: object
+      additionalProperties: false
+      properties:
+        publication_id:
+          type: string
+          format: uuid
+        title:
+          type: string
+        source_version:
+          type: integer
+    PublicLineage:
+      type: object
+      additionalProperties: false
+      required: [derived]
+      properties:
+        source:
+          $ref: '#/components/schemas/PublicSource'
+        derived:
+          type: array
+          items:
+            $ref: '#/components/schemas/PublicBranch'
+    PublicDeriveRequest:
+      type: object
+      additionalProperties: false
+      required: [title, inheritance_fields]
+      properties:
+        title:
+          type: string
+          minLength: 1
+          maxLength: 200
+        inheritance_fields:
+          type: array
+          minItems: 1
+          items:
+            type: string
+    ReportRequest:
+      type: object
+      additionalProperties: false
+      required: [reason]
+      properties:
+        reason:
+          type: string
+          minLength: 1
+          maxLength: 1000
+    ModelCheck:
+      type: object
+      additionalProperties: false
+      required: [status, mode, detail]
+      properties:
+        status:
+          type: string
+          enum: [ok, fixture, unauthorized, unreachable, error]
+        mode:
+          type: string
+          enum: [fixture, real]
+        model_name:
+          type: string
+        detail:
+          type: string

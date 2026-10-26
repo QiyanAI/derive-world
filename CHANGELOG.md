@@ -5,6 +5,39 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+
+- A World Stage with visible objects, real derivation branches, pending human
+  approvals, and a Living Pulse built only from real events.
+- A third native object type, `living_scene_v1`: structured ideas, steps,
+  scenes, choices, and outcomes with versioned add/update/remove/move actions,
+  step completion, tags, and scene export.
+- A Derive Lens with authorized source, version history, visible branches,
+  inheritance fields, and pending AI proposals.
+- Friendships, blocks, direct human messages, object discussions, and
+  authenticated SSE refresh signals with a polling fallback.
+- Opt-in publication of one object version, contributor consent, anonymous
+  Explore discovery, public lineage, independent private public-derivation,
+  revocation, and basic abuse reports.
+- A version-6 migration (30 tables) and registered social/publication audit
+  actions. Historical migrations and the published `v0.1.0` tag are unchanged.
+- Runtime diagnostics, a non-completion model connection check, and explicit
+  daily/hourly/concurrency/global limit reporting in Settings.
+
+### Security
+
+- Anonymous public reads use only the stored snapshot and never the private
+  object endpoint.
+- Public derivation re-checks the active publication and derivation permission
+  inside the final write transaction.
+- Per-user buckets for publication, social writes, friend requests, reports,
+  and model checks supplement the global API limits.
+- New negative tests cover private-object anonymity, unreadable versions and
+  lens data, view-only publication derivation, revocation, contributor consent,
+  blocking, and report idempotency.
+
 ## [0.1.0] - 2026-10-25
 
 ### Added

@@ -57,9 +57,27 @@ const (
 	ActionSystemShutdown         Action = "system.shutdown"
 	ActionSystemMigration        Action = "system.migration"
 	ActionSystemConfigError      Action = "system.config_error"
+
+	// living-world Social and Publication actions. They are registered by migration
+	// 00006 and expand the frozen G00 registry without changing old actions.
+	ActionSocialFriendRequest  Action = "social.friend_request"
+	ActionSocialFriendAccept   Action = "social.friend_accept"
+	ActionSocialFriendDecline  Action = "social.friend_decline"
+	ActionSocialFriendRemove   Action = "social.friend_remove"
+	ActionSocialBlock          Action = "social.block"
+	ActionSocialUnblock        Action = "social.unblock"
+	ActionSocialMessageSend    Action = "social.message_send"
+	ActionSocialDiscussionPost Action = "social.discussion_post"
+	ActionPublicationCreate    Action = "publication.create"
+	ActionPublicationActivate  Action = "publication.activate"
+	ActionPublicationRevoke    Action = "publication.revoke"
+	ActionPublicationConsent   Action = "publication.consent"
+	ActionPublicationDerive    Action = "publication.derive"
+	ActionPublicationReport    Action = "publication.report"
 )
 
-// AllActions is the normative 49-action set.
+// AllActions is the normative G00 49-action set plus the living-world additions
+// registered by migration 00006.
 func AllActions() []Action {
 	return []Action{
 		ActionAuthRegister, ActionAuthLogin, ActionAuthLoginFailed, ActionAuthLogout,
@@ -78,6 +96,11 @@ func AllActions() []Action {
 		ActionCapabilityDenied, ActionCapabilityTimeout, ActionCapabilityUnknown,
 		ActionCapabilityDefSynced, ActionCapabilityReconciled,
 		ActionSystemStartup, ActionSystemShutdown, ActionSystemMigration, ActionSystemConfigError,
+		ActionSocialFriendRequest, ActionSocialFriendAccept, ActionSocialFriendDecline,
+		ActionSocialFriendRemove, ActionSocialBlock, ActionSocialUnblock,
+		ActionSocialMessageSend, ActionSocialDiscussionPost,
+		ActionPublicationCreate, ActionPublicationActivate, ActionPublicationRevoke,
+		ActionPublicationConsent, ActionPublicationDerive, ActionPublicationReport,
 	}
 }
 

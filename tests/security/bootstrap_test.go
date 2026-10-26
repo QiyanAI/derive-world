@@ -49,8 +49,8 @@ func TestMigrationIdempotent(t *testing.T) {
 		"SELECT value FROM app_meta WHERE key = 'schema_version'").Scan(&schemaVersion); err != nil {
 		t.Fatalf("read app_meta: %v", err)
 	}
-	if schemaVersion != "5" {
-		t.Fatalf("schema_version = %q, want 5", schemaVersion)
+	if schemaVersion != "6" {
+		t.Fatalf("schema_version = %q, want 6", schemaVersion)
 	}
 
 	var migrationTableExists bool
@@ -105,6 +105,9 @@ func TestFrozenSchemaShape(t *testing.T) {
 		"derivation_edges", "capability_definitions", "capability_invocations",
 		"model_invocations", "audit_events", "idempotency_keys", "confirmations",
 		"object_proposals", "audit_actions",
+		"friendships", "user_blocks", "direct_messages", "object_discussions",
+		"publications", "publication_consents", "publication_derivations",
+		"publication_reports",
 	}
 	for _, table := range businessTables {
 		var exists bool
@@ -121,8 +124,8 @@ func TestFrozenSchemaShape(t *testing.T) {
 	if err := database.Pool().QueryRow(ctx, "SELECT count(*) FROM audit_actions").Scan(&auditActions); err != nil {
 		t.Fatalf("count audit actions: %v", err)
 	}
-	if auditActions != 49 {
-		t.Fatalf("audit_actions rows = %d, want 49", auditActions)
+	if auditActions != 63 {
+		t.Fatalf("audit_actions rows = %d, want 63", auditActions)
 	}
 
 	var sourceColumns int
@@ -206,7 +209,9 @@ SELECT pg_get_constraintdef(oid)
 `).Scan(&templateCheck); err != nil {
 		t.Fatalf("read template constraint: %v", err)
 	}
-	if !strings.Contains(templateCheck, "collaborative_v1") || !strings.Contains(templateCheck, "interactive_v1") {
+	if !strings.Contains(templateCheck, "collaborative_v1") ||
+		!strings.Contains(templateCheck, "interactive_v1") ||
+		!strings.Contains(templateCheck, "living_scene_v1") {
 		t.Fatalf("template pairing constraint is incomplete: %s", templateCheck)
 	}
 

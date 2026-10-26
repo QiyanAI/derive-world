@@ -29,7 +29,9 @@ audit -> store
 
 ## 能力范围
 
-本范围保持冻结的 22 表 Schema，激活 Capability Broker、五项冻结能力、`capability_definitions` 同步、调用记录、Open API、TypeScript SDK 与独立 `content.structure` Provider。Broker 复用对象、Handoff、提议、Derive、Trust Kernel 与确认路径，不建立第二套授权、对象写入、衍生或确认机制。
+本范围保留已发布 `v0.1.0` 的 22 表 Schema，并追加版本 6 迁移以支持活场景对象、社交与公开领域。它激活 Capability Broker、五项冻结能力、`capability_definitions` 同步、调用记录、Open API、TypeScript SDK 与独立 `content.structure` Provider。Broker 复用对象、Handoff、提议、Derive、Trust Kernel 与确认路径，不建立第二套授权、对象写入、衍生或确认机制。
+
+本开发分支新增三个边界，且不建立第二套对象存储：`internal/social` 拥有好友、屏蔽、人与人直接消息与对象讨论，但不授予对象权限；`internal/publication` 拥有发布记录、净化后的版本快照、贡献者同意、公开衍生关系与举报，匿名读取绝不使用私人对象接口；`internal/world` 是面向世界舞台与世界脉搏的只读投影；`internal/stream` 只发送认证刷新信号，不携带对象状态或消息正文。
 
 对象聚合是 `living_objects`、`object_memberships`、`object_events`、`object_action_receipts`、`object_proposals`、`invitations`、`derivation_edges` 的唯一写入者。`internal/derive` 只组装子对象状态，并通过 objects 服务写入；人类端点与确认执行共享同一套准备/变更路径。`internal/trust` 拥有 `delegation_grants` 与 `confirmations`，是唯一 AI 授权裁定点。`internal/personalai` 拥有档案、私人上下文、会话与消息，只能通过窄接口调用 objects 提议写入，绝不写对象状态。`internal/handoff` 只读对象数据。`internal/model` 拥有 `model_invocations`。`internal/identity` 写用户、会话与 PAT；`internal/audit` 在调用方事务内追加审计；`internal/store` 拥有幂等预约表。
 

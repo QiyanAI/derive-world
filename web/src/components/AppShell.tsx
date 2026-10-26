@@ -30,6 +30,8 @@ export default function AppShell() {
       [/^\/objects\/new/, t("object.create.title")],
       [/^\/objects\/[^/]+/, t("nav.objects")],
       [/^\/objects/, t("objects.title")],
+      [/^\/friends/, t("friends.title")],
+      [/^\/explore/, t("explore.title")],
       [/^\/ai/, t("ai.title")],
       [/^\/self/, t("self.title")],
       [/^\/settings/, t("settings.title")],
@@ -63,6 +65,12 @@ export default function AppShell() {
           </NavLink>
           {authenticated ? (
             <>
+              <NavLink to="/friends" className={navClass}>
+                {t("nav.friends")}
+              </NavLink>
+              <NavLink to="/explore" className={navClass}>
+                {t("nav.explore")}
+              </NavLink>
               <NavLink to="/objects" className={navClass}>
                 {t("nav.objects")}
               </NavLink>

@@ -1,10 +1,12 @@
 # Quick Start
 
-Derive World `v0.1.0` is an OSS-MVP foundation. This guide starts the
-Open Reference World in Fixture mode, walks through both Living Object types,
-two independent users, the Handoff → Personal AI → human confirmation → Derive
-loop, error states, and the browser acceptance suite, then shows how to switch
-to a real OpenAI-compatible model.
+Derive World is an open, self-hostable world of Living Objects, Personal AI,
+and independent derivation. This guide starts the reference stack in Fixture
+mode and walks through the World Stage, the three Living Object types
+(collaborative, interactive, living scene), two independent users, direct
+friendship and messaging, opt-in publication, public derivation, error states,
+and the browser acceptance suite. It then shows how to switch to a real
+OpenAI-compatible model.
 
 ## Prerequisites
 
@@ -29,16 +31,46 @@ curl -fsS http://127.0.0.1:8080/readyz
 Open <http://127.0.0.1:8080>. The header shows `FIXTURE`; all AI output in this
 mode is deterministic demo data, not real model output.
 
+### Who needs what
+
+| Entry point | Needs Docker or PostgreSQL? | What it can do |
+|---|---|---|
+| Public visitor | No | Browse Explore and read active public snapshots; sign in to derive where allowed. |
+| Registered user | No | Create and edit objects, use Personal AI, collaborate with friends, publish and derive. |
+| Self-hoster | Yes | Run PostgreSQL, migrations, the Go service, the capability provider, and the web build. |
+
+The Go binary is not a standalone desktop app. It needs PostgreSQL, a built
+`WEB_DIST_DIR`, and (for Real AI) a configured provider. A prebuilt image skips
+compilation, not the database.
+
+### Diagnostics
+
+`GET /healthz` proves the process is alive. `GET /readyz` checks the database
+and capability readiness. After signing in, **Settings → Runtime and limits**
+and `GET /api/v1/system/status` show the model mode, database and capability
+state, public base URL, daily and hourly AI limits, burst capacity,
+concurrency, and the deployment-wide stop. API keys are never returned.
+
+For another device, terminate HTTPS at a reverse proxy and set
+`PUBLIC_BASE_URL` to that public origin. A `localhost` invitation link is not a
+remote link. Keep the default loopback binding unless you have completed the
+security review in [self-hosting.md](self-hosting.md).
+
 ## Reference World walkthrough
 
 1. Choose **Create account**. Registration creates the user, Personal AI
    profile, empty private context, default delegation, and session in one
    transaction. The **welcome** page confirms that real state.
-2. Open **World**. The onboarding checklist is derived from server state. Create
-   a **Collaborative object** or an **Interactive object**.
-3. Edit the document or vote in the poll. Each accepted action increments the
-   version; a stale `expected_version` returns `version_conflict` instead of
-   overwriting.
+2. Open **World**. The World Stage shows your real objects, visible derivation
+   branches, and the latest real change for each object. Create a **Living
+   scene** (project or story), a **Collaborative object**, or an **Interactive
+   object**.
+3. Edit the document, vote in the poll, or work directly in a living scene:
+   change its premise, add ideas/steps/scenes/choices/outcomes, mark steps done,
+   reorder, and remove elements. Each accepted action increments the version; a
+   stale `expected_version` returns `version_conflict` instead of overwriting.
+   Open the **Lens** tab to inspect real versions, visible branches, and
+   inheritable fields.
 4. Open **People & access** and create an invitation with explicit permissions.
    The link is shown once. In a second browser profile, a new person registers
    from that link and returns to the same invitation.
@@ -51,11 +83,21 @@ mode is deterministic demo data, not real model output.
 7. Open **History & lineage**. Version history groups actions by object version.
    Lineage clips unreadable ancestors and omits unreadable descendants instead
    of claiming they do not exist.
-8. Switch language with the header toggle. Every route updates `<html lang>`,
-   the document title, and all controls. At 390 px the navigation scrolls
-   horizontally and lineage indentation is capped.
-9. Restart the app container, reload, and confirm the object, events, child, and
-   session still exist. PostgreSQL is the source of truth.
+8. Open **Friends**. Send a request by handle, accept it in the second profile,
+   and exchange direct human messages. Friendship alone does not grant object
+   access; use the object's **Access** tab for that. Blocking stops new friend
+   contact and messages but does not silently revoke existing object access.
+9. Open **Publish** on an object you own. Publish a version with or without
+   derivation permission. If other people contributed to that version, the
+   publication stays `pending_consent` until every contributor approves. Only
+   then does it appear in **Explore**. A logged-in visitor can create an
+   independent private branch only when the owner allowed it; revoking the
+   publication stops new reads and derivations.
+10. Switch language with the header toggle. Every route updates `<html lang>`,
+    the document title, and all controls. At 390 px the navigation scrolls
+    horizontally and lineage indentation is capped.
+11. Restart the app container, reload, and confirm the object, events, child, and
+    session still exist. PostgreSQL is the source of truth.
 
 The two-user walkthrough with expected results is in the
 [Demo guide](demo-guide.md); the full tour is in the

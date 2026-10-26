@@ -233,6 +233,7 @@ func (a *App) createObject(w http.ResponseWriter, r *http.Request) {
 		a.writeDomainError(w, r, err)
 		return
 	}
+	a.notifyUser(principal.User.ID)
 	httpx.WriteJSON(w, http.StatusCreated, view)
 }
 
@@ -249,6 +250,13 @@ func (a *App) getObject(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		a.writeDomainError(w, r, err)
 		return
+	}
+	if lineage == nil && a.publication != nil {
+		lineage, err = a.publication.PublicLineageForChild(r.Context(), object.ID)
+		if err != nil {
+			a.writeDomainError(w, r, err)
+			return
+		}
 	}
 	view.Lineage = lineage
 	httpx.WriteJSON(w, http.StatusOK, view)
@@ -276,6 +284,7 @@ func (a *App) deleteObject(w http.ResponseWriter, r *http.Request) {
 		a.writeDomainError(w, r, err)
 		return
 	}
+	a.notifyObjectMembers(r.Context(), object.ID)
 	w.WriteHeader(http.StatusNoContent)
 }
 
@@ -411,6 +420,7 @@ func (a *App) postAction(w http.ResponseWriter, r *http.Request) {
 		a.writeDomainError(w, r, err)
 		return
 	}
+	a.notifyObjectMembers(r.Context(), object.ID)
 	httpx.WriteJSON(w, http.StatusOK, view)
 }
 
@@ -488,6 +498,8 @@ func (a *App) deriveObject(w http.ResponseWriter, r *http.Request) {
 		a.writeReplay(w, claim)
 		return
 	}
+	a.notifyUser(principal.User.ID)
+	a.notifyObjectMembers(r.Context(), object.ID)
 	httpx.WriteJSON(w, http.StatusCreated, view)
 }
 

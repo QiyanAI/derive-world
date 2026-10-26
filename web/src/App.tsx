@@ -7,6 +7,8 @@ import { I18nProvider } from "./i18n";
 import { MetaProvider } from "./meta";
 import AIPage from "./pages/AIPage";
 import DerivePage from "./pages/DerivePage";
+import ExplorePage from "./pages/ExplorePage";
+import FriendsPage from "./pages/FriendsPage";
 import HomePage from "./pages/HomePage";
 import InvitePage from "./pages/InvitePage";
 import LineagePage from "./pages/LineagePage";
@@ -30,6 +32,9 @@ export default function App() {
               <Routes>
                 <Route element={<AppShell />}>
                   <Route index element={<HomePage />} />
+                  <Route path="friends" element={<FriendsPage />} />
+                  <Route path="explore" element={<ExplorePage />} />
+                  <Route path="explore/:id" element={<ExplorePage />} />
                   <Route path="welcome" element={<WelcomePage />} />
                   <Route path="login" element={<LoginPage />} />
                   <Route path="register" element={<RegisterPage />} />

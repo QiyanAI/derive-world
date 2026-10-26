@@ -914,6 +914,26 @@ func validateActionReferences(objectType string, state json.RawMessage, plan *ob
 		}
 		return newFailure(httpx.CodeInvalidRequest, "invalid request",
 			fmt.Errorf("%w: input.option_id", ErrInvalidRequest))
+	case "update_element", "remove_element", "move_element":
+		var scene objects.LivingSceneState
+		if err := json.Unmarshal(state, &scene); err != nil {
+			return newFailure(httpx.CodeInternal, "internal server error", err)
+		}
+		elementID, _ := plan.Input["element_id"].(string)
+		for _, element := range scene.Elements {
+			if element.ID == elementID {
+				if plan.Action == "move_element" {
+					position, _ := plan.Input["position"].(int)
+					if position < 0 || position >= len(scene.Elements) {
+						return newFailure(httpx.CodeInvalidRequest, "invalid request",
+							fmt.Errorf("%w: input.position", ErrInvalidRequest))
+					}
+				}
+				return nil
+			}
+		}
+		return newFailure(httpx.CodeInvalidRequest, "invalid request",
+			fmt.Errorf("%w: input.element_id", ErrInvalidRequest))
 	default:
 		return nil
 	}
@@ -970,6 +990,8 @@ func deriveWhitelist(objectType string) []string {
 		return []string{"summary", "body", "checklist", "tags"}
 	case objects.TypeInteractive:
 		return []string{"prompt", "options"}
+	case objects.TypeLivingScene:
+		return []string{"premise", "elements", "tags"}
 	default:
 		return nil
 	}

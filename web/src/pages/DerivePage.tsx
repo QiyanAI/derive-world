@@ -6,10 +6,11 @@ import { ErrorNotice } from "../errors";
 import { useAuth } from "../auth";
 import { useI18n } from "../i18n";
 
-type Field = "summary" | "body" | "checklist" | "tags" | "prompt" | "options";
+type Field = "summary" | "body" | "checklist" | "tags" | "prompt" | "options" | "premise" | "elements";
 
 const collaborativeFields: Field[] = ["summary", "body", "checklist", "tags"];
 const interactiveFields: Field[] = ["prompt", "options"];
+const sceneFields: Field[] = ["premise", "elements", "tags"];
 
 export default function DerivePage() {
   const { id } = useParams();
@@ -39,7 +40,13 @@ export default function DerivePage() {
         setObject(loaded);
         const baseTitle = String(loaded.state.title ?? "");
         setTitle(`${baseTitle} ${t("derive.defaultSuffix")}`.trim().slice(0, 200));
-        setFields(loaded.object_type === "interactive" ? ["prompt", "options"] : ["summary", "body"]);
+        setFields(
+          loaded.object_type === "interactive"
+            ? ["prompt", "options"]
+            : loaded.object_type === "living_scene"
+              ? ["premise", "elements"]
+              : ["summary", "body"]
+        );
       })
       .catch((failure) => {
         if (!controller.signal.aborted) {
@@ -112,7 +119,12 @@ export default function DerivePage() {
     );
   }
 
-  const available: Field[] = object.object_type === "interactive" ? interactiveFields : collaborativeFields;
+  const available: Field[] =
+    object.object_type === "interactive"
+      ? interactiveFields
+      : object.object_type === "living_scene"
+        ? sceneFields
+        : collaborativeFields;
   const selectedSource = sourceVersion === "" ? object.version : Number(sourceVersion);
   const historical = selectedSource !== object.version;
 
@@ -122,6 +134,9 @@ export default function DerivePage() {
     }
     if (field === "options") {
       return Array.isArray(object?.state.options) ? `${object.state.options.length}` : "0";
+    }
+    if (field === "elements") {
+      return Array.isArray(object?.state.elements) ? `${object.state.elements.length}` : "0";
     }
     if (field === "tags") {
       return Array.isArray(object?.state.tags) ? (object.state.tags as string[]).join(", ") || "—" : "—";

@@ -121,6 +121,15 @@ func (w *responseWriter) Unwrap() http.ResponseWriter {
 	return w.ResponseWriter
 }
 
+// Flush forwards streaming flushes (SSE) to the underlying writer. The method
+// is always present so handlers can detect streaming support through the
+// middleware wrapper; it is a no-op when the underlying writer cannot flush.
+func (w *responseWriter) Flush() {
+	if flusher, ok := w.ResponseWriter.(http.Flusher); ok {
+		flusher.Flush()
+	}
+}
+
 // AccessLog emits one structured line per request. It never logs the raw path,
 // query, cookies, authorization headers, request bodies, or object content.
 func AccessLog(logger *slog.Logger, ipPepper string, trustProxyHeaders bool) Middleware {

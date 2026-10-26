@@ -13,7 +13,13 @@ const actionKeys: Record<string, MessageKey> = {
   remove_tag: "action.remove_tag",
   cast_vote: "action.cast_vote",
   close_poll: "action.close_poll",
-  set_shared_context: "action.set_shared_context"
+  set_shared_context: "action.set_shared_context",
+  set_premise: "action.set_premise",
+  set_purpose: "action.set_purpose",
+  add_element: "action.add_element",
+  update_element: "action.update_element",
+  remove_element: "action.remove_element",
+  move_element: "action.move_element"
 };
 
 const eventKeys: Record<string, MessageKey> = {

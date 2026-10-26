@@ -25,12 +25,15 @@ func TestOpenAPI(t *testing.T) {
 	}
 
 	publicPaths := map[string]bool{
-		"/healthz":              true,
-		"/readyz":               true,
-		"/api/v1/meta":          true,
-		"/api/v1/openapi.yaml":  true,
-		"/api/v1/auth/register": true,
-		"/api/v1/auth/login":    true,
+		"/healthz":                           true,
+		"/readyz":                            true,
+		"/api/v1/meta":                       true,
+		"/api/v1/openapi.yaml":               true,
+		"/api/v1/auth/register":              true,
+		"/api/v1/auth/login":                 true,
+		"/api/v1/public/worlds":              true,
+		"/api/v1/public/worlds/{id}":         true,
+		"/api/v1/public/worlds/{id}/lineage": true,
 	}
 	bodyRoutes := map[string]bool{
 		"POST /api/v1/auth/register":                       true,
@@ -39,6 +42,14 @@ func TestOpenAPI(t *testing.T) {
 		"POST /api/v1/objects/{id}/actions":                true,
 		"POST /api/v1/objects/{id}/derive":                 true,
 		"POST /api/v1/capabilities/{capability_id}/invoke": true,
+		"POST /api/v1/objects/{id}/discussions":            true,
+		"POST /api/v1/social/friend-requests":              true,
+		"POST /api/v1/social/messages":                     true,
+		"POST /api/v1/social/messages/read":                true,
+		"POST /api/v1/social/blocks":                       true,
+		"POST /api/v1/objects/{id}/publications":           true,
+		"POST /api/v1/public/worlds/{id}/derive":           true,
+		"POST /api/v1/public/worlds/{id}/report":           true,
 	}
 
 	specRoutes := map[string]bool{}

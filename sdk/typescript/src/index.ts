@@ -10,7 +10,8 @@
  */
 
 export type ModelMode = "fixture" | "real";
-export type ObjectType = "collaborative" | "interactive";
+export type ObjectType = "collaborative" | "interactive" | "living_scene";
+export type PresentationTemplate = "collaborative_v1" | "interactive_v1" | "living_scene_v1";
 export type Permission = "read" | "contribute" | "derive" | "invite" | "manage";
 export type CapabilityId =
   | "object.read"
@@ -107,7 +108,7 @@ export interface DeriveLineage {
 export interface ObjectView {
   id: string;
   object_type: ObjectType;
-  presentation_template: string;
+  presentation_template: PresentationTemplate;
   schema_version: number;
   creator_id: string;
   owner_id: string;

@@ -30,8 +30,12 @@ import (
 	"github.com/QiyanAI/derive-world/internal/model"
 	"github.com/QiyanAI/derive-world/internal/objects"
 	"github.com/QiyanAI/derive-world/internal/personalai"
+	"github.com/QiyanAI/derive-world/internal/publication"
+	"github.com/QiyanAI/derive-world/internal/social"
 	"github.com/QiyanAI/derive-world/internal/store"
+	"github.com/QiyanAI/derive-world/internal/stream"
 	"github.com/QiyanAI/derive-world/internal/trust"
+	"github.com/QiyanAI/derive-world/internal/world"
 )
 
 // Options assembles the application.
@@ -70,17 +74,21 @@ type App struct {
 	handler http.Handler
 	routes  []RouteSpec
 
-	audit      *audit.Writer
-	idem       *store.Idempotency
-	identity   *identity.Service
-	objects    *objects.Service
-	derive     *derive.Service
-	trust      *trust.Service
-	handoff    *handoff.Service
-	personalAI *personalai.Service
-	capability *capability.Service
-	quota      *model.Quota
-	cursorKey  []byte
+	audit       *audit.Writer
+	idem        *store.Idempotency
+	identity    *identity.Service
+	objects     *objects.Service
+	derive      *derive.Service
+	trust       *trust.Service
+	handoff     *handoff.Service
+	personalAI  *personalai.Service
+	capability  *capability.Service
+	social      *social.Service
+	publication *publication.Service
+	world       *world.Service
+	stream      *stream.Broker
+	quota       *model.Quota
+	cursorKey   []byte
 
 	authIPLimiter        *httpx.Limiter
 	authAccountLimiter   *httpx.Limiter
@@ -88,6 +96,11 @@ type App struct {
 	anonAPILimiter       *httpx.Limiter
 	aiLimiter            *httpx.Limiter
 	exportLimiter        *httpx.Limiter
+	publicationLimiter   *httpx.Limiter
+	socialWriteLimiter   *httpx.Limiter
+	friendRequestLimiter *httpx.Limiter
+	reportLimiter        *httpx.Limiter
+	modelCheckLimiter    *httpx.Limiter
 	rateAuthLimit        int
 	rateAuthAccountLimit int
 	rateAPILimit         int
@@ -149,6 +162,7 @@ func New(options Options) (*App, error) {
 		buildTime: options.BuildTime,
 		webRoot:   webRoot,
 		cursorKey: []byte(options.Config.CursorHMACSecret),
+		stream:    stream.NewBroker(),
 	}
 	absoluteTTL := options.Config.SessionAbsoluteTTL
 	if absoluteTTL <= 0 {
@@ -189,6 +203,11 @@ func New(options Options) (*App, error) {
 	application.anonAPILimiter = httpx.NewLimiterWithBurst(rateAPI, time.Minute, apiBurst)
 	application.aiLimiter = httpx.NewLimiterWithBurst(rateAI, time.Hour, 5)
 	application.exportLimiter = httpx.NewLimiter(1, time.Hour)
+	application.publicationLimiter = httpx.NewLimiterWithBurst(10, time.Hour, 3)
+	application.socialWriteLimiter = httpx.NewLimiterWithBurst(60, time.Minute, 20)
+	application.friendRequestLimiter = httpx.NewLimiterWithBurst(20, time.Hour, 5)
+	application.reportLimiter = httpx.NewLimiterWithBurst(5, time.Hour, 2)
+	application.modelCheckLimiter = httpx.NewLimiterWithBurst(5, time.Hour, 2)
 	if options.Store != nil {
 		application.audit = audit.NewWriter(options.Store.Pool())
 		application.idem = options.Store.Idempotency()
@@ -199,6 +218,9 @@ func New(options Options) (*App, error) {
 		application.trust = trust.NewService(options.Store.Pool(), application.audit, application.idem)
 		application.objects = objects.NewService(options.Store.Pool(), application.audit, application.idem, application.trust)
 		application.derive = derive.NewService(options.Store.Pool(), application.objects, application.idem)
+		application.social = social.NewService(options.Store.Pool(), application.audit)
+		application.publication = publication.NewService(options.Store.Pool(), application.objects, application.audit, application.idem)
+		application.world = world.NewService(options.Store.Pool())
 		identityService, identityErr := identity.NewService(options.Store.Pool(), application.audit, absoluteTTL, idleTTL)
 		if identityErr != nil {
 			return nil, identityErr

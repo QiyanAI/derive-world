@@ -29,10 +29,13 @@ export interface AuthResponse {
   scopes?: string[];
 }
 
+export type ObjectType = "collaborative" | "interactive" | "living_scene";
+export type PresentationTemplate = "collaborative_v1" | "interactive_v1" | "living_scene_v1";
+
 export interface ObjectView {
   id: string;
-  object_type: "collaborative" | "interactive";
-  presentation_template: "collaborative_v1" | "interactive_v1";
+  object_type: ObjectType;
+  presentation_template: PresentationTemplate;
   schema_version: 1;
   creator_id: string;
   owner_id: string;
@@ -47,6 +50,9 @@ export interface ObjectView {
   lineage?: {
     parent: { object_id: string; version: number };
     inherited_fields: string[];
+    publication_id?: string;
+    publication_title?: string;
+    public?: boolean;
   };
 }
 
@@ -54,7 +60,7 @@ export type Permission = "read" | "contribute" | "derive" | "invite" | "manage";
 
 export interface ObjectListItem {
   id: string;
-  object_type: "collaborative" | "interactive";
+  object_type: ObjectType;
   title: string;
   version: number;
   owner_id: string;
@@ -102,7 +108,7 @@ export interface Invitation {
 export interface InvitationPreview {
   invitation_id: string;
   object_id: string;
-  object_type: "collaborative" | "interactive";
+  object_type: ObjectType;
   title: string;
   inviter_name: string;
   permissions: InvitationPermission[];
@@ -115,7 +121,7 @@ export interface InvitationPreview {
 export interface AcceptedInvitation {
   object: {
     id: string;
-    object_type: "collaborative" | "interactive";
+    object_type: ObjectType;
     version: number;
     title: string;
     presentation_template: string;
@@ -131,7 +137,7 @@ export interface Handoff {
   expires_at: string;
   object_id: string;
   object_version: number;
-  object_type: "collaborative" | "interactive";
+  object_type: ObjectType;
   permitted_object_context: {
     state: Record<string, unknown>;
     shared_context: Record<string, unknown>;
@@ -316,7 +322,7 @@ export interface Lineage {
 }
 
 export interface CreateObjectInput {
-  object_type: "collaborative" | "interactive";
+  object_type: ObjectType;
   title: string;
   content: Record<string, unknown>;
   shared_context: Record<string, unknown>;
@@ -740,6 +746,12 @@ export function newIdempotencyKey(): string {
   return (random + second).slice(0, 48);
 }
 
+// Client message ids are UUIDs; the server treats (sender, id) as the
+// idempotency key for a direct message or discussion post.
+export function newClientMessageID(): string {
+  return crypto.randomUUID();
+}
+
 export function errorMessage(error: unknown): string {
   if (error instanceof APIError) {
     return `${error.code}: ${error.message}`;
@@ -748,4 +760,469 @@ export function errorMessage(error: unknown): string {
     return error.message;
   }
   return "Unknown error";
+}
+
+// ---------------------------------------------------------------------------
+// Living world: scene, world stage, pulse, lens, social, publication
+// ---------------------------------------------------------------------------
+
+export interface SceneElement {
+  id: string;
+  kind: "idea" | "step" | "scene" | "choice" | "outcome";
+  text: string;
+  status: "open" | "done";
+}
+
+export interface SceneState {
+  title: string;
+  purpose: "project" | "story";
+  premise: string;
+  elements: SceneElement[];
+  tags?: string[];
+}
+
+export interface StageEvent {
+  event_type: string;
+  action?: string;
+  actor_type: string;
+  actor_name?: string;
+  occurred_at: string;
+}
+
+export interface StageObject {
+  id: string;
+  object_type: ObjectType;
+  presentation_template: PresentationTemplate;
+  title: string;
+  version: number;
+  owner_id: string;
+  permissions: Permission[];
+  role: "owner" | "editor" | "viewer" | "custom";
+  updated_at: string;
+  member_count: number;
+  branch_count: number;
+  latest_event: StageEvent | null;
+}
+
+export interface StageEdge {
+  parent_id: string;
+  child_id: string;
+}
+
+export interface WorldStage {
+  objects: StageObject[];
+  edges: StageEdge[];
+  generated_at: string;
+}
+
+export interface PulseItem {
+  kind: string;
+  object_id: string;
+  title: string;
+  event_type?: string;
+  action?: string;
+  actor_type?: string;
+  actor_name?: string;
+  summary?: string;
+  occurred_at: string;
+}
+
+export interface Friend {
+  user_id: string;
+  handle: string;
+  display_name: string;
+  since: string;
+  unread: number;
+}
+
+export interface FriendRequest {
+  id: string;
+  direction: "incoming" | "outgoing";
+  user_id: string;
+  handle: string;
+  display_name: string;
+  status: string;
+  created_at: string;
+}
+
+export interface DirectMessage {
+  id: string;
+  seq: number;
+  sender_id: string;
+  recipient_id: string;
+  body: string;
+  client_message_id: string;
+  created_at: string;
+  read_at: string | null;
+}
+
+export interface Block {
+  user_id: string;
+  handle: string;
+  display_name: string;
+  created_at: string;
+}
+
+export interface SocialActivity {
+  incoming_requests: FriendRequest[];
+  unread_messages: number;
+  recent_messages: DirectMessage[];
+}
+
+export interface Consent {
+  id: string;
+  publication_id: string;
+  object_id: string;
+  title: string;
+  publisher_name: string;
+  status: "pending" | "approved" | "declined";
+  created_at: string;
+  responded_at: string | null;
+}
+
+export interface LivingPulse {
+  items: PulseItem[];
+  social: SocialActivity | null;
+  publication_consents: Consent[];
+  generated_at: string;
+}
+
+export interface LensVersion {
+  version: number;
+  event_type: string;
+  action?: string;
+  actor: { type: string; user_id?: string; display_name?: string };
+  created_at: string;
+}
+
+export interface BranchChild {
+  object_id: string;
+  title: string;
+  version: number;
+  source_version: number;
+  created_at: string;
+}
+
+export interface DeriveLens {
+  object: ObjectView;
+  lineage: ObjectView["lineage"] | null;
+  versions: LensVersion[];
+  children: BranchChild[];
+  inheritance_fields: string[];
+  proposals: Proposal[];
+}
+
+export interface ObjectVersion {
+  object_id: string;
+  object_type: ObjectType;
+  version: number;
+  current_version: number;
+  state: Record<string, unknown>;
+}
+
+export interface SystemStatus {
+  version: string;
+  commit: string;
+  build_time: string;
+  model_mode: "fixture" | "real";
+  model_name: string;
+  public_base_url: string;
+  database_ok: boolean;
+  capabilities_ready: boolean;
+  quota: {
+    daily_calls: number;
+    daily_input_chars: number;
+    concurrency: number;
+    global_daily_calls: number;
+    kill_switch: boolean;
+  };
+  rate_limits: { ai_per_hour: number; ai_burst: number; api_per_minute: number };
+}
+
+export interface Discussion {
+  id: string;
+  seq: number;
+  object_id: string;
+  author_id: string;
+  author_name: string;
+  body: string;
+  client_message_id: string;
+  created_at: string;
+}
+
+export interface Publication {
+  id: string;
+  object_id: string;
+  source_version: number;
+  publisher_id: string;
+  publisher_name: string;
+  title: string;
+  summary: string;
+  object_type: ObjectType;
+  presentation_template: PresentationTemplate;
+  status: "pending_consent" | "active" | "declined" | "revoked";
+  derive_allowed: boolean;
+  license: "all_rights_reserved" | "cc_by_4.0" | "cc_by_sa_4.0";
+  created_at: string;
+  updated_at: string;
+  revoked_at: string | null;
+}
+
+export interface PublicWorld {
+  id: string;
+  title: string;
+  summary: string;
+  object_type: ObjectType;
+  presentation_template: PresentationTemplate;
+  source_version: number;
+  publisher_name: string;
+  snapshot?: Record<string, unknown>;
+  derive_allowed: boolean;
+  license: string;
+  created_at: string;
+}
+
+export interface PublicLineage {
+  source: {
+    publication_id: string;
+    title: string;
+    source_version: number;
+    inherited_fields: string[];
+  } | null;
+  derived: Array<{ publication_id: string; title: string; source_version: number }>;
+}
+
+export async function getWorldStage(signal?: AbortSignal): Promise<WorldStage> {
+  return request<WorldStage>("/api/v1/world/stage", { signal });
+}
+
+export async function getPulse(signal?: AbortSignal): Promise<LivingPulse> {
+  return request<LivingPulse>("/api/v1/pulse", { signal });
+}
+
+export async function getLens(id: string, signal?: AbortSignal): Promise<DeriveLens> {
+  return request<DeriveLens>(`/api/v1/objects/${encodeURIComponent(id)}/lens`, { signal });
+}
+
+export async function getObjectVersion(
+  id: string,
+  version: number,
+  signal?: AbortSignal
+): Promise<ObjectVersion> {
+  return request<ObjectVersion>(
+    `/api/v1/objects/${encodeURIComponent(id)}/versions/${version}`,
+    { signal }
+  );
+}
+
+export async function listDiscussions(
+  id: string,
+  cursor?: string,
+  signal?: AbortSignal
+): Promise<{ items: Discussion[]; next_cursor: string | null }> {
+  const params = new URLSearchParams({ limit: "50" });
+  if (cursor) {
+    params.set("cursor", cursor);
+  }
+  return request(
+    `/api/v1/objects/${encodeURIComponent(id)}/discussions?${params.toString()}`,
+    { signal }
+  );
+}
+
+export async function postDiscussion(
+  id: string,
+  body: string,
+  clientMessageID: string
+): Promise<Discussion> {
+  return request<Discussion>(`/api/v1/objects/${encodeURIComponent(id)}/discussions`, {
+    method: "POST",
+    body: { body, client_message_id: clientMessageID }
+  });
+}
+
+export async function listFriends(signal?: AbortSignal): Promise<{ items: Friend[] }> {
+  return request("/api/v1/social/friends", { signal });
+}
+
+export async function listFriendRequests(
+  direction: "incoming" | "outgoing",
+  signal?: AbortSignal
+): Promise<{ items: FriendRequest[] }> {
+  return request(`/api/v1/social/friend-requests?direction=${direction}`, { signal });
+}
+
+export async function sendFriendRequest(handle: string): Promise<FriendRequest> {
+  return request<FriendRequest>("/api/v1/social/friend-requests", {
+    method: "POST",
+    body: { handle }
+  });
+}
+
+export async function respondFriendRequest(
+  id: string,
+  accept: boolean
+): Promise<FriendRequest> {
+  return request<FriendRequest>(
+    `/api/v1/social/friend-requests/${encodeURIComponent(id)}/${accept ? "accept" : "decline"}`,
+    { method: "POST" }
+  );
+}
+
+export async function removeFriend(userID: string): Promise<void> {
+  await request<void>(`/api/v1/social/friends/${encodeURIComponent(userID)}`, {
+    method: "DELETE"
+  });
+}
+
+export async function listDirectMessages(
+  withUserID: string,
+  cursor?: string,
+  signal?: AbortSignal
+): Promise<{ items: DirectMessage[]; next_cursor: string | null }> {
+  const params = new URLSearchParams({ with: withUserID, limit: "50" });
+  if (cursor) {
+    params.set("cursor", cursor);
+  }
+  return request(`/api/v1/social/messages?${params.toString()}`, { signal });
+}
+
+export async function sendDirectMessage(
+  toUserID: string,
+  body: string,
+  clientMessageID: string
+): Promise<DirectMessage> {
+  return request<DirectMessage>("/api/v1/social/messages", {
+    method: "POST",
+    body: { to_user_id: toUserID, body, client_message_id: clientMessageID }
+  });
+}
+
+export async function markDirectMessagesRead(withUserID: string): Promise<{ marked: number }> {
+  return request("/api/v1/social/messages/read", {
+    method: "POST",
+    body: { with_user_id: withUserID }
+  });
+}
+
+export async function listBlocks(signal?: AbortSignal): Promise<{ items: Block[] }> {
+  return request("/api/v1/social/blocks", { signal });
+}
+
+export async function blockUser(userID: string): Promise<void> {
+  await request<void>("/api/v1/social/blocks", {
+    method: "POST",
+    body: { blocked_user_id: userID }
+  });
+}
+
+export async function unblockUser(userID: string): Promise<void> {
+  await request<void>(`/api/v1/social/blocks/${encodeURIComponent(userID)}`, {
+    method: "DELETE"
+  });
+}
+
+export async function listPublications(
+  objectID: string,
+  signal?: AbortSignal
+): Promise<{ items: Publication[] }> {
+  return request(`/api/v1/objects/${encodeURIComponent(objectID)}/publications`, { signal });
+}
+
+export async function createPublication(
+  objectID: string,
+  input: {
+    source_version?: number;
+    derive_allowed: boolean;
+    license: "all_rights_reserved" | "cc_by_4.0" | "cc_by_sa_4.0";
+  }
+): Promise<Publication> {
+  return idempotentRequest<Publication>(
+    "POST",
+    `/api/v1/objects/${encodeURIComponent(objectID)}/publications`,
+    input
+  );
+}
+
+export async function revokePublication(publicationID: string): Promise<void> {
+  await request<void>(`/api/v1/publications/${encodeURIComponent(publicationID)}`, {
+    method: "DELETE"
+  });
+}
+
+export async function listPublicationConsents(
+  signal?: AbortSignal
+): Promise<{ items: Consent[] }> {
+  return request("/api/v1/publication-consents", { signal });
+}
+
+export async function respondPublicationConsent(
+  id: string,
+  approve: boolean
+): Promise<Consent> {
+  return request<Consent>(
+    `/api/v1/publication-consents/${encodeURIComponent(id)}/${approve ? "approve" : "decline"}`,
+    { method: "POST" }
+  );
+}
+
+export async function listPublicWorlds(
+  cursor?: string,
+  signal?: AbortSignal
+): Promise<{ items: PublicWorld[]; next_cursor: string | null }> {
+  const params = new URLSearchParams({ limit: "20" });
+  if (cursor) {
+    params.set("cursor", cursor);
+  }
+  return request(`/api/v1/public/worlds?${params.toString()}`, { signal });
+}
+
+export async function getPublicWorld(
+  id: string,
+  signal?: AbortSignal
+): Promise<PublicWorld> {
+  return request<PublicWorld>(`/api/v1/public/worlds/${encodeURIComponent(id)}`, { signal });
+}
+
+export async function getPublicLineage(
+  id: string,
+  signal?: AbortSignal
+): Promise<PublicLineage> {
+  return request<PublicLineage>(
+    `/api/v1/public/worlds/${encodeURIComponent(id)}/lineage`,
+    { signal }
+  );
+}
+
+export async function derivePublicWorld(
+  publicationID: string,
+  input: { title: string; inheritance_fields: string[] }
+): Promise<ObjectView> {
+  return idempotentRequest<ObjectView>(
+    "POST",
+    `/api/v1/public/worlds/${encodeURIComponent(publicationID)}/derive`,
+    input
+  );
+}
+
+export async function getSystemStatus(signal?: AbortSignal): Promise<SystemStatus> {
+  return request<SystemStatus>("/api/v1/system/status", { signal });
+}
+
+export interface ModelCheck {
+  status: "ok" | "fixture" | "unauthorized" | "unreachable" | "error";
+  mode: "fixture" | "real";
+  model_name: string;
+  detail: string;
+}
+
+export async function checkModelConnection(): Promise<ModelCheck> {
+  return request<ModelCheck>("/api/v1/system/model-check");
+}
+
+export async function reportPublicWorld(publicationID: string, reason: string): Promise<void> {
+  await request<void>(`/api/v1/public/worlds/${encodeURIComponent(publicationID)}/report`, {
+    method: "POST",
+    body: { reason }
+  });
 }

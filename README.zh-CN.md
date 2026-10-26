@@ -2,9 +2,9 @@
 
 **万物皆可衍生。第一个活着的 Web。**
 
-Derive World 是一个面向 *Living Object（活对象）* 的开源基础：共享、有版本的对象，人和自己的 Personal AI 可以读取、贡献、衍生，并沿着显式来源链追溯。首个版本只做可自托管的 OSS MVP（`v0.1.0`），不是完整平台。
+Derive World 是一个面向 *Living Object（活对象）* 的开源基础：共享、有版本的对象，人和自己的 Personal AI 可以读取、贡献、衍生，并沿着显式来源链追溯。这个开发分支在已发布的 `v0.1.0` 基础上，加入世界舞台、活场景对象、好友直接交流、主动公开世界与公开衍生。
 
-**为什么不同：** 多数 AI 工具把聊天当作产品。Derive World 把 *对象* 当作产品：Living Object 有版本、成员、权限与可追溯的来源链。Personal AI 可以提议修改并衍生子对象，但只有人类可以批准；衍生对象是独立的，不是活指针。结果是一个小而可审计、可自托管的开源基础。
+**为什么不同：** 多数 AI 工具把聊天当作产品。Derive World 把 *对象* 当作产品：Living Object 有版本、成员、权限与可追溯的来源链。Personal AI 可以提议修改并衍生子对象，但只有人类可以批准；衍生对象是独立的，不是活指针。结果是一个小而可审计、可自托管的开源世界。
 
 ## 演示
 
@@ -12,7 +12,7 @@ Derive World 是一个面向 *Living Object（活对象）* 的开源基础：�
 
 17 秒参考世界演示：Living Object、版本历史与来源链、互动投票。完整录屏见 [`demo-17s.webm`](docs/assets/demo-17s.webm)。Fixture 模式，无需模型 API Key。[作品展示](docs/zh/showcase.md)提供三个首发示例与自愿分享入口。
 
-> **状态：公开 OSS MVP — `v0.1.0`。** 这是 Derive World 的首个公开版本：一个可自托管的 Living Object 基础，不是生产平台。**Real AI 仅对已批准的双 Personal AI 两次 API 级调用（DeepSeek `deepseek-flash`，合成数据）记为 VERIFIED_REAL；未在发布 SHA 上重跑，不构成对所有模型或 Provider 的普遍验收。Fixture 模式不调用模型，不是真实 AI。** 冻结的 22 表 Schema 与五个能力描述符未变。见[发行说明](docs/zh/release-notes.md)与 [CHANGELOG](CHANGELOG.md)。
+> **状态：公开 OSS MVP `v0.1.0` 之上的未发布开发分支。** 已发布的 `v0.1.0` 仍是其[发行说明](docs/zh/release-notes.md)所述、22 表与两种对象的版本。本分支新增版本 6 迁移（30 表）、第三种对象类型、社交与公开领域，以及世界舞台客户端。它是可审查代码，不是已发布版本。**Real AI 仅对已批准的双 Personal AI 两次 API 级调用（DeepSeek `deepseek-flash`，合成数据）记为 VERIFIED_REAL；未在本分支重跑，不构成对所有模型或 Provider 的普遍验收。Fixture 模式不调用模型，不是真实 AI。** 见 [CHANGELOG](CHANGELOG.md)。
 
 ## 参考世界
 
@@ -20,11 +20,13 @@ Derive World 是一个面向 *Living Object（活对象）* 的开源基础：�
 |---|---|
 | ![首页](docs/assets/g05-landing.png) | ![世界](docs/assets/g05-world-populated.png) |
 
-- **世界** — 身份、拥有与共享的对象、真实的第一使用进度、待批准事项与连接关系。
-- **对象** — 协作文档与互动投票，包含版本化操作、成员、邀请、Handoff、AI 协作、历史与谱系。
+- **世界** — 真实对象与可见衍生分支的舞台，附真实变化的“世界脉搏”和待批准事项。
+- **对象** — 协作文档、互动投票与活场景（想法、步骤、场景、选择、结果），包含版本化操作、成员、邀请、Handoff、AI 协作、衍生透镜、历史与谱系。
+- **好友** — 人与人之间的好友关系、直接消息、屏蔽与对象讨论；好友关系本身不授予对象访问权。
+- **探索** — 主动公开的快照，以及在所有者许可下衍生为独立、私人的新对象。
 - **个人 AI** — 资料、私人上下文、会话，以及绝不冒充其他用户 AI 的 Handoff 预览。
 - **数字自我** — 同意账本：授权、撤销，以及只有你能给出的批准。
-- **设置** — 语言、令牌、导出、部署模式与文档化限制。
+- **设置** — 语言、令牌、导出、运行诊断、模型连接检查、部署模式与文档化限制。
 
 带预期结果的双人演示见[演示指南](docs/zh/demo-guide.md)，完整导览见[参考世界指南](docs/zh/reference-world.md)。
 

@@ -34,10 +34,12 @@ edges, cycle freedom, submodule isolation, and the table-ownership matrix.
 
 ## Capability scope
 
-This scope keeps the frozen 22-table schema and activates the Capability Broker, the
-five frozen capabilities, `capability_definitions` synchronization, invocation
-recording, Open API endpoints, the TypeScript SDK, and the independent
-`content.structure` Provider. The Broker composes the object, Handoff,
+This scope keeps the published `v0.1.0` 22-table schema intact and appends a
+version-6 migration for the living-scene object, social, and publication
+domains. It activates the Capability Broker, the five frozen capabilities,
+`capability_definitions` synchronization, invocation recording, Open API
+endpoints, the TypeScript SDK, and the independent `content.structure`
+Provider. The Broker composes the object, Handoff,
 proposal, derive, Trust Kernel, and confirmation paths; it does not create a
 second authorization, object-write, derive, or confirmation mechanism.
 
@@ -49,7 +51,17 @@ shares one preparation/mutation path with the human endpoints. `internal/trust`
 owns `delegation_grants` and `confirmations` and is the single AI authorization
 decision point. `internal/personalai` owns profiles, private context,
 conversations, and messages; it calls objects through a narrow proposal-writer
-interface and never writes object state. `internal/handoff` reads only object
+interface and never writes object state.
+
+The development branch adds three read/write boundaries without a second
+object store. `internal/social` owns friendships, blocks, direct human messages,
+and object discussions; it never grants object permissions. `internal/publication`
+owns publication records, sanitized version snapshots, contributor consents,
+public derivation links, and abuse reports; anonymous reads never use the
+private object endpoint. `internal/world` is a read-only projection over
+authorized objects, derivation edges, and real events for the World Stage and
+Living Pulse. `internal/stream` carries only authenticated refresh signals; it
+never carries object state or message bodies. `internal/handoff` reads only object
 data. `internal/model` owns `model_invocations`. `internal/identity` writes users,
 sessions, and PATs. `internal/audit` appends audit rows in the caller's
 transaction. `internal/store` owns idempotency reservations.

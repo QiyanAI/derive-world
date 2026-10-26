@@ -347,8 +347,11 @@ func (s *Service) Create(ctx context.Context, actorID uuid.UUID, input CreateInp
 		return nil, err
 	}
 	template := TemplateCollaborative
-	if input.ObjectType == TypeInteractive {
+	switch input.ObjectType {
+	case TypeInteractive:
 		template = TemplateInteractive
+	case TypeLivingScene:
+		template = TemplateLivingScene
 	}
 
 	tx, err := s.db.BeginTx(ctx, pgx.TxOptions{IsoLevel: pgx.ReadCommitted})
@@ -750,37 +753,7 @@ SELECT m.user_id, u.display_name, m.permissions, m.granted_by, m.created_at
 
 // StateAtVersion reads the immutable state snapshot for historical derive.
 func (s *Service) StateAtVersion(ctx context.Context, tx pgx.Tx, objectID uuid.UUID, version int) (json.RawMessage, error) {
-	var payload []byte
-	var err error
-	if version == 1 {
-		err = tx.QueryRow(ctx, `
-SELECT payload->'state'
-  FROM object_events
- WHERE object_id = $1
-   AND event_type IN ('object.created','object.derived')
-   AND object_version = 1
- ORDER BY seq ASC
- LIMIT 1`, objectID.String()).Scan(&payload)
-	} else {
-		err = tx.QueryRow(ctx, `
-SELECT payload->'state_after'
-  FROM object_events
- WHERE object_id = $1
-   AND event_type = 'object.state_changed'
-   AND object_version = $2
- ORDER BY seq ASC
- LIMIT 1`, objectID.String(), version).Scan(&payload)
-	}
-	if errors.Is(err, pgx.ErrNoRows) {
-		return nil, ErrSnapshotMissing
-	}
-	if err != nil {
-		return nil, err
-	}
-	if len(payload) == 0 {
-		return nil, ErrSnapshotMissing
-	}
-	return payload, nil
+	return stateAtVersion(ctx, tx, objectID, version)
 }
 
 // DerivedInput carries the already-authorized, already-assembled child state.

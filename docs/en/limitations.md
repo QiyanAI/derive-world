@@ -82,8 +82,11 @@ scope.
   deployment configuration are vendor-neutral, but choosing a different model
   still means changing deployment configuration, not running two providers at
   once.
-- No real-time collaboration; the object workspace polls every 10 seconds while
-  visible and offers explicit refresh.
+- No simultaneous co-editing. The object workspace uses an authenticated SSE
+  refresh signal with a polling fallback; stale writes return a version
+  conflict instead of overwriting.
+- Friends, direct messages, public worlds, and public derivation are scoped to
+  one instance. There is no cross-instance federation or public import.
 - No email, password reset, OAuth, email verification, or account deletion in
   `v0.1.0`.
 - No standalone product website or native mobile client is provided in `v0.1.0`.
@@ -103,9 +106,12 @@ scope.
   reservation counted, so a possible billable call is not forgotten. Multiple
   app replicas still do not share the in-memory concurrency/counter state; the
   durable rows prevent forgotten charges, not multi-replica coordination.
-- Historical object state has no read endpoint in `v0.1.0`; history is an event
-  and version summary, and derive-from-an-older-version uses immutable
-  snapshots.
+- Historical object state can be read with `GET /api/v1/objects/{id}/versions/{version}`
+  only while the caller currently holds read permission. Derive-from-an-older-
+  version uses the same immutable snapshots.
+- Revoking a publication stops new public reads and derivations. It cannot
+  delete copies that were already downloaded, screenshotted, cached, or
+  independently derived.
 - GitHub Dependency Review runs on public pull requests as part of the
   release gate. The required checks also cover govulncheck, gitleaks, npm
   audit, and License.
@@ -116,8 +122,9 @@ scope.
 
 ## Data limits
 
-- The frozen 22-table schema is unchanged. Capability definitions and
-  invocations are active.
+- The published `v0.1.0` has a 22-table schema. This development branch adds a
+  version-6 migration with social, publication, scene, report, and public
+  derivation tables (30 tables total). Earlier migrations are not rewritten.
 - Object state is capped at 64 KiB; `shared_context` at 8 KiB.
 - AI proposal input storage is capped at 64 KiB.
   Proposal creation and apply have distinct limits: apply obeys the 64 KiB

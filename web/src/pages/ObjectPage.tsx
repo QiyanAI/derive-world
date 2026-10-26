@@ -14,9 +14,13 @@ import {
   type ObjectView
 } from "../api";
 import AIPanel from "../components/AIPanel";
+import DiscussionsPanel from "../components/DiscussionsPanel";
+import LensPanel from "../components/LensPanel";
 import ObjectAccessTab from "../components/ObjectAccessTab";
 import ObjectHistoryTab from "../components/ObjectHistoryTab";
 import ObjectWorkTab from "../components/ObjectWorkTab";
+import PublicationPanel from "../components/PublicationPanel";
+import SceneWorkTab from "../components/SceneWorkTab";
 import SectionNav, { type SectionTab } from "../components/SectionNav";
 import { ErrorNotice, StatusNotice } from "../errors";
 import { useAuth } from "../auth";
@@ -24,6 +28,9 @@ import { useI18n } from "../i18n";
 
 const tabs: SectionTab[] = [
   { id: "work", labelKey: "object.tab.work" },
+  { id: "lens", labelKey: "object.tab.lens" },
+  { id: "discuss", labelKey: "object.tab.discuss" },
+  { id: "publish", labelKey: "object.tab.publish" },
   { id: "ai", labelKey: "object.tab.ai" },
   { id: "access", labelKey: "object.tab.access" },
   { id: "history", labelKey: "object.tab.history" }
@@ -355,6 +362,12 @@ export default function ObjectPage() {
   const canInvite = object.permissions.includes("invite");
   const recordedVote = recordedVoteOf(events, user?.id);
   const parentAncestor = lineage?.ancestors.find((ancestor) => !ancestor.redacted);
+  const objectTypeLabel =
+    object.object_type === "living_scene"
+      ? t("object.create.scene")
+      : object.object_type === "interactive"
+        ? t("object.create.interactive")
+        : t("object.create.collaborative");
 
   return (
     <div className="page page-wide object-page">
@@ -368,9 +381,7 @@ export default function ObjectPage() {
         <div>
           <p className="eyebrow">
             <span className={`template-badge template-${object.object_type}`}>
-              {object.object_type === "collaborative"
-                ? t("object.create.collaborative")
-                : t("object.create.interactive")}
+              {objectTypeLabel}
             </span>
           </p>
           <h1>{stateString(object, "title")}</h1>
@@ -421,14 +432,29 @@ export default function ObjectPage() {
       <div className="object-layout">
         <div className="object-content">
           {activeTab === "work" ? (
-            <ObjectWorkTab
-              object={object}
-              canContribute={canContribute}
-              canManage={canManage}
-              recordedVote={recordedVote}
-              onUpdated={handleUpdated}
-              onReload={handleReload}
-            />
+            object.object_type === "living_scene" ? (
+              <SceneWorkTab
+                object={object}
+                canContribute={canContribute}
+                canManage={canManage}
+                onUpdated={handleUpdated}
+                onReload={handleReload}
+              />
+            ) : (
+              <ObjectWorkTab
+                object={object}
+                canContribute={canContribute}
+                canManage={canManage}
+                recordedVote={recordedVote}
+                onUpdated={handleUpdated}
+                onReload={handleReload}
+              />
+            )
+          ) : null}
+          {activeTab === "lens" ? <LensPanel objectID={object.id} /> : null}
+          {activeTab === "discuss" ? <DiscussionsPanel objectID={object.id} /> : null}
+          {activeTab === "publish" ? (
+            <PublicationPanel objectID={object.id} currentVersion={object.version} canManage={canManage} />
           ) : null}
           {activeTab === "ai" ? <AIPanel object={object} canContribute={canContribute} onChanged={() => void handleReload()} /> : null}
           {activeTab === "access" ? (
@@ -462,11 +488,7 @@ export default function ObjectPage() {
             <dl className="detail-list">
               <div>
                 <dt>{t("object.type")}</dt>
-                <dd>
-                  {object.object_type === "collaborative"
-                    ? t("object.create.collaborative")
-                    : t("object.create.interactive")}
-                </dd>
+                <dd>{objectTypeLabel}</dd>
               </div>
               <div>
                 <dt>{t("object.version")}</dt>

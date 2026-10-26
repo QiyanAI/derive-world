@@ -11,8 +11,8 @@ import (
 
 func TestActionRegistryIsClosedAndUnique(t *testing.T) {
 	actions := AllActions()
-	if len(actions) != 49 {
-		t.Fatalf("action count = %d, want 49", len(actions))
+	if len(actions) != 63 {
+		t.Fatalf("action count = %d, want 63", len(actions))
 	}
 	seen := map[Action]bool{}
 	for _, action := range actions {
