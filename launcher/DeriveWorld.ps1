@@ -42,7 +42,7 @@
 [CmdletBinding()]
 param(
     [ValidateSet('Menu', 'Start', 'Stop', 'Restart', 'Status', 'Check', 'Diagnostics',
-        'OpenConfig', 'ApplyConfig', 'StatusConfig', 'UseFixture', 'Open', 'SelfTest')]
+        'OpenConfig', 'ApplyConfig', 'StatusConfig', 'UseFixture', 'CleanBackups', 'Open', 'SelfTest')]
     [string]$Command = 'Menu',
 
     [switch]$NoBrowser,
@@ -175,6 +175,9 @@ function Protect-ConfigFile {
 
 function Ensure-EnvFile {
     if (Test-Path -LiteralPath $script:EnvPath) {
+        # Existing files may have been created by cp/git with inherited ACLs.
+        # Re-apply the restricted permission set on every launcher entry.
+        Protect-ConfigFile -Path $script:EnvPath
         return $true
     }
     if (-not (Test-Path -LiteralPath $script:EnvExamplePath)) {
@@ -274,19 +277,30 @@ function Get-DockerHealth {
         return $result
     }
     $result.Installed = $true
-    $client = & docker --version 2>$null
-    if ($client) {
-        $result.ClientVersion = (($client | Out-String).Trim())
+    $previousPreference = $ErrorActionPreference
+    $ErrorActionPreference = 'Continue'
+    try {
+        $client = & docker --version 2>$null
+        if ($client) {
+            $result.ClientVersion = (($client | Out-String).Trim())
+        }
+        $server = & docker info --format '{{.ServerVersion}}' 2>$null
+        if ($LASTEXITCODE -eq 0 -and $server) {
+            $result.Engine = $true
+            $result.ServerVersion = (($server | Out-String).Trim())
+        }
+        $compose = & docker compose version --short 2>$null
+        if ($LASTEXITCODE -eq 0 -and $compose) {
+            $result.Compose = $true
+            $result.ComposeVersion = (($compose | Out-String).Trim())
+        }
     }
-    $server = & docker info --format '{{.ServerVersion}}' 2>$null
-    if ($LASTEXITCODE -eq 0 -and $server) {
-        $result.Engine = $true
-        $result.ServerVersion = (($server | Out-String).Trim())
+    catch {
+        # A stopped Docker engine writes to stderr; report it as unavailable
+        # instead of terminating the launcher.
     }
-    $compose = & docker compose version --short 2>$null
-    if ($LASTEXITCODE -eq 0 -and $compose) {
-        $result.Compose = $true
-        $result.ComposeVersion = (($compose | Out-String).Trim())
+    finally {
+        $ErrorActionPreference = $previousPreference
     }
     return $result
 }
@@ -1090,6 +1104,35 @@ function Use-FixtureMode {
     return (Apply-AIConfig)
 }
 
+function Clear-OldConfigBackups {
+    Write-Title 'Clean configuration snapshots'
+    $files = @(Get-ChildItem -LiteralPath $script:Root -File -Filter '.env.backup-*' -ErrorAction SilentlyContinue)
+    if ($files.Count -eq 0) {
+        Write-Ok 'No .env.backup-* snapshots are present.'
+        return $true
+    }
+    Write-Info ('Found {0} snapshot(s). They contain plaintext secrets.' -f $files.Count)
+    foreach ($file in $files) {
+        Write-Info ('  ' + $file.Name + '  ' + $file.LastWriteTime.ToString('yyyy-MM-dd HH:mm'))
+    }
+    if (-not (Confirm-Action -Prompt 'Delete all listed snapshots? The .env.last-good recovery copy is kept.' -DefaultYes $false)) {
+        Write-Info 'No files were deleted.'
+        return $false
+    }
+    $deleted = 0
+    foreach ($file in $files) {
+        try {
+            Remove-Item -LiteralPath $file.FullName -Force
+            $deleted++
+        }
+        catch {
+            Write-Warn ('Could not delete ' + $file.Name + ': ' + $_.Exception.Message)
+        }
+    }
+    Write-Ok ('Deleted {0} snapshot(s). .env and .env.last-good were kept.' -f $deleted)
+    return $true
+}
+
 function Start-Instance {
     Write-Title 'Start Derive World'
     if (-not (Test-InstanceOwnership)) {
@@ -1439,6 +1482,7 @@ function Show-Menu {
         Write-Info '9  Environment check'
         Write-Info '10 AI configuration status'
         Write-Info '11 Switch AI to Fixture mode'
+        Write-Info '12 Clean old configuration snapshots'
         Write-Info '0  Exit'
         $choice = Read-Host 'Choose'
         switch ($choice) {
@@ -1453,8 +1497,9 @@ function Show-Menu {
             '9' { [void](Show-PrerequisiteReport) }
             '10' { Write-Title 'AI configuration status'; Show-AIConfigStatus }
             '11' { [void](Use-FixtureMode) }
+            '12' { [void](Clear-OldConfigBackups) }
             '0' { return }
-            default { Write-Warn 'Choose 0-11.' }
+            default { Write-Warn 'Choose 0-12.' }
         }
         if (-not $NoPause) {
             Write-Host ''
@@ -1478,6 +1523,7 @@ try {
         'ApplyConfig' { $result = Apply-AIConfig }
         'StatusConfig' { Write-Title 'AI configuration status'; Show-AIConfigStatus }
         'UseFixture' { $result = Use-FixtureMode }
+        'CleanBackups' { $result = Clear-OldConfigBackups }
         'Open' { $productUrl = Get-ProductUrl; Start-Process $productUrl; Write-Ok ('Opened ' + $productUrl) }
         'SelfTest' { $result = Invoke-SelfTest }
     }

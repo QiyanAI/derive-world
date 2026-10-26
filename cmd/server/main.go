@@ -58,7 +58,7 @@ func run(args []string, stdout, stderr io.Writer) int {
 func runCheckConfig(stdout, stderr io.Writer) int {
 	cfg, err := config.Load()
 	if err != nil {
-		fmt.Fprintf(stderr, "invalid configuration: %v\n", err)
+		fmt.Fprintf(stderr, "%v\n", err)
 		return 2
 	}
 	fmt.Fprintf(stdout, "configuration ok (model_mode=%s)\n", cfg.Model.Mode)
@@ -72,7 +72,7 @@ func runCheckConfig(stdout, stderr io.Writer) int {
 func runCheckModel(stdout, stderr io.Writer) int {
 	cfg, err := config.Load()
 	if err != nil {
-		fmt.Fprintf(stderr, "invalid configuration: %v\n", err)
+		fmt.Fprintf(stderr, "%v\n", err)
 		return 2
 	}
 	result := app.CheckModelConnection(context.Background(), cfg)

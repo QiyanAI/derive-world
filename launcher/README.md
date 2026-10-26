@@ -36,6 +36,9 @@ Double-click **`Start Derive World.cmd`** in the repository root (or
 | 7 | **AI settings / Connect AI — apply and verify** |
 | 8 | Diagnostics with secrets redacted |
 | 9 | Environment check |
+| 10 | AI configuration status |
+| 11 | Switch AI back to Fixture mode |
+| 12 | Clean old `.env.backup-*` snapshots (keeps `.env.last-good`) |
 
 Command-line equivalents:
 
