@@ -7,6 +7,8 @@ import {
   listDirectMessages,
   listFriendRequests,
   listFriends,
+  listObjects,
+  type ObjectListItem,
   markDirectMessagesRead,
   newClientMessageID,
   removeFriend,
@@ -25,8 +27,9 @@ import { useI18n } from "../i18n";
 
 export default function FriendsPage() {
   const { t, lang } = useI18n();
-  const { status } = useAuth();
+  const { status, user } = useAuth();
   const [friends, setFriends] = useState<Friend[]>([]);
+  const [sharedWorlds, setSharedWorlds] = useState<ObjectListItem[]>([]);
   const [incoming, setIncoming] = useState<FriendRequest[]>([]);
   const [outgoing, setOutgoing] = useState<FriendRequest[]>([]);
   const [blocks, setBlocks] = useState<Block[]>([]);
@@ -53,16 +56,18 @@ export default function FriendsPage() {
   const loadSocial = useCallback(async (signal?: AbortSignal) => {
     setError(null);
     try {
-      const [friendList, incomingList, outgoingList, blockList] = await Promise.all([
+      const [friendList, incomingList, outgoingList, blockList, sharedList] = await Promise.all([
         listFriends(signal),
         listFriendRequests("incoming", signal),
         listFriendRequests("outgoing", signal),
-        listBlocks(signal)
+        listBlocks(signal),
+        listObjects("shared")
       ]);
       if (signal?.aborted) {
         return;
       }
       setFriends(friendList.items);
+      setSharedWorlds(sharedList.items);
       setIncoming(incomingList.items);
       setOutgoing(outgoingList.items);
       setBlocks(blockList.items);
@@ -317,7 +322,41 @@ export default function FriendsPage() {
 
         <section className="friends-thread dw-together-stage">
           {!selected ? (
-            <div className="dw-together-empty"><div className="dw-together-orbit" aria-hidden="true"><span>✧</span><span>◎</span><span>✦</span></div><h2>{lang === "zh" ? "一起，让世界有更多可能。" : "Create something that grows together."}</h2><p>{friends.length === 0 ? (lang === "zh" ? "先通过 @账号添加好友，同意后即可交流和共同创造。" : "Add a friend with an exact @handle to talk and create together.") : t("friends.threadEmpty")}</p><button className="button button-small" type="button" onClick={() => { setManageOpen(true); window.requestAnimationFrame(() => friendHandleRef.current?.focus()); }}>{lang === "zh" ? "邀请朋友" : "Invite a friend"}</button></div>
+            <div className="dw-together-landing" data-testid="dw-together-world">
+              <div className="dw-together-constellation" aria-label={lang === "zh" ? "好友与共同世界" : "Friends and shared worlds"}>
+                <span className="dw-together-person dw-together-me"><span className="avatar avatar-small">{(user?.display_name || "You").slice(0, 1)}</span>{lang === "zh" ? "你的世界" : "Your world"}</span>
+                {friends.slice(0, 3).map((friend, index) => (
+                  <button type="button" key={friend.user_id} className={`dw-together-person dw-together-friend dw-together-friend-${index}`} onClick={() => setSelected(friend)} aria-label={lang === "zh" ? `与${friend.display_name}聊天` : `Chat with ${friend.display_name}`}>
+                    <span className="avatar avatar-small" aria-hidden="true">{friend.display_name.slice(0, 1).toUpperCase()}</span>
+                    {friend.display_name}
+                  </button>
+                ))}
+                <div className="dw-together-world-core">
+                  <span className="dw-together-world-symbol" aria-hidden="true">◇</span>
+                  <p className="eyebrow">{lang === "zh" ? "你们正在延伸的可能性" : "A WORLD YOU CAN GROW TOGETHER"}</p>
+                  {sharedWorlds[0] ? (
+                    <>
+                      <h2>{sharedWorlds[0].title}</h2>
+                      <p>{lang === "zh" ? "真实共享世界。每个人和 AI 都只能在获得授权的范围内参与。" : "A real shared world. People and AI contribute only with permission."}</p>
+                      <Link className="button" to={`/objects/${sharedWorlds[0].id}?tab=work`}>{lang === "zh" ? "给世界一个新想法" : "Add a new idea"}</Link>
+                      <div className="dw-together-core-actions">
+                        <Link to={`/objects/${sharedWorlds[0].id}/lineage`}>{lang === "zh" ? "看看大家的分支" : "Explore the branches"}</Link>
+                        <Link to={`/objects/${sharedWorlds[0].id}?tab=ai`}>{lang === "zh" ? "让我的 AI 参与" : "Bring my AI"}</Link>
+                        {sharedWorlds[0].permissions.includes("invite") ? <Link to={`/objects/${sharedWorlds[0].id}?tab=access`}>{lang === "zh" ? "邀请好友加入" : "Invite a friend"}</Link> : null}
+                      </div>
+                    </>
+                  ) : (
+                    <>
+                      <h2>{lang === "zh" ? "一起创造，从一个世界开始。" : "Every shared world begins somewhere."}</h2>
+                      <p>{lang === "zh" ? "先创建一个世界，再把邀请发送给好友。只有被邀请的成员才能进入。" : "Create a world, then invite people. Friends never receive private access automatically."}</p>
+                      <Link className="button" to="/objects/new?template=living_scene&purpose=story">{lang === "zh" ? "创建共同世界" : "Create a world to share"}</Link>
+                      <button className="dw-together-secondary-action" type="button" onClick={() => { setManageOpen(true); window.requestAnimationFrame(() => friendHandleRef.current?.focus()); }}>{lang === "zh" ? "先找好友" : "Find a friend first"}</button>
+                    </>
+                  )}
+                </div>
+              </div>
+              {sharedWorlds.length > 1 ? <div className="dw-together-world-switch"><span>{lang === "zh" ? "其他共同世界" : "More shared worlds"}</span>{sharedWorlds.slice(1, 5).map((world) => <Link key={world.id} to={`/objects/${world.id}?tab=work`}>{world.title}</Link>)}<Link to="/objects?scope=shared">{lang === "zh" ? "查看全部" : "See all"}</Link></div> : null}
+            </div>
           ) : (
             <>
               <div className="section-heading">
