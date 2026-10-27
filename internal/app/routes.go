@@ -88,9 +88,9 @@ func (a *App) registerBusinessRoutes(mux *http.ServeMux) {
 		{method: http.MethodPost, pattern: "/api/v1/objects/{id}/discussions", auth: true, handler: a.postDiscussion},
 
 		// living-world Social: friendships, blocks, direct human messages.
-        {method: http.MethodGet, pattern: "/api/v1/social/discovery", auth: true, handler: a.searchDiscoverableFriends},
-        {method: http.MethodGet, pattern: "/api/v1/social/discovery/me", auth: true, handler: a.getDiscoveryPreference},
-        {method: http.MethodPut, pattern: "/api/v1/social/discovery/me", auth: true, handler: a.setDiscoveryPreference},
+		{method: http.MethodGet, pattern: "/api/v1/social/discovery", auth: true, handler: a.searchDiscoverableFriends},
+		{method: http.MethodGet, pattern: "/api/v1/social/discovery/me", auth: true, handler: a.getDiscoveryPreference},
+		{method: http.MethodPut, pattern: "/api/v1/social/discovery/me", auth: true, handler: a.setDiscoveryPreference},
 		{method: http.MethodGet, pattern: "/api/v1/social/friends", auth: true, handler: a.listFriends},
 		{method: http.MethodGet, pattern: "/api/v1/social/friend-requests", auth: true, handler: a.listFriendRequests},
 		{method: http.MethodPost, pattern: "/api/v1/social/friend-requests", auth: true, handler: a.sendFriendRequest},
