@@ -18,7 +18,7 @@ test("Living world: one person creates a scene, inspects the lens, publishes, an
     await register(page, actor);
     await page.goto("/");
     await expect(page.getByTestId("world-stage")).toBeVisible();
-    await expect(page.getByRole("heading", { name: new RegExp(actor.displayName) })).toBeVisible();
+    await expect(page.locator(".dw-world-hello")).toContainText(actor.displayName);
 
     await page.goto("/objects/new?template=living_scene&purpose=project");
     await expect(page.getByRole("radio", { name: /Living scene/ })).toBeChecked();
