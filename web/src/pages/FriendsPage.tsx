@@ -261,9 +261,13 @@ export default function FriendsPage() {
                 onChange={(event) => {
                   const next = event.target.checked;
                   setUpdatingPreference(true);
+                  setDiscoverable(next);
                   void setDiscoveryPreference(next)
                     .then((result) => setDiscoverable(result.discoverable))
-                    .catch(setError)
+                    .catch((failure) => {
+                      setDiscoverable(!next);
+                      setError(failure);
+                    })
                     .finally(() => setUpdatingPreference(false));
                 }} />
               <span>{lang === "zh" ? "允许别人按昵称或账号找到我（默认关闭）"
