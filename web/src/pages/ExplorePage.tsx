@@ -298,6 +298,22 @@ export default function ExplorePage() {
           <p>{t("explore.emptyBody")}</p>
         </div>
       ) : null}
+      {worlds.length > 0 ? (() => {
+        const featured = worlds[0];
+        const preview = publicPreview(featured);
+        return (
+          <section className="dw-featured-world" aria-label={lang === "zh" ? "精选公开世界" : "Featured public world"}>
+            <div className="dw-featured-world-art" aria-hidden="true"><span className="dw-featured-world-orb">✦</span></div>
+            <div className="dw-featured-world-content">
+              <p className="eyebrow">{lang === "zh" ? "来自另一个人的想象" : "FROM SOMEONE ELSE'S IMAGINATION"}</p>
+              <p className="dw-featured-world-title">{preview.title}</p>
+              <p className="dw-featured-world-summary">{preview.body || t("explore.noSummary")}</p>
+              <p className="dw-featured-world-byline">{t("explore.by", { name: featured.publisher_name })} · {featured.derive_allowed ? t("explore.derivable") : t("explore.viewOnly")}</p>
+              <Link className="button" to={`/explore/${featured.id}`}>{lang === "zh" ? "进入这个世界" : "Enter this world"}</Link>
+            </div>
+          </section>
+        );
+      })() : null}
       <ul className="public-grid dw-discovery-grid">
         {worlds.map((world) => {
           const preview = publicPreview(world);
