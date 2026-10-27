@@ -17,6 +17,12 @@ test("V2: context-first navigation, world zoom and exact-handle friend discovery
   await expect(stage.getByTestId("dw-stage-viewport")).toHaveAttribute("data-zoom", "1.15");
   await stage.getByTestId("dw-stage-zoom-reset").click();
   await expect(stage.getByTestId("dw-stage-viewport")).toHaveAttribute("data-zoom", "1.00");
+  // The visible move affordance must remain keyboard-operable.
+  await expect(stage.locator(".dw-node-move-handle")).toHaveCount(1);
+  await stage.locator(".dw-node-move-handle").focus();
+  await stage.locator(".dw-node-move-handle").press("ArrowRight");
+  await page.reload();
+  await expect(page.getByTestId("dw-stage-node")).toHaveCount(1);
   await page.goto("/friends");
   await page.getByRole("button", { name: "Find a friend" }).click();
   await expect(page.getByPlaceholder("Friend's handle")).toBeFocused();
