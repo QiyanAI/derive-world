@@ -110,6 +110,33 @@ export default function InvitationsPanel({ objectID, canInvite, canManage }: Pro
     }
   }
 
+  async function inviteAcceptedFriend() {
+    if (!canInvite || !inviteFriendID || !acceptedFriends.some((f) => f.user_id === inviteFriendID)) return;
+    setInvitingFriend(true);
+    setError(null);
+    setNotice("");
+    let issuedID: string | null = null;
+    try {
+      const invitation = await createInvitation(objectID, {
+        permissions: ["read", "contribute"], max_uses: 1, expires_in_days: 7
+      });
+      issuedID = invitation.id;
+      if (!invitation.token) throw new Error("No invitation token was returned");
+      const origin = new URL(publicBaseURL.trim() || window.location.origin, window.location.origin);
+      if (origin.protocol !== "https:" && origin.hostname !== "localhost" && origin.hostname !== "127.0.0.1") {
+        throw new Error("A secure instance URL is required for invitations");
+      }
+      const link = new URL("/invite/" + encodeURIComponent(invitation.token), origin).toString();
+      await sendDirectMessage(inviteFriendID,
+        (lang === "zh" ? "邀请你一起创造：" : "Join my world: ") + link, newClientMessageID());
+      setNotice(lang === "zh" ? "已私信发出邀请；接受后才获得访问权限。" :
+        "Invitation sent by private message; access requires acceptance.");
+      await refresh();
+    } catch (failure) {
+      if (issuedID) { try { await revokeInvitation(objectID, issuedID); } catch { /* original error shown */ } }
+      setError(failure);
+    } finally { setInvitingFriend(false); }
+  }
   async function revoke(id: string) {
     if (!window.confirm(t("workspace.revoke") + "?")) {
       return;
