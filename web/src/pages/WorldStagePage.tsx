@@ -396,7 +396,7 @@ export default function WorldStagePage() {
         </button>
       </div>
 
-      <div className="stage-layout">
+      <div className="stage-layout dw-focused-world">
         <section
           className={`stage-board${draggingId ? " stage-board-dragging" : ""}`}
           aria-label={t("stage.boardLabel")}
@@ -430,25 +430,25 @@ export default function WorldStagePage() {
           {draggingId ? <div className="stage-drop-target">{t("stage.dropBranch")}</div> : null}
           {loading && !stage ? <p className="muted">{t("common.loading")}</p> : null}
           {!loading && (stage?.objects.length ?? 0) === 0 ? (
-            <div className="stage-empty">
+            <div className="stage-empty dw-world-first-scene">
               <h2>{t("stage.emptyTitle")}</h2>
               <p>{t("stage.emptyBody")}</p>
-              <div className="stage-empty-actions">
+              <div className="stage-empty-actions dw-world-first-actions">
                 <Link
-                  className="card stage-entry"
+                  className="stage-entry dw-first-choice"
                   to="/objects/new?template=living_scene&purpose=project&first=1"
                 >
                   <strong>{t("stage.entryProject")}</strong>
                   <small>{t("stage.entryProjectHint")}</small>
                 </Link>
                 <Link
-                  className="card stage-entry"
+                  className="stage-entry dw-first-choice"
                   to="/objects/new?template=living_scene&purpose=story&first=1"
                 >
                   <strong>{t("stage.entryStory")}</strong>
                   <small>{t("stage.entryStoryHint")}</small>
                 </Link>
-                <Link className="card stage-entry" to="/explore">
+                <Link className="stage-entry dw-first-choice" to="/explore">
                   <strong>{t("stage.entryExplore")}</strong>
                   <small>{t("stage.entryExploreHint")}</small>
                 </Link>
@@ -489,7 +489,7 @@ export default function WorldStagePage() {
           ) : null}
           </div> : null}
         </section>
-        <aside className="stage-side">
+        <aside className="stage-side dw-context-hub">
           {continueObject ? (
             <section className="card stage-continue" data-testid="stage-continue">
               <p className="eyebrow">{t("stage.continueEyebrow")}</p>
@@ -509,8 +509,7 @@ export default function WorldStagePage() {
             </section>
           ) : null}
           <PulsePanel compact refreshKey={stage?.generated_at ?? ""} />
-          <section className="card">
-            <h2>{t("stage.approvals")}</h2>
+          <details className="dw-context-detail"><summary>{t("stage.approvals")}{confirmations.length > 0 ? ` (${confirmations.length})` : ""}</summary>
             {confirmations.length === 0 ? (
               <p className="muted">{t("stage.noApprovals")}</p>
             ) : (
@@ -528,8 +527,8 @@ export default function WorldStagePage() {
                 ))}
               </ul>
             )}
-          </section>
-          <details className="card stage-quick dw-stage-quick"><summary>{t("stage.quick")}</summary>
+          </details>
+          <details className="stage-quick dw-stage-quick"><summary>{t("stage.quick")}</summary>
             <Link to="/objects">{t("nav.objects")}</Link>
             <Link to="/friends">{t("nav.friends")}</Link>
             <Link to="/ai">{t("nav.ai")}</Link>

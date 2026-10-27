@@ -59,7 +59,7 @@ export default function AppShell() {
             <small>{t("app.tagline")}</small>
           </span>
         </Link>
-        <nav className="main-nav" aria-label={t("nav.primary")}>
+        <details className="dw-utilities"><summary>{lang === "zh" ? "更多" : "More"}</summary><nav className="main-nav dw-secondary-nav" aria-label={lang === "zh" ? "其他功能" : "Additional tools"}>
           
           {authenticated ? (
             <>
@@ -79,7 +79,7 @@ export default function AppShell() {
               </NavLink>
             </>
           ) : null}
-        </nav>
+        </nav></details>
         <div className="header-actions">
           {authenticated ? <Link className="button button-ghost button-compact dw-ai-setup" to="/settings#ai-connection">{lang === "zh" ? "设置 AI" : "AI setup"} ⚙</Link> : null}<ModeBadge mode={mode} />
           <LanguageToggle />
