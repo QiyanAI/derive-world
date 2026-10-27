@@ -27,6 +27,56 @@ func parseUUIDParam(r *http.Request, name string) (uuid.UUID, bool) {
 	return parsed, true
 }
 
+// Search results are visible only for opted-in, active, unblocked accounts.
+func (a *App) searchDiscoverableFriends(w http.ResponseWriter, r *http.Request) {
+    if a.socialServiceUnavailable(w, r) { return }
+    principal := principalFrom(r.Context())
+    if !a.allowUserLimit(w, r, principal.User.ID, a.friendRequestLimiter, 20,
+        "discovery_rate_limited", "too many discovery requests") { return }
+    q := r.URL.Query().Get("q")
+    if len(q) > 160 {
+        httpx.WriteError(w, r, httpx.NewError(httpx.CodeInvalidRequest, "query too long"))
+        return
+    }
+    items, err := a.social.SearchDiscovery(r.Context(), principal.User.ID, q)
+    if err != nil { a.writeDomainError(w, r, err); return }
+    httpx.WriteJSON(w, http.StatusOK, struct {
+        Items []social.DiscoveryCandidate `json:"items"`
+    }{Items: items})
+}
+
+func (a *App) getDiscoveryPreference(w http.ResponseWriter, r *http.Request) {
+    if a.socialServiceUnavailable(w, r) { return }
+    principal := principalFrom(r.Context())
+    enabled, err := a.social.DiscoveryEnabled(r.Context(), principal.User.ID)
+    if err != nil { a.writeDomainError(w, r, err); return }
+    httpx.WriteJSON(w, http.StatusOK, map[string]bool{"discoverable": enabled})
+}
+
+func (a *App) setDiscoveryPreference(w http.ResponseWriter, r *http.Request) {
+    if a.socialServiceUnavailable(w, r) { return }
+    principal := principalFrom(r.Context())
+    if !a.checkCSRF(w, r, principal) { return }
+    body, err := a.readRequestBody(w, r)
+    if err != nil { a.writeDomainError(w, r, err); return }
+    if field := detectActorOverride(r, body); field != "" {
+        a.rejectActorOverride(w, r, &principal.User.ID, field)
+        return
+    }
+    var input struct { Discoverable *bool `json:"discoverable"` }
+    if err := httpx.DecodeJSON(w, r, &input, a.config.MaxRequestBytes); err != nil {
+        a.writeDomainError(w, r, err); return
+    }
+    if input.Discoverable == nil {
+        httpx.WriteError(w, r, httpx.NewError(httpx.CodeInvalidRequest, "discoverable required"))
+        return
+    }
+    if err := a.social.SetDiscoveryEnabled(r.Context(), principal.User.ID, *input.Discoverable); err != nil {
+        a.writeDomainError(w, r, err); return
+    }
+    httpx.WriteJSON(w, http.StatusOK, map[string]bool{"discoverable": *input.Discoverable})
+}
+
 func (a *App) listFriends(w http.ResponseWriter, r *http.Request) {
 	if a.socialServiceUnavailable(w, r) {
 		return
