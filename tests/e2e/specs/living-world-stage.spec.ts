@@ -94,13 +94,13 @@ test("Living world: two people become friends and exchange direct messages", asy
     await expect(second.page.getByText(alice.displayName)).toBeVisible();
 
     await first.page.reload();
-    await first.page.getByRole("button", { name: new RegExp(bob.displayName) }).click();
+    await first.page.locator(".dw-friend-list").getByRole("button", { name: new RegExp(bob.displayName) }).click();
     await first.page.getByPlaceholder("Write a message").fill("Want to build this together?");
     await first.page.getByRole("button", { name: "Send", exact: true }).click();
     await expect(first.page.getByText("Want to build this together?")).toBeVisible();
 
     await second.page.reload();
-    await second.page.getByRole("button", { name: new RegExp(alice.displayName) }).click();
+    await second.page.locator(".dw-friend-list").getByRole("button", { name: new RegExp(alice.displayName) }).click();
     await expect(second.page.getByText("Want to build this together?")).toBeVisible();
     await second.page.screenshot({ path: testInfo.outputPath("living-world-friends.png"), fullPage: true });
   } finally {
