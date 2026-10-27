@@ -39,6 +39,7 @@ export default function FriendsPage() {
   const [error, setError] = useState<unknown>(null);
   const [busy, setBusy] = useState("");
   const [loading, setLoading] = useState(true);
+  const [manageOpen, setManageOpen] = useState(false);
 
   const timeFormatter = useMemo(
     () =>
@@ -192,7 +193,7 @@ export default function FriendsPage() {
         <p className="eyebrow">{t("friends.eyebrow")}</p>
         <h1>{t("friends.title")}</h1>
         <p className="lead">{t("friends.lead")}</p>
-        <button className="button button-small dw-find-friend-button" type="button" onClick={() => { friendHandleRef.current?.scrollIntoView({ block: "center", behavior: "smooth" }); friendHandleRef.current?.focus(); }}>
+        <button className="button button-small dw-find-friend-button" type="button" onClick={() => { setManageOpen(true); window.requestAnimationFrame(() => friendHandleRef.current?.focus()); }}>
           {lang === "zh" ? "查找好友" : "Find a friend"}
         </button>
       </div>
@@ -200,9 +201,9 @@ export default function FriendsPage() {
       {notice ? <StatusNotice>{notice}</StatusNotice> : null}
       {error ? <ErrorNotice error={error} onRetry={() => void loadSocial()} /> : null}
 
-      <div className="friends-layout">
-        <aside className="friends-side">
-          <section className="card">
+      <div className="friends-layout dw-together-world">
+        <aside className="friends-side dw-people-panel">
+          <section className="dw-friend-management" hidden={!manageOpen}><button type="button" className="button button-ghost button-small" onClick={() => setManageOpen(false)}>×</button>
             <h2>{t("friends.add")}</h2><p className="muted">{lang === "zh" ? "输入对方准确的 @账号发送好友申请。添加好友不会自动开放私人世界。" : "Enter an exact @handle to request friendship. Friends do not automatically see private worlds."}</p>
             <form className="inline-field" onSubmit={submitRequest} data-testid="dw-find-friend-form">
               <input
@@ -220,7 +221,7 @@ export default function FriendsPage() {
             <p className="form-hint">{t("friends.addHint")}</p>
           </section>
 
-          <section className="card">
+          <section className="dw-friend-requests" hidden={incoming.length === 0 && outgoing.length === 0 && !manageOpen}>
             <h2>{t("friends.requests")}</h2>
             {incoming.length === 0 && outgoing.length === 0 ? (
               <p className="muted">{t("friends.noRequests")}</p>
@@ -264,7 +265,7 @@ export default function FriendsPage() {
             </ul>
           </section>
 
-          <section className="card">
+          <section className="dw-friend-list">
             <h2>{t("friends.friends")}</h2>
             {friends.length === 0 ? <p className="muted">{t("friends.noFriends")}</p> : null}
             <ul className="friend-list">
@@ -289,8 +290,7 @@ export default function FriendsPage() {
             </ul>
           </section>
 
-          <section className="card">
-            <h2>{t("friends.blocks")}</h2>
+          <details className="dw-friend-blocks"><summary>{t("friends.blocks")}</summary>
             {blocks.length === 0 ? <p className="muted">{t("friends.noBlocks")}</p> : null}
             <ul className="friend-list">
               {blocks.map((block) => (
@@ -312,15 +312,12 @@ export default function FriendsPage() {
                 </li>
               ))}
             </ul>
-          </section>
+          </details>
         </aside>
 
-        <section className="card friends-thread">
+        <section className="friends-thread dw-together-stage">
           {!selected ? (
-            <div className="thread-empty">
-              <h2>{t("friends.threadTitle")}</h2>
-              <p className="muted">{t("friends.threadEmpty")}</p>
-            </div>
+            <div className="dw-together-empty"><div className="dw-together-orbit" aria-hidden="true"><span>✧</span><span>◎</span><span>✦</span></div><h2>{lang === "zh" ? "一起，让世界有更多可能。" : "Create something that grows together."}</h2><p>{friends.length === 0 ? (lang === "zh" ? "先通过 @账号添加好友，同意后即可交流和共同创造。" : "Add a friend with an exact @handle to talk and create together.") : t("friends.threadEmpty")}</p><button className="button button-small" type="button" onClick={() => { setManageOpen(true); window.requestAnimationFrame(() => friendHandleRef.current?.focus()); }}>{lang === "zh" ? "邀请朋友" : "Invite a friend"}</button></div>
           ) : (
             <>
               <div className="section-heading">

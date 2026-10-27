@@ -44,7 +44,7 @@ function publicPreview(world: PublicWorld): { title: string; body: string; eleme
 
 export default function ExplorePage() {
   const { id } = useParams();
-  const { t } = useI18n();
+  const { t, lang } = useI18n();
   const { status } = useAuth();
   const navigate = useNavigate();
   const [worlds, setWorlds] = useState<PublicWorld[]>([]);
@@ -57,6 +57,7 @@ export default function ExplorePage() {
   const [fields, setFields] = useState<string[]>([]);
   const [busy, setBusy] = useState(false);
   const [reportNotice, setReportNotice] = useState("");
+  const [deriveOpen, setDeriveOpen] = useState(false);
 
   const load = useCallback(
     async (cursor?: string, signal?: AbortSignal) => {
@@ -181,8 +182,8 @@ export default function ExplorePage() {
         {error ? <ErrorNotice error={error} /> : null}
         {reportNotice ? <StatusNotice>{reportNotice}</StatusNotice> : null}
         {selected ? (
-          <div className="explore-detail">
-            <article className="card public-world">
+          <div className="explore-detail dw-public-experience">
+            <article className="public-world dw-public-stage"><div className="dw-public-world-art" aria-hidden="true"><span>✦</span></div><div className="dw-public-stage-intro"><h2>{publicPreview(selected).title}</h2></div>
               {publicPreview(selected).body ? (
                 <p className="document-summary">{publicPreview(selected).body}</p>
               ) : null}
@@ -194,7 +195,7 @@ export default function ExplorePage() {
                 </ul>
               ) : null}
             </article>
-            <aside className="card">
+            <aside className="dw-public-derive-panel">
               <h2>{t("explore.lineageTitle")}</h2>
               {lineage?.source ? (
                 <p>
@@ -225,12 +226,12 @@ export default function ExplorePage() {
               ) : null}
               {selected.derive_allowed ? (
                 status === "authenticated" ? (
-                  <div className="field-stack">
+                  <div className="field-stack"><button type="button" className="button dw-derive-reveal" onClick={() => setDeriveOpen((open) => !open)} aria-expanded={deriveOpen}>{lang === "zh" ? "衍生我的版本" : "Derive my own version"}</button>{deriveOpen ? <div className="dw-derive-options">
                     <label>
                       <span>{t("explore.deriveTitleField")}</span>
                       <input maxLength={200} value={title} onChange={(event) => setTitle(event.target.value)} />
                     </label>
-                    <fieldset className="field-group">
+                    <fieldset className="field-group dw-inheritance-options">
                       <legend>{t("derive.fields")}</legend>
                       {[
                         ...(selected.object_type === "interactive"
@@ -263,7 +264,7 @@ export default function ExplorePage() {
                     >
                       {busy ? t("derive.creating") : t("explore.deriveAction")}
                     </button>
-                    <p className="form-hint">{t("explore.deriveHint")}</p>
+                    <p className="form-hint">{t("explore.deriveHint")}</p></div> : null}
                   </div>
                 ) : (
                   <p>
@@ -297,7 +298,7 @@ export default function ExplorePage() {
           <p>{t("explore.emptyBody")}</p>
         </div>
       ) : null}
-      <ul className="public-grid">
+      <ul className="public-grid dw-discovery-grid">
         {worlds.map((world) => {
           const preview = publicPreview(world);
           return (
