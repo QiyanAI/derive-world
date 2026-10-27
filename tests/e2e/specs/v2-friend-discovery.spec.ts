@@ -31,6 +31,31 @@ test("V2: opt-in nickname discovery sends a real friend request without exposing
     await result.getByRole("button", { name: "Add friend" }).click();
     await expect(alice.getByText("Friend request sent.")).toBeVisible();
 
+    await bob.goto("/friends");
+    await bob.getByRole("button", { name: "Accept" }).click();
+    await expect(bob.getByText(aliceUser.displayName)).toBeVisible();
+
+    await alice.goto("/objects/new?template=living_scene&purpose=project&first=1");
+    await alice.getByRole("button", { name: "Create object" }).click();
+    await expect(alice).toHaveURL(/\/objects\/[0-9a-f-]{36}/);
+    const worldURL = new URL(alice.url());
+    await alice.goto(worldURL.pathname + "?tab=access");
+    const inviteSelect = alice.getByLabel("Choose friend");
+    await expect(inviteSelect).toBeVisible();
+    await inviteSelect.selectOption({ label: bobUser.displayName + " (@" + bobUser.handle + ")" });
+    await alice.getByTestId("invite-accepted-friend").click();
+    await expect(alice.getByText("Invitation sent by private message; access requires acceptance.")).toBeVisible();
+
+    await bob.goto("/friends");
+    await bob.locator(".dw-friend-list").getByRole("button", { name: new RegExp(aliceUser.displayName) }).click();
+    const invitationMessage = bob.getByText(/Join my world: .*\/invite\//).first();
+    await expect(invitationMessage).toBeVisible();
+    const messageText = await invitationMessage.textContent();
+    const invitationURL = messageText?.match(/https?:\/\/\S+\/invite\/[a-zA-Z0-9_-]+/)?.[0];
+    expect(invitationURL).toBeTruthy();
+    await bob.goto(invitationURL!);
+    await bob.getByRole("button", { name: "Accept invitation" }).click();
+    await expect(bob).toHaveURL(/\/objects\/[0-9a-f-]{36}/);
     await bob.getByRole("checkbox", { name: /Allow people to find me/ }).uncheck();
     await expect(bob.getByRole("checkbox", { name: /Allow people to find me/ })).not.toBeChecked();
     await expect(bob.getByRole("checkbox", { name: /Allow people to find me/ })).toBeEnabled();
