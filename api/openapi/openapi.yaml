@@ -1641,6 +1641,8 @@ paths:
                 $ref: '#/components/schemas/DiscoveryPreference'
         '401':
           $ref: '#/components/responses/Unauthenticated'
+        '429':
+          $ref: '#/components/responses/RateLimited'
     put:
       operationId: setDiscoveryPreference
       summary: Opt in or opt out for the authenticated caller only
