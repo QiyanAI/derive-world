@@ -469,6 +469,54 @@ SELECT id, email, handle, display_name, status, created_at, updated_at
 	return &user, nil
 }
 
+// Discoverability returns whether this account may appear in authenticated,
+// query-scoped account discovery.
+func (s *Service) Discoverability(ctx context.Context, userID uuid.UUID) (bool, error) {
+	var discoverable bool
+	err := s.db.QueryRow(ctx, `
+SELECT discoverable FROM users WHERE id = $1 AND status = 'active'`,
+		userID.String()).Scan(&discoverable)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return false, ErrUnauthenticated
+	}
+	return discoverable, err
+}
+
+// SetDiscoverability changes the account-discovery preference. Identity owns
+// the users row; the privacy-relevant change is audited in the same
+// transaction.
+func (s *Service) SetDiscoverability(ctx context.Context, userID uuid.UUID, discoverable bool,
+	requestID string, ipHash []byte) error {
+	tx, err := s.db.BeginTx(ctx, pgx.TxOptions{IsoLevel: pgx.ReadCommitted})
+	if err != nil {
+		return err
+	}
+	defer func() { _ = tx.Rollback(ctx) }()
+
+	command, err := tx.Exec(ctx, `
+UPDATE users SET discoverable = $2, updated_at = now()
+ WHERE id = $1 AND status = 'active'`, userID.String(), discoverable)
+	if err != nil {
+		return err
+	}
+	if command.RowsAffected() == 0 {
+		return ErrUnauthenticated
+	}
+	if err := s.audit.Write(ctx, tx, audit.Event{
+		Actor:        audit.UserActor(userID),
+		Action:       audit.ActionSocialDiscoverabilityUpdate,
+		ResourceType: "user",
+		ResourceID:   &userID,
+		Decision:     "allow",
+		RequestID:    requestID,
+		IPHash:       ipHash,
+		Metadata:     map[string]any{"discoverable": discoverable},
+	}); err != nil {
+		return err
+	}
+	return tx.Commit(ctx)
+}
+
 func randomToken() (string, error) {
 	buffer := make([]byte, 32)
 	if _, err := rand.Read(buffer); err != nil {

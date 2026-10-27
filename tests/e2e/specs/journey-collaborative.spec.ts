@@ -20,7 +20,7 @@ test.describe("two independent users, collaborative Derive Loop", () => {
     const title = `Collaborative world ${actorA.handle.slice(-6)}`;
 
     await register(page, actorA);
-    await expect(page.getByRole("heading", { name: "Your Digital Self is live" })).toBeVisible();
+    await expect(page.getByTestId("world-onboarding")).toBeVisible();
     await page.goto("/objects/new");
     await expect(page).toHaveURL(/\/objects\/new/);
 

@@ -795,6 +795,10 @@ export interface StageObject {
   object_type: ObjectType;
   presentation_template: PresentationTemplate;
   title: string;
+  note: string;
+  purpose?: string;
+  done_count: number;
+  total_count: number;
   version: number;
   owner_id: string;
   permissions: Permission[];
@@ -813,6 +817,18 @@ export interface StageEdge {
 export interface WorldStage {
   objects: StageObject[];
   edges: StageEdge[];
+  generated_at: string;
+}
+
+export interface WorldLayoutItem {
+  object_id: string;
+  x: number;
+  y: number;
+  updated_at: string;
+}
+
+export interface WorldLayout {
+  items: WorldLayoutItem[];
   generated_at: string;
 }
 
@@ -844,6 +860,13 @@ export interface FriendRequest {
   display_name: string;
   status: string;
   created_at: string;
+}
+
+export interface UserSearchResult {
+  user_id: string;
+  handle: string;
+  display_name: string;
+  relation: "none" | "friend" | "incoming" | "outgoing";
 }
 
 export interface DirectMessage {
@@ -997,6 +1020,21 @@ export async function getWorldStage(signal?: AbortSignal): Promise<WorldStage> {
   return request<WorldStage>("/api/v1/world/stage", { signal });
 }
 
+export async function getWorldLayout(signal?: AbortSignal): Promise<WorldLayout> {
+  return request<WorldLayout>("/api/v1/world/layout", { signal });
+}
+
+export async function saveWorldLayout(
+  objectID: string,
+  x: number,
+  y: number
+): Promise<WorldLayoutItem> {
+  return request<WorldLayoutItem>("/api/v1/world/layout", {
+    method: "PUT",
+    body: { object_id: objectID, x, y }
+  });
+}
+
 export async function getPulse(signal?: AbortSignal): Promise<LivingPulse> {
   return request<LivingPulse>("/api/v1/pulse", { signal });
 }
@@ -1060,6 +1098,29 @@ export async function sendFriendRequest(handle: string): Promise<FriendRequest> 
   });
 }
 
+export async function searchUsers(
+  query: string,
+  signal?: AbortSignal
+): Promise<{ items: UserSearchResult[] }> {
+  const params = new URLSearchParams({ q: query });
+  return request(`/api/v1/social/user-search?${params.toString()}`, { signal });
+}
+
+export async function getDiscoverability(
+  signal?: AbortSignal
+): Promise<{ discoverable: boolean }> {
+  return request("/api/v1/social/discoverability", { signal });
+}
+
+export async function setDiscoverability(
+  discoverable: boolean
+): Promise<{ discoverable: boolean }> {
+  return request("/api/v1/social/discoverability", {
+    method: "PATCH",
+    body: { discoverable }
+  });
+}
+
 export async function respondFriendRequest(
   id: string,
   accept: boolean
@@ -1085,6 +1146,14 @@ export async function listDirectMessages(
   if (cursor) {
     params.set("cursor", cursor);
   }
+  return request(`/api/v1/social/messages?${params.toString()}`, { signal });
+}
+
+export async function listRecentDirectMessages(
+  withUserID: string,
+  signal?: AbortSignal
+): Promise<{ items: DirectMessage[]; next_cursor: string | null }> {
+  const params = new URLSearchParams({ with: withUserID, limit: "100", latest: "1" });
   return request(`/api/v1/social/messages?${params.toString()}`, { signal });
 }
 
@@ -1211,7 +1280,16 @@ export async function getSystemStatus(signal?: AbortSignal): Promise<SystemStatu
 }
 
 export interface ModelCheck {
-  status: "ok" | "fixture" | "unauthorized" | "unreachable" | "error";
+  status:
+    | "fixture"
+    | "unverified_model"
+    | "unauthorized"
+    | "rate_limited"
+    | "unavailable"
+    | "tls_failure"
+    | "invalid_url"
+    | "unreachable"
+    | "error";
   mode: "fixture" | "real";
   model_name: string;
   detail: string;

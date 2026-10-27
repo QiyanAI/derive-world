@@ -1,27 +1,59 @@
 // SPDX-License-Identifier: Apache-2.0
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Link } from "react-router";
+import { Link, useNavigate } from "react-router";
 import {
+  errorMessage,
   getObject,
+  getPulse,
+  getWorldLayout,
   getWorldStage,
-  listConfirmations,
-  type Confirmation,
+  listFriends,
+  listPublications,
+  respondPublicationConsent,
+  saveWorldLayout,
+  type Friend,
+  type LivingPulse,
   type ObjectView,
-  type StageObject,
+  type Publication,
+  type PulseItem,
   type WorldStage
 } from "../api";
-import PulsePanel from "../components/PulsePanel";
-import StageInspector, { type StageInspectorTab } from "../components/StageInspector";
 import { ErrorNotice } from "../errors";
 import { actionKey, eventKey } from "../humanize";
 import { useAuth } from "../auth";
 import { useI18n } from "../i18n";
+import StageInspector, { type StageInspectorTab } from "../components/StageInspector";
+import CreateWorldDialog from "../components/v2/CreateWorldDialog";
+import Icon from "../components/v2/Icon";
+import InviteDialog from "../components/v2/InviteDialog";
+import Modal from "../components/v2/Modal";
+import PrivacyDialog from "../components/v2/PrivacyDialog";
+import { useToast } from "../components/v2/Toast";
+import WorldCanvas, { type WorldPosition } from "../components/v2/WorldCanvas";
+
+type PrivacyStatus = "private" | "pending" | "public" | "derivable";
+
+function privacyFrom(publications: Publication[]): PrivacyStatus {
+  const active = publications.find((publication) => publication.status === "active");
+  if (active) {
+    return active.derive_allowed ? "derivable" : "public";
+  }
+  if (publications.some((publication) => publication.status === "pending_consent")) {
+    return "pending";
+  }
+  return "private";
+}
 
 export default function WorldStagePage() {
   const { t, lang } = useI18n();
   const { user } = useAuth();
+  const navigate = useNavigate();
+  const zh = lang === "zh";
+  const { push: toast, view: toastView } = useToast();
   const [stage, setStage] = useState<WorldStage | null>(null);
-  const [confirmations, setConfirmations] = useState<Confirmation[]>([]);
+  const [positions, setPositions] = useState<Record<string, WorldPosition>>({});
+  const [pulse, setPulse] = useState<LivingPulse | null>(null);
+  const [friends, setFriends] = useState<Friend[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<unknown>(null);
   const [selectedId, setSelectedId] = useState<string | null>(null);
@@ -30,21 +62,38 @@ export default function WorldStagePage() {
   const [selectedError, setSelectedError] = useState<unknown>(null);
   const [inspectorOpen, setInspectorOpen] = useState(false);
   const [inspectorTab, setInspectorTab] = useState<StageInspectorTab>("work");
-  const [draggingId, setDraggingId] = useState<string | null>(null);
-  const [zoom, setZoom] = useState(1);
+  const [privacyStatus, setPrivacyStatus] = useState<PrivacyStatus>("private");
+  const [createOpen, setCreateOpen] = useState(false);
+  const [privacyOpen, setPrivacyOpen] = useState(false);
+  const [inviteOpen, setInviteOpen] = useState(false);
+  const [pulseOpen, setPulseOpen] = useState(false);
+  const [consentBusy, setConsentBusy] = useState("");
+  const [focusId, setFocusId] = useState<string | null>(null);
   const selectRequest = useRef(0);
+  const branchPoint = useRef<WorldPosition | null>(null);
 
   const load = useCallback(async (signal?: AbortSignal) => {
     setError(null);
     try {
-      const [data, pending] = await Promise.all([
+      const [stageData, layoutData, pulseData, friendData] = await Promise.all([
         getWorldStage(signal),
-        listConfirmations("pending", signal).catch(() => ({ items: [] }))
+        getWorldLayout(signal).catch(() => null),
+        getPulse(signal).catch(() => null),
+        listFriends(signal).catch(() => ({ items: [] as Friend[] }))
       ]);
-      if (!signal?.aborted) {
-        setStage(data);
-        setConfirmations(pending.items);
+      if (signal?.aborted) {
+        return;
       }
+      setStage(stageData);
+      if (layoutData) {
+        setPositions(
+          Object.fromEntries(layoutData.items.map((item) => [item.object_id, { x: item.x, y: item.y }]))
+        );
+      }
+      if (pulseData) {
+        setPulse(pulseData);
+      }
+      setFriends(friendData.items);
     } catch (failure) {
       if (!signal?.aborted) {
         setError(failure);
@@ -61,6 +110,12 @@ export default function WorldStagePage() {
     void load(controller.signal);
     return () => controller.abort();
   }, [load]);
+
+  useEffect(() => {
+    const onCreate = () => setCreateOpen(true);
+    window.addEventListener("dw:create-world", onCreate);
+    return () => window.removeEventListener("dw:create-world", onCreate);
+  }, []);
 
   useEffect(() => {
     let source: EventSource | null = null;
@@ -111,10 +166,14 @@ export default function WorldStagePage() {
     setSelectedLoading(true);
     setSelectedError(null);
     try {
-      const object = await getObject(objectID);
+      const [object, publications] = await Promise.all([
+        getObject(objectID),
+        listPublications(objectID).catch(() => ({ items: [] as Publication[] }))
+      ]);
       if (selectRequest.current === request) {
         setSelected(object);
         setSelectedId(objectID);
+        setPrivacyStatus(privacyFrom(publications.items));
       }
     } catch (failure) {
       if (selectRequest.current === request) {
@@ -138,6 +197,26 @@ export default function WorldStagePage() {
     [loadSelected]
   );
 
+  useEffect(() => {
+    let focus = "";
+    try {
+      focus = window.sessionStorage.getItem("dw:focus-object") ?? "";
+      if (focus) {
+        window.sessionStorage.removeItem("dw:focus-object");
+      }
+    } catch {
+      focus = "";
+    }
+    if (!focus) {
+      return;
+    }
+    const timer = window.setTimeout(() => {
+      setFocusId(focus);
+      openInspector(focus, "work");
+    }, 250);
+    return () => window.clearTimeout(timer);
+  }, [openInspector]);
+
   const closeInspector = useCallback(() => {
     const previousID = selectedId;
     selectRequest.current += 1;
@@ -146,10 +225,7 @@ export default function WorldStagePage() {
     setSelectedId(null);
     if (previousID) {
       window.setTimeout(() => {
-        const trigger = document.querySelector<HTMLElement>(
-          `[data-stage-object="${previousID}"]`
-        );
-        trigger?.focus();
+        document.querySelector<HTMLElement>(`[data-stage-object="${previousID}"]`)?.focus();
       }, 50);
     }
   }, [selectedId]);
@@ -157,6 +233,12 @@ export default function WorldStagePage() {
   const handleObjectUpdated = useCallback(
     async (updated: ObjectView) => {
       setSelected(updated);
+      try {
+        const publications = await listPublications(updated.id);
+        setPrivacyStatus(privacyFrom(publications.items));
+      } catch {
+        // The object update succeeded even if publication status is unavailable.
+      }
       await load();
     },
     [load]
@@ -168,12 +250,31 @@ export default function WorldStagePage() {
     }
   }, [loadSelected, selectedId]);
 
-  const handleDerived = useCallback((child: ObjectView) => {
-    setSelected(child);
-    setSelectedId(child.id);
-    setInspectorTab("work");
-    setInspectorOpen(true);
-  }, []);
+  const handleDerived = useCallback(
+    (child: ObjectView) => {
+      const at = branchPoint.current;
+      branchPoint.current = null;
+      setSelected(child);
+      setSelectedId(child.id);
+      setInspectorTab("work");
+      setInspectorOpen(true);
+      setFocusId(child.id);
+      setPositions((current) => (at ? { ...current, [child.id]: at } : current));
+      toast(zh ? "新分支已经出现；原来的世界仍然完整。" : "A new branch exists; the original world is intact.");
+      if (at) {
+        void saveWorldLayout(child.id, at.x, at.y)
+          .catch((failure) => {
+            toast(errorMessage(failure), "error");
+          })
+          .finally(() => {
+            void load();
+          });
+      } else {
+        void load();
+      }
+    },
+    [load, toast, zh]
+  );
 
   useEffect(() => {
     if (!selectedId || selectedLoading || !selected || !stage) {
@@ -185,300 +286,222 @@ export default function WorldStagePage() {
     }
   }, [stage, selectedId, selected, selectedLoading, loadSelected]);
 
-  const { roots, childrenOf } = useMemo(() => {
-    const objects = stage?.objects ?? [];
-    const edges = stage?.edges ?? [];
-    const byId = new Map(objects.map((object) => [object.id, object]));
-    const childIDs = new Set(edges.map((edge) => edge.child_id));
-    const childMap = new Map<string, StageObject[]>();
-    for (const edge of edges) {
-      const child = byId.get(edge.child_id);
-      if (!child) {
-        continue;
+  const sourceTitle = useMemo(() => {
+    if (!selected) {
+      return "";
+    }
+    if (selected.lineage?.publication_title) {
+      return selected.lineage.publication_title;
+    }
+    const parentID = selected.lineage?.parent.object_id;
+    if (!parentID) {
+      return "";
+    }
+    return stage?.objects.find((object) => object.id === parentID)?.title ?? "";
+  }, [selected, stage]);
+
+  const privacyLabel = useMemo(() => {
+    if (!selected) {
+      return zh ? "默认私人" : "Private by default";
+    }
+    switch (privacyStatus) {
+      case "derivable":
+        return zh ? "公开 · 可衍生" : "Public · derivable";
+      case "public":
+        return zh ? "已公开" : "Published";
+      case "pending":
+        return zh ? "公开待确认" : "Publication pending";
+      default:
+        return zh ? "仅自己可见" : "Only me";
+    }
+  }, [privacyStatus, selected, zh]);
+
+  const pulseItems = pulse?.items ?? [];
+  const latestPulse = pulseItems[0] ?? null;
+
+  function pulseLine(item: PulseItem): string {
+    const label = item.action ? t(actionKey(item.action)) : t(eventKey(item.event_type ?? ""));
+    return `${item.title || (zh ? "未命名世界" : "Untitled world")} · ${label}${
+      item.actor_name ? ` · ${item.actor_name}` : ""
+    }`;
+  }
+
+  function pulseIcon(item: PulseItem): "branch" | "check" | "spark" | "clock" {
+    if (item.event_type === "object.derived") {
+      return "branch";
+    }
+    if (item.action === "update_element" || item.action === "toggle_checklist_item") {
+      return "check";
+    }
+    if (item.event_type?.startsWith("ai.")) {
+      return "spark";
+    }
+    return "clock";
+  }
+
+  async function respondConsent(id: string, approve: boolean) {
+    setConsentBusy(`${id}:${approve}`);
+    try {
+      await respondPublicationConsent(id, approve);
+      toast(
+        approve
+          ? zh
+            ? "你已同意这个公开版本。若所有共同创作者都同意，它会出现在探索世界。"
+            : "You approved this public version. It appears in Explore once every contributor agrees."
+          : zh
+            ? "你拒绝了这个公开版本。它不会公开。"
+            : "You declined this public version. It will not become public.",
+        "ok"
+      );
+      await load();
+      if (selectedId) {
+        await loadSelected(selectedId);
       }
-      const list = childMap.get(edge.parent_id) ?? [];
-      list.push(child);
-      childMap.set(edge.parent_id, list);
+    } catch (failure) {
+      toast(errorMessage(failure), "error");
+    } finally {
+      setConsentBusy("");
     }
-    for (const list of childMap.values()) {
-      list.sort((left, right) => right.updated_at.localeCompare(left.updated_at));
-    }
-    return {
-      roots: objects
-        .filter((object) => !childIDs.has(object.id))
-        .sort((left, right) => right.updated_at.localeCompare(left.updated_at)),
-      childrenOf: childMap
-    };
-  }, [stage]);
-
-  const continueObject = useMemo(() => {
-    const objects = stage?.objects ?? [];
-    if (objects.length === 0) {
-      return null;
-    }
-    const preferred = objects.filter(
-      (object) => object.permissions.includes("contribute") || object.permissions.includes("manage")
-    );
-    const candidates = preferred.length > 0 ? preferred : objects;
-    return [...candidates].sort((left, right) => right.updated_at.localeCompare(left.updated_at))[0] ?? null;
-  }, [stage]);
-
-
-  const graph = useMemo(() => {
-    const nodes = stage?.objects ?? [];
-    const byId = new Map(nodes.map((node) => [node.id, node]));
-    const placed = new Map<string, { x: number; y: number; depth: number }>();
-    const visiting = new Set<string>();
-    let nextLeaf = 0;
-    let maxDepth = 0;
-
-    const visit = (object: StageObject, depth: number): { x: number; y: number; depth: number } | null => {
-      const existing = placed.get(object.id);
-      if (existing) return existing;
-      if (visiting.has(object.id) || depth > 24) return null;
-      visiting.add(object.id);
-      maxDepth = Math.max(maxDepth, depth);
-      const children = (childrenOf.get(object.id) ?? []).filter((child) => byId.has(child.id));
-      const childPositions = children
-        .map((child) => visit(child, depth + 1))
-        .filter((position): position is { x: number; y: number; depth: number } => position !== null);
-      const x = childPositions.length
-        ? ((childPositions[0]?.x ?? 200) + (childPositions[childPositions.length - 1]?.x ?? 200)) / 2
-        : 200 + nextLeaf++ * 290;
-      const result = { x, y: 178 + depth * 278, depth };
-      placed.set(object.id, result);
-      visiting.delete(object.id);
-      return result;
-    };
-    roots.forEach((root) => visit(root, 0));
-    nodes.forEach((node) => visit(node, 0));
-    const xs = [...placed.values()].map((position) => position.x);
-    const minX = Math.min(200, ...xs);
-    const maxX = Math.max(200, ...xs);
-    const width = Math.max(940, maxX - minX + 400);
-    const offset = width / 2 - (maxX + minX) / 2;
-    const positions = new Map(
-      [...placed].map(([id, p]) => [id, { x: p.x + offset, y: p.y, depth: p.depth }])
-    );
-    const height = Math.max(580, 178 + maxDepth * 278 + 200);
-    const edges = (stage?.edges ?? [])
-      .map((edge) => {
-        const parent = positions.get(edge.parent_id);
-        const child = positions.get(edge.child_id);
-        return parent && child ? { id: `${edge.parent_id}:${edge.child_id}`, parent, child } : null;
-      })
-      .filter((edge): edge is { id: string; parent: {x:number;y:number;depth:number}; child: {x:number;y:number;depth:number} } => edge !== null);
-    return { positions, width, height, edges };
-  }, [stage, roots, childrenOf]);
-
-  const branchCount = stage?.edges.length ?? 0;
-  const displayName = user?.display_name ?? "";
-
-  function typeLabel(type: StageObject["object_type"]): string {
-    if (type === "living_scene") {
-      return t("object.create.scene");
-    }
-    if (type === "interactive") {
-      return t("object.create.interactive");
-    }
-    return t("object.create.collaborative");
   }
 
-
-  function renderNode(object: StageObject) {
-    const point = graph.positions.get(object.id);
-    if (!point) return null;
-    const canDerive = object.permissions.includes("derive");
-    return (
-      <li
-        key={object.id}
-        className="stage-node-wrap dw-orb-wrap"
-        style={{ left: point.x - 110, top: point.y - 110 }}
-      >
-        <article
-          className={`stage-node dw-world-orb stage-node-${object.object_type}${
-            selectedId === object.id ? " stage-node-selected" : ""
-          }`}
-          data-testid="dw-stage-node"
-          aria-current={selectedId === object.id ? "true" : undefined}
-          draggable={canDerive}
-          onDragStart={(event) => {
-            if (!canDerive) return;
-            event.dataTransfer.setData("text/x-derive-object", object.id);
-            event.dataTransfer.effectAllowed = "copy";
-            setDraggingId(object.id);
-          }}
-          onDragEnd={() => setDraggingId(null)}
-        >
-          <div className="stage-node-top">
-            <span className={`template-badge template-${object.object_type}`}>{typeLabel(object.object_type)}</span>
-            <span className="version-badge">v{object.version}</span>
-          </div>
-          <h3>
-            <button
-              className="stage-node-title-button"
-              type="button"
-              onClick={() => openInspector(object.id, "work")}
-              data-stage-object={object.id}
-              aria-label={t("stage.selectNamed", { title: object.title || t("common.untitled") })}
-            >
-              <span className="dw-orb-mark" aria-hidden="true">✧</span>
-              <span className="dw-orb-name">{object.title || t("common.untitled")}</span>
-            </button>
-          </h3>
-          <p className="stage-node-meta">
-            {object.member_count > 1
-              ? t("stage.members", { count: object.member_count })
-              : t("stage.solo")}
-            {object.branch_count > 0 ? ` · ${t("stage.branches", { count: object.branch_count })}` : ""}
-          </p>
-          {object.latest_event ? (
-            <p className="stage-node-event">
-              <span className="stage-event-dot" aria-hidden="true" />
-              {object.latest_event.action
-                ? t(actionKey(object.latest_event.action))
-                : t(eventKey(object.latest_event.event_type))}
-              {object.latest_event.actor_name ? ` · ${object.latest_event.actor_name}` : ""}
-            </p>
-          ) : null}
-          {selectedId === object.id ? (
-            <div className="stage-node-actions">
-              <button className="button button-small" type="button" onClick={() => openInspector(object.id, "work")}>
-                {t("stage.workHere")}
-              </button>
-              {canDerive ? <button className="button button-ghost button-small" type="button" onClick={() => openInspector(object.id, "branch")}>{t("stage.branchHere")}</button> : null}
-              <button className="button button-ghost button-small" type="button" onClick={() => openInspector(object.id, "lens")}>{t("stage.lensHere")}</button>
-              <button className="button button-ghost button-small" type="button" onClick={() => openInspector(object.id, "ai")}>{t("stage.aiHere")}</button>
-              <Link className="text-link" to={`/objects/${object.id}`}>{t("stage.openPage")}</Link>
-            </div>
-          ) : null}
-        </article>
-      </li>
-    );
+  function onPositionChange(id: string, position: WorldPosition) {
+    setPositions((current) => ({ ...current, [id]: position }));
+    void saveWorldLayout(id, position.x, position.y).catch((failure) => {
+      toast(errorMessage(failure), "error");
+    });
   }
+
+  function createWorldButton() {
+    setCreateOpen(true);
+  }
+
+  const emptyState = (
+    <div className="dw-stage-onboarding" data-testid="world-onboarding">
+      <p className="dw-eyebrow">
+        <span className="dw-eyebrow-line" />
+        {zh ? "A DIFFERENT BEGINNING" : "A DIFFERENT BEGINNING"}
+      </p>
+      <h2>{zh ? "不必先学会操作软件。" : "You don't need to learn the software first."}</h2>
+      <p>
+        {zh
+          ? "试着给一个念头一个可以继续生长的开始。你可以直接改变它，也可以从旁边拉出一条新的未来。"
+          : "Give one idea a beginning that can keep growing. Change it directly, or pull out a different future."}
+      </p>
+      <div className="dw-stage-onboarding-actions">
+        <button className="dw-button dw-button-primary" type="button" onClick={createWorldButton}>
+          <Icon name="plus" size={16} />
+          {zh ? "创造第一个世界" : "Create the first world"}
+        </button>
+        <Link className="dw-button dw-button-ghost" to="/explore">
+          {zh ? "先看看公开世界" : "Explore public worlds first"}
+        </Link>
+      </div>
+    </div>
+  );
 
   return (
-    <div className="page page-wide stage-page" data-testid="world-stage">
-      <div className="page-heading with-actions stage-heading">
-        <div>
-          <p className="eyebrow">{t("stage.eyebrow")}</p>
-          <h1 className="dw-world-hero-title">{lang === "zh" ? <>让一个念头，<em>长出自己的未来。</em></> : <>Let an idea <em>grow its own future.</em></>}</h1>
-          <p className="lead">{lang === "zh" ? "触碰一个创造物，直接改变它。衍生一条分支，看看不同的选择会走向哪里。" : "Touch a creation to change it. Derive a new direction and see what becomes possible."}</p>
-          <p className="dw-world-hello">{lang === "zh" ? `属于 ${displayName} 的持续世界` : `${displayName}'s living world`}</p>
+    <div className="dw-page dw-world-page" data-testid="world-page">
+      <header className="dw-page-head">
+        <p className="dw-eyebrow">
+          <span className="dw-eyebrow-line" />
+          YOUR LIVING WORLD
+        </p>
+        <div className="dw-heading-row">
+          <div className="dw-head-left">
+            <h1>
+              {zh ? (
+                <>
+                  让一个念头，<em>长出自己的未来。</em>
+                </>
+              ) : (
+                <>
+                  Let one idea <em>grow its own future.</em>
+                </>
+              )}
+            </h1>
+            <p className="dw-lead">
+              {zh
+                ? "触碰一个对象，改变它。拉出一条分支，看看不同选择会走向哪里。"
+                : "Touch a creation to change it. Pull out a branch and see where a different choice leads."}
+            </p>
+            <p className="dw-world-hello">
+              {zh ? `属于 ${user?.display_name ?? ""} 的持续世界` : `${user?.display_name ?? ""}'s living world`}
+            </p>
+          </div>
+          <div className="dw-head-actions">
+            <button className="dw-privacy-chip" type="button" onClick={() => setPrivacyOpen(true)}>
+              <Icon name={privacyStatus === "private" || privacyStatus === "pending" ? "lock" : "globe"} size={15} />
+              <span>{privacyLabel}</span>
+            </button>
+            <button className="dw-button dw-button-primary" type="button" onClick={createWorldButton}>
+              <Icon name="plus" size={16} />
+              {zh ? "创造一个起点" : "Create a beginning"}
+            </button>
+          </div>
         </div>
-        <div className="stage-create">
-          <Link className="button" to="/objects/new?template=living_scene&purpose=project">
-            {t("stage.createProject")}
-          </Link>
-          <Link className="button button-ghost" to="/objects/new?template=living_scene&purpose=story">
-            {t("stage.createStory")}
-          </Link>
-          <Link className="button button-ghost" to="/explore">
-            {t("stage.explore")}
-          </Link>
-        </div>
-      </div>
+      </header>
 
       {error ? <ErrorNotice error={error} onRetry={() => void load()} /> : null}
 
-      <div className="stage-stats dw-world-facts">
-        <span>
-          <strong>{stage?.objects.length ?? 0}</strong> {t("stage.statObjects")}
-        </span>
-        <span>
-          <strong>{branchCount}</strong> {t("stage.statBranches")}
-        </span>
-        <span>
-          <strong>{roots.length}</strong> {t("stage.statRoots")}
-        </span>
-        <button className="button button-ghost button-small" type="button" onClick={() => void load()}>
-          {t("common.refresh")}
-        </button>
-      </div>
-
-      <div className="stage-layout dw-focused-world">
-        <section
-          className={`stage-board${draggingId ? " stage-board-dragging" : ""}`}
-          aria-label={t("stage.boardLabel")}
-          onDragOver={(event) => {
-            if (Array.from(event.dataTransfer.types).includes("text/x-derive-object")) {
-              event.preventDefault();
-              event.dataTransfer.dropEffect = "copy";
-            }
-          }}
-          onDrop={(event) => {
-            const droppedID = event.dataTransfer.getData("text/x-derive-object");
-            setDraggingId(null);
-            if (droppedID) {
-              event.preventDefault();
-              openInspector(droppedID, "branch");
-            }
-          }}
-        >
-          <div className="dw-stage-topbar">
-            <div className="dw-stage-topbar-title">
-              <strong>{lang === "zh" ? "正在演化的世界" : "Your living world"}</strong>
-              <small>{lang === "zh" ? "选择一个创造物，直接改变或衍生" : "Select a creation to change or derive it"}</small>
-            </div>
-            <div className="dw-stage-zoom-controls" role="group" aria-label={lang === "zh" ? "世界视角缩放" : "World zoom controls"}>
-              <button type="button" data-testid="dw-stage-zoom-out" aria-label={lang === "zh" ? "缩小世界" : "Zoom out"} disabled={zoom <= 0.7} onClick={() => setZoom((value) => Math.max(0.7, Math.round((value - 0.15) * 100) / 100))}>−</button>
-              <output aria-live="off" aria-label={lang === "zh" ? "缩放比例" : "Zoom level"}>{Math.round(zoom * 100)}%</output>
-              <button type="button" data-testid="dw-stage-zoom-in" aria-label={lang === "zh" ? "放大世界" : "Zoom in"} disabled={zoom >= 1.45} onClick={() => setZoom((value) => Math.min(1.45, Math.round((value + 0.15) * 100) / 100))}>+</button>
-              <button type="button" data-testid="dw-stage-zoom-reset" aria-label={lang === "zh" ? "恢复世界视角" : "Reset view"} onClick={() => setZoom(1)}>↺</button>
-            </div>
-          </div>
-          {draggingId ? <div className="stage-drop-target">{t("stage.dropBranch")}</div> : null}
-          {loading && !stage ? <p className="muted">{t("common.loading")}</p> : null}
-          {!loading && (stage?.objects.length ?? 0) === 0 ? (
-            <div className="stage-empty dw-world-first-scene">
-              <h2>{t("stage.emptyTitle")}</h2>
-              <p>{t("stage.emptyBody")}</p>
-              <div className="stage-empty-actions dw-world-first-actions">
-                <Link
-                  className="stage-entry dw-first-choice"
-                  to="/objects/new?template=living_scene&purpose=project&first=1"
-                >
-                  <strong>{t("stage.entryProject")}</strong>
-                  <small>{t("stage.entryProjectHint")}</small>
-                </Link>
-                <Link
-                  className="stage-entry dw-first-choice"
-                  to="/objects/new?template=living_scene&purpose=story&first=1"
-                >
-                  <strong>{t("stage.entryStory")}</strong>
-                  <small>{t("stage.entryStoryHint")}</small>
-                </Link>
-                <Link className="stage-entry dw-first-choice" to="/explore">
-                  <strong>{t("stage.entryExplore")}</strong>
-                  <small>{t("stage.entryExploreHint")}</small>
-                </Link>
-              </div>
-            </div>
-          ) : (
-            <div className="dw-stage-scrollspace" style={{ width: graph.width * zoom, height: graph.height * zoom }}>
-              <div className="dw-stage-viewport" data-testid="dw-stage-viewport" data-zoom={zoom.toFixed(2)} style={{ width: graph.width, height: graph.height, transform: `scale(${zoom})` }}>
-                <svg className="dw-world-lines" viewBox={`0 0 ${graph.width} ${graph.height}`} aria-hidden="true" preserveAspectRatio="none">
-                  {graph.edges.map((edge) => (
-                    <path key={edge.id} d={`M ${edge.parent.x} ${edge.parent.y} C ${edge.parent.x} ${edge.parent.y + 145}, ${edge.child.x} ${edge.child.y - 145}, ${edge.child.x} ${edge.child.y}`} />
-                  ))}
-                </svg>
-                <ul className="stage-roots">{(stage?.objects ?? []).map((object) => renderNode(object))}</ul>
-              </div>
-            </div>
-          )}
-          {continueObject ? (
-            <button className="dw-ai-orb" type="button" onClick={() => openInspector(selectedId ?? continueObject.id, "ai")} aria-label={lang === "zh" ? "向当前世界的 Personal AI 寻求协助" : "Ask your Personal AI about this world"}>
-              <span aria-hidden="true">✧</span><small>{lang === "zh" ? "AI 在此" : "AI here"}</small>
-            </button>
-          ) : null}
-          {inspectorOpen ? <div className="dw-stage-inspector-dock">
-{inspectorOpen ? (
+      <WorldCanvas
+        stage={stage}
+        layout={positions}
+        selectedId={inspectorOpen ? selectedId : null}
+        focusId={focusId}
+        onSelect={(id) => openInspector(id, "work")}
+        onBranch={(id, at) => {
+          branchPoint.current = at;
+          openInspector(id, "branch");
+        }}
+        onPositionChange={onPositionChange}
+        onBackgroundClick={() => {
+          if (inspectorOpen) {
+            closeInspector();
+          }
+        }}
+        emptyState={emptyState}
+        pulse={
+          <button className="dw-pulse-mini" type="button" onClick={() => setPulseOpen(true)}>
+            <Icon name="spark" size={16} />
+            <span>
+              <strong>WORLD PULSE</strong>
+              <small>
+                {latestPulse
+                  ? zh
+                    ? `最近：${pulseLine(latestPulse)}`
+                    : `Latest: ${pulseLine(latestPulse)}`
+                  : zh
+                    ? "这里的每次改变，都会留下痕迹。"
+                    : "Every real change leaves a trace here."}
+              </small>
+            </span>
+          </button>
+        }
+        aiOrb={
+          <button
+            className="dw-ai-orb"
+            type="button"
+            aria-label={zh ? "向 Personal AI 寻求创作建议" : "Ask your Personal AI for a direction"}
+            onClick={() => {
+              if (selectedId) {
+                openInspector(selectedId, "ai");
+              } else {
+                toast(zh ? "先选择一个世界，再让 AI 参与。" : "Select a world before bringing in AI.");
+              }
+            }}
+          >
+            <Icon name="spark" size={23} />
+            <small>{zh ? "AI 在此" : "AI here"}</small>
+          </button>
+        }
+        inspector={
+          inspectorOpen ? (
             <StageInspector
-              key={selected?.id ?? "none"}
               object={selected}
               tab={inspectorTab}
               loading={selectedLoading}
               error={selectedError}
+              sourceTitle={sourceTitle}
               onTab={setInspectorTab}
               onClose={closeInspector}
               onUpdated={handleObjectUpdated}
@@ -486,57 +509,167 @@ export default function WorldStagePage() {
               onRefresh={() => load()}
               onDerived={handleDerived}
             />
-          ) : null}
-          </div> : null}
-        </section>
-        <aside className="stage-side dw-context-hub">
-          {continueObject ? (
-            <section className="card stage-continue" data-testid="stage-continue">
-              <p className="eyebrow">{t("stage.continueEyebrow")}</p>
-              <h2>{continueObject.title || t("common.untitled")}</h2>
-              <p className="muted">
-                {t("stage.continueHint")} · v{continueObject.version}
-                {continueObject.latest_event?.actor_name
-                  ? ` · ${continueObject.latest_event.actor_name}`
-                  : ""}
-              </p>
-              <Link
-                className="button button-small"
-                to={`/objects/${continueObject.id}?tab=work`}
-              >
-                {t("stage.continueAction")}
-              </Link>
-            </section>
-          ) : null}
-          <PulsePanel compact refreshKey={stage?.generated_at ?? ""} />
-          <details className="dw-context-detail"><summary>{t("stage.approvals")}{confirmations.length > 0 ? ` (${confirmations.length})` : ""}</summary>
-            {confirmations.length === 0 ? (
-              <p className="muted">{t("stage.noApprovals")}</p>
-            ) : (
-              <ul className="pulse-list">
-                {confirmations.slice(0, 5).map((confirmation) => (
-                  <li key={confirmation.id}>
-                    <div>
-                      <strong>{confirmation.target_object_title || confirmation.action}</strong>
-                      <small>{confirmation.permission_summary}</small>
-                    </div>
-                    <Link className="text-link" to="/self">
-                      {t("stage.review")}
-                    </Link>
-                  </li>
-                ))}
-              </ul>
-            )}
-          </details>
-          <details className="stage-quick dw-stage-quick"><summary>{t("stage.quick")}</summary>
-            <Link to="/objects">{t("nav.objects")}</Link>
-            <Link to="/friends">{t("nav.friends")}</Link>
-            <Link to="/ai">{t("nav.ai")}</Link>
-            <Link to="/welcome">{t("nav.welcome")}</Link>
-            <Link to="/settings">{t("nav.settings")}</Link>
-          </details>
-        </aside>
+          ) : undefined
+        }
+      />
+
+      <div className="dw-activity-strip" aria-label={zh ? "世界动态" : "World activity"}>
+        <span className="dw-activity-label">{zh ? "世界正在继续" : "The world continues"}</span>
+        {pulseItems.slice(0, 5).map((item, index) => (
+          <button
+            key={`${item.object_id}-${item.occurred_at}-${index}`}
+            className="dw-activity-chip"
+            type="button"
+            onClick={() => setPulseOpen(true)}
+          >
+            <Icon name={pulseIcon(item)} size={13} />
+            <span>{pulseLine(item)}</span>
+          </button>
+        ))}
+        {pulseItems.length === 0 ? (
+          <span className="dw-activity-empty">
+            {zh ? "一次真实的改变，就会让这里开始生长。" : "One real change will make this place begin to grow."}
+          </span>
+        ) : null}
       </div>
+
+      <p className="dw-world-note">
+        <Icon name="shield" size={13} />
+        {zh
+          ? "私人是默认。公开或邀请必须是你的主动选择；好友身份本身不会授予私人世界访问权。"
+          : "Private is the default. Publishing or inviting is always a separate choice; friendship itself never grants access to a private world."}
+      </p>
+
+      <CreateWorldDialog
+        open={createOpen}
+        onClose={() => setCreateOpen(false)}
+        onCreated={(object) => {
+          setFocusId(object.id);
+          setSelected(object);
+          setSelectedId(object.id);
+          setInspectorOpen(false);
+          toast(zh ? "你的新世界开始生长了。" : "Your new world has begun to grow.");
+          void load().then(() => openInspector(object.id, "work"));
+        }}
+      />
+
+      <PrivacyDialog
+        open={privacyOpen}
+        object={selected}
+        onClose={() => setPrivacyOpen(false)}
+        onChanged={async () => {
+          await load();
+          if (selectedId) {
+            await loadSelected(selectedId);
+          }
+        }}
+        onInvite={() => {
+          if (!selected) {
+            toast(zh ? "先选择一个世界，再邀请好友。" : "Select a world before inviting someone.");
+            return;
+          }
+          setInviteOpen(true);
+        }}
+      />
+
+      <InviteDialog
+        open={inviteOpen}
+        object={selected}
+        friends={friends}
+        onClose={() => setInviteOpen(false)}
+        onFindFriend={() => {
+          setInviteOpen(false);
+          navigate("/friends");
+        }}
+      />
+
+      <Modal
+        open={pulseOpen}
+        onClose={() => setPulseOpen(false)}
+        title={zh ? "世界留下的每一个瞬间" : "Every moment the world left behind"}
+        kicker="LIVING PULSE"
+        wide
+        actions={
+          <Link className="dw-button dw-button-ghost" to="/self" onClick={() => setPulseOpen(false)}>
+            {zh ? "查看待确认事项" : "Review pending approvals"}
+          </Link>
+        }
+      >
+        <p className="dw-modal-lead">
+          {zh
+            ? "这里只展示真实发生过的对象、邀请、公开与 AI 提议事件，不编造离线活动。"
+            : "This shows only real object, invitation, publication, and AI-proposal events. It never invents offline activity."}
+        </p>
+        {pulse?.publication_consents.length ? (
+          <section className="dw-consent-section">
+            <h3>{zh ? "等待你确认的公开版本" : "Public versions waiting for your consent"}</h3>
+            <ul className="dw-pulse-list">
+              {pulse.publication_consents.map((consent) => (
+                <li key={consent.id}>
+                  <span className="dw-pulse-icon">
+                    <Icon name="globe" size={16} />
+                  </span>
+                  <div>
+                    <strong>{consent.title}</strong>
+                    <small>
+                      {zh ? `由 ${consent.publisher_name} 请求公开` : `Requested by ${consent.publisher_name}`}
+                    </small>
+                  </div>
+                  <div className="dw-consent-actions">
+                    <button
+                      className="dw-friend-action"
+                      type="button"
+                      disabled={consentBusy !== ""}
+                      onClick={() => void respondConsent(consent.id, true)}
+                    >
+                      {consentBusy === `${consent.id}:true` ? (zh ? "确认中…" : "Approving…") : zh ? "同意公开" : "Approve"}
+                    </button>
+                    <button
+                      className="dw-friend-action dw-friend-action-quiet"
+                      type="button"
+                      disabled={consentBusy !== ""}
+                      onClick={() => void respondConsent(consent.id, false)}
+                    >
+                      {zh ? "拒绝" : "Decline"}
+                    </button>
+                  </div>
+                </li>
+              ))}
+            </ul>
+          </section>
+        ) : null}
+        {pulseItems.length === 0 ? (
+          <p className="dw-empty-note">
+            {zh ? "世界还没有留下改变。第一次触碰就会开始记录。" : "No changes yet. The first touch starts the record."}
+          </p>
+        ) : (
+          <ul className="dw-pulse-list">
+            {pulseItems.map((item, index) => (
+              <li key={`${item.object_id}-${item.occurred_at}-${index}`}>
+                <span className="dw-pulse-icon">
+                  <Icon name={pulseIcon(item)} size={16} />
+                </span>
+                <div>
+                  <strong>{pulseLine(item)}</strong>
+                  <small>
+                    {new Intl.DateTimeFormat(zh ? "zh-CN" : "en", {
+                      dateStyle: "medium",
+                      timeStyle: "short"
+                    }).format(new Date(item.occurred_at))}
+                  </small>
+                </div>
+              </li>
+            ))}
+          </ul>
+        )}
+      </Modal>
+
+      {loading && !stage ? (
+        <div className="dw-page-loading" role="status">
+          {zh ? "正在进入你的世界…" : "Entering your world…"}
+        </div>
+      ) : null}
+      {toastView}
     </div>
   );
 }

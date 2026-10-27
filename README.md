@@ -28,8 +28,9 @@ what you build.
 > **Status: unreleased development branch on top of public OSS MVP `v0.1.0`.**
 > The published `v0.1.0` remains the 22-table, two-object foundation described
 > in its [release notes](docs/en/release-notes.md). This branch adds a
-> version-6 migration (30 tables), a third object type, social and publication
-> domains, and the World Stage client. It is reviewable code, not a released
+> version-7 migration (31 tables), a third object type, social discovery,
+> publication, user-private world layout, and the V2 World Stage client. It is
+> reviewable code, not a released
 > version. **Real AI is VERIFIED_REAL only for the approved two-call API-level
 > run (DeepSeek `deepseek-flash`, synthetic data); it was not re-run on this
 > branch, and no general model/provider claim is made. Fixture mode calls no

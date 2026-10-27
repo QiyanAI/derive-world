@@ -52,6 +52,18 @@ type FriendRequest struct {
 	CreatedAt   time.Time `json:"created_at"`
 }
 
+// UserSearchResult is the minimal, non-sensitive projection returned by
+// authenticated account discovery. It never contains email, status, or any
+// object/AI data.
+type UserSearchResult struct {
+	UserID      string `json:"user_id"`
+	Handle      string `json:"handle"`
+	DisplayName string `json:"display_name"`
+	// Relation is one of none, friend, incoming, or outgoing. It describes the
+	// caller's current friendship state with the result.
+	Relation string `json:"relation"`
+}
+
 // Message is a direct human message.
 type Message struct {
 	ID              string     `json:"id"`
@@ -173,6 +185,67 @@ SELECT f.id, 'outgoing', other.id, other.handle, other.display_name, f.status, f
 		requests = append(requests, request)
 	}
 	return requests, rows.Err()
+}
+
+// SearchUsers returns a small, query-scoped account discovery projection.
+// Discovery is authenticated-only and deliberately not a directory: an empty
+// query is rejected, results are capped, blocked accounts are excluded, and
+// accounts that opted out are never returned.
+func (s *Service) SearchUsers(ctx context.Context, userID uuid.UUID, rawQuery string) ([]UserSearchResult, error) {
+	query := strings.ToLower(strings.TrimSpace(rawQuery))
+	query = strings.TrimPrefix(query, "@")
+	if runeLength(query) < 2 || runeLength(query) > 32 {
+		return nil, fmt.Errorf("%w: q", ErrInvalidRequest)
+	}
+	rows, err := s.db.Query(ctx, `
+SELECT u.id, u.handle, u.display_name,
+       COALESCE(rel.relation, 'none')
+  FROM users u
+  LEFT JOIN LATERAL (
+        SELECT CASE
+                 WHEN f.status = 'accepted' THEN 'friend'
+                 WHEN f.requester_id = $1 THEN 'outgoing'
+                 ELSE 'incoming'
+               END AS relation
+          FROM friendships f
+         WHERE f.status IN ('accepted', 'pending')
+           AND ((f.requester_id = $1 AND f.addressee_id = u.id)
+             OR (f.addressee_id = $1 AND f.requester_id = u.id))
+         ORDER BY f.updated_at DESC
+         LIMIT 1
+       ) rel ON true
+ WHERE u.status = 'active'
+   AND u.id <> $1
+   AND u.discoverable = true
+   AND (starts_with(lower(u.handle), $2) OR position($2 in lower(u.display_name)) > 0)
+   AND NOT EXISTS (
+        SELECT 1 FROM user_blocks b
+         WHERE b.revoked_at IS NULL
+           AND ((b.blocker_id = $1 AND b.blocked_id = u.id)
+             OR (b.blocker_id = u.id AND b.blocked_id = $1))
+       )
+ ORDER BY
+   CASE WHEN starts_with(lower(u.handle), $2) THEN 0 ELSE 1 END,
+   CASE COALESCE(rel.relation, 'none')
+     WHEN 'friend' THEN 0 WHEN 'incoming' THEN 1 WHEN 'outgoing' THEN 2 ELSE 3
+   END,
+   lower(u.display_name), u.id
+ LIMIT 8`, userID.String(), query)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	results := make([]UserSearchResult, 0, 8)
+	for rows.Next() {
+		var result UserSearchResult
+		if err := rows.Scan(&result.UserID, &result.Handle, &result.DisplayName,
+			&result.Relation); err != nil {
+			return nil, err
+		}
+		results = append(results, result)
+	}
+	return results, rows.Err()
 }
 
 // SendRequest creates or revives a pending request for a target handle.
@@ -566,6 +639,47 @@ SELECT id, seq, sender_id, recipient_id, body, client_message_id, created_at, re
 		return messages, &lastSeq, nil
 	}
 	return messages, nil, nil
+}
+
+// ListRecentMessages returns the newest page of a conversation in ascending
+// order. It exists so a long-running chat never appears frozen behind its
+// oldest 50 messages. Older history remains available through ListMessages.
+func (s *Service) ListRecentMessages(ctx context.Context, userID, otherID uuid.UUID, limit int) ([]Message, error) {
+	if userID == otherID {
+		return nil, fmt.Errorf("%w: with", ErrInvalidRequest)
+	}
+	if limit <= 0 || limit > 100 {
+		limit = 50
+	}
+	rows, err := s.db.Query(ctx, `
+SELECT id, seq, sender_id, recipient_id, body, client_message_id, created_at, read_at
+  FROM direct_messages
+ WHERE (sender_id = $1 AND recipient_id = $2)
+    OR (sender_id = $2 AND recipient_id = $1)
+ ORDER BY seq DESC
+ LIMIT $3`, userID.String(), otherID.String(), limit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	messages := make([]Message, 0, limit)
+	for rows.Next() {
+		var message Message
+		if err := rows.Scan(&message.ID, &message.Seq, &message.SenderID,
+			&message.RecipientID, &message.Body, &message.ClientMessageID,
+			&message.CreatedAt, &message.ReadAt); err != nil {
+			return nil, err
+		}
+		messages = append(messages, message)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	for left, right := 0, len(messages)-1; left < right; left, right = left+1, right-1 {
+		messages[left], messages[right] = messages[right], messages[left]
+	}
+	return messages, nil
 }
 
 // MarkRead marks messages from one sender as read.

@@ -20,15 +20,16 @@ test("Published untrusted title and body render as text, not executable HTML", a
   await page.getByRole("button", { name: "Publish", exact: true }).click();
   await expect(page.locator(".publication-list")).toContainText("public");
 
+  await page.locator(".dw-profile summary").click();
   await page.getByRole("button", { name: "Sign out" }).click();
   await page.goto("/explore");
   await expect(page.getByTestId("explore-page")).toBeVisible();
-  await page.getByRole("link", { name: new RegExp(actor.handle) }).click();
+  await page.getByRole("link", { name: new RegExp(actor.handle) }).first().click();
   await expect(page).toHaveURL(/\/explore\/[0-9a-f-]{36}/);
 
-  const publicWorld = page.locator(".public-world");
-  await expect(publicWorld.getByRole("heading", { name: new RegExp(actor.handle) })).toBeVisible();
-  await expect(publicWorld.getByText(summary, { exact: false })).toBeVisible();
+  const publicWorld = page.getByTestId("explore-detail");
+  await expect(publicWorld.getByRole("heading", { name: new RegExp(actor.handle), level: 2 })).toBeVisible();
+  await expect(publicWorld.locator(".dw-public-premise")).toHaveText(summary);
   await expect(page.locator('img[src="x"]')).toHaveCount(0);
   const executed = await page.evaluate(
     () => (window as unknown as { __xss?: number }).__xss

@@ -49,8 +49,8 @@ func TestMigrationIdempotent(t *testing.T) {
 		"SELECT value FROM app_meta WHERE key = 'schema_version'").Scan(&schemaVersion); err != nil {
 		t.Fatalf("read app_meta: %v", err)
 	}
-	if schemaVersion != "6" {
-		t.Fatalf("schema_version = %q, want 6", schemaVersion)
+	if schemaVersion != "7" {
+		t.Fatalf("schema_version = %q, want 7", schemaVersion)
 	}
 
 	var migrationTableExists bool
@@ -124,8 +124,8 @@ func TestFrozenSchemaShape(t *testing.T) {
 	if err := database.Pool().QueryRow(ctx, "SELECT count(*) FROM audit_actions").Scan(&auditActions); err != nil {
 		t.Fatalf("count audit actions: %v", err)
 	}
-	if auditActions != 63 {
-		t.Fatalf("audit_actions rows = %d, want 63", auditActions)
+	if auditActions != 64 {
+		t.Fatalf("audit_actions rows = %d, want 64", auditActions)
 	}
 
 	var sourceColumns int
@@ -186,10 +186,11 @@ SELECT count(*) FROM information_schema.columns
 		}
 	}
 	for table, privilege := range map[string]string{
-		"object_events":    "INSERT",
-		"audit_events":     "INSERT",
-		"living_objects":   "UPDATE",
-		"idempotency_keys": "UPDATE",
+		"object_events":      "INSERT",
+		"audit_events":       "INSERT",
+		"living_objects":     "UPDATE",
+		"user_world_layouts": "UPDATE",
+		"idempotency_keys":   "UPDATE",
 	} {
 		var allowed bool
 		query := "SELECT has_table_privilege('derive_world_app', $1, $2)"

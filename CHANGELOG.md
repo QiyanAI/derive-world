@@ -21,8 +21,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Opt-in publication of one object version, contributor consent, anonymous
   Explore discovery, public lineage, independent private public-derivation,
   revocation, and basic abuse reports.
-- A version-6 migration (30 tables) and registered social/publication audit
-  actions. Historical migrations and the published `v0.1.0` tag are unchanged.
+- A version-7 migration (31 tables), registered social/publication audit
+  actions, privacy-aware account discovery, and user-private World Stage layout
+  state. Historical migrations and the published `v0.1.0` tag are unchanged.
 - Runtime diagnostics, a non-completion model connection check, and explicit
   daily/hourly/concurrency/global limit reporting in Settings.
 

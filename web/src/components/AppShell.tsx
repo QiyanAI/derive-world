@@ -1,16 +1,18 @@
 // SPDX-License-Identifier: Apache-2.0
-import { useEffect } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Link, NavLink, Outlet, useLocation } from "react-router";
 import { useAuth } from "../auth";
 import { useI18n } from "../i18n";
 import { useMeta } from "../meta";
 import { ErrorNotice } from "../errors";
-import FixtureBanner from "./FixtureBanner";
 import LanguageToggle from "./LanguageToggle";
 import ModeBadge from "./ModeBadge";
+import AISettingsDialog from "./v2/AISettingsDialog";
+import HelpDialog from "./v2/HelpDialog";
+import Icon from "./v2/Icon";
 
 const navClass = ({ isActive }: { isActive: boolean }) =>
-  isActive ? "nav-link nav-link-active" : "nav-link";
+  isActive ? "dw-rail-link active" : "dw-rail-link";
 
 export default function AppShell() {
   const { t, lang } = useI18n();
@@ -18,9 +20,14 @@ export default function AppShell() {
   const { status, user, logout, logoutError, authError, refresh } = useAuth();
   const location = useLocation();
   const authenticated = status === "authenticated";
+  const zh = lang === "zh";
+  const [aiOpen, setAIOpen] = useState(false);
+  const [helpOpen, setHelpOpen] = useState(false);
+  const profileRef = useRef<HTMLDetailsElement>(null);
 
   useEffect(() => {
     window.scrollTo({ top: 0, behavior: "auto" });
+    profileRef.current?.removeAttribute("open");
   }, [location.pathname]);
 
   useEffect(() => {
@@ -44,89 +51,184 @@ export default function AppShell() {
     document.title = match ? `${match[1]} · ${t("app.name")}` : t("app.name");
   }, [location.pathname, t]);
 
+  useEffect(() => {
+    function onKeyDown(event: KeyboardEvent) {
+      const target = document.activeElement;
+      const tag = target?.tagName;
+      const editing = tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT" || (target as HTMLElement | null)?.isContentEditable;
+      if (editing) {
+        return;
+      }
+      if (event.key === "?" || event.key === "F1") {
+        event.preventDefault();
+        setHelpOpen(true);
+      } else if (event.key === "n" || event.key === "N") {
+        if (authenticated) {
+          event.preventDefault();
+          window.dispatchEvent(new Event("dw:create-world"));
+        }
+      }
+    }
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [authenticated]);
+
   return (
-    <div className={`app-shell dw-shell${authenticated ? " dw-auth" : ""}`}>
-      {authenticated ? <aside className="dw-rail" aria-label={t("nav.primary")}><Link to="/" className="dw-rail-logo" aria-label={t("app.name")}>✧</Link><nav className="dw-rail-nav"><NavLink end to="/" className={({isActive})=>isActive?"dw-rail-link active":"dw-rail-link"}>◉<small>{t("nav.world")}</small></NavLink><NavLink to="/friends" className={({isActive})=>isActive?"dw-rail-link active":"dw-rail-link"}>◎<small>{t("nav.friends")}</small></NavLink><NavLink to="/explore" className={({isActive})=>isActive?"dw-rail-link active":"dw-rail-link"}>✦<small>{t("nav.explore")}</small></NavLink></nav><Link to="/self" className="dw-rail-avatar" aria-label={t("nav.self")}>☺</Link></aside> : null}<a className="skip-link" href="#main-content">
-        {t("a11y.skip")}
-      </a>
-      <header className="site-header">
-        <Link className="brand" to="/" aria-label={t("app.name")}>
-          <span className="brand-mark" aria-hidden="true">
-            DW
-          </span>
-          <span className="brand-text">
-            <strong>{t("app.name")}</strong>
-            <small>{t("app.tagline")}</small>
-          </span>
-        </Link>
-        <details className="dw-utilities"><summary>{lang === "zh" ? "更多" : "More"}</summary><nav className="main-nav dw-secondary-nav" aria-label={lang === "zh" ? "其他功能" : "Additional tools"}>
-          
-          {authenticated ? (
-            <>
-              
-              
-              <NavLink to="/objects" className={navClass}>
-                {t("nav.objects")}
-              </NavLink>
-              <NavLink to="/ai" className={navClass}>
-                {t("nav.ai")}
-              </NavLink>
-              <NavLink to="/self" className={navClass}>
-                {t("nav.self")}
-              </NavLink>
-              <NavLink to="/settings" className={navClass}>
-                {t("nav.settings")}
-              </NavLink>
-            </>
-          ) : null}
-        </nav></details>
-        <div className="header-actions">
-          {authenticated ? <Link className="button button-ghost button-compact dw-ai-setup" to="/settings#ai-connection">{lang === "zh" ? "设置 AI" : "AI setup"} ⚙</Link> : null}<ModeBadge mode={mode} />
-          <LanguageToggle />
-          {authenticated && user ? (
-            <>
-              <span className="signed-in-name" title={user.display_name}>
-                {user.display_name}
-              </span>
-              <button className="button button-ghost button-compact" type="button" onClick={() => void logout()}>
-                {t("auth.signOut")}
-              </button>
-              {logoutError ? (
-                <span className="form-error header-error" role="alert">
-                  {t("auth.logoutFailed")}
-                </span>
-              ) : null}
-            </>
-          ) : status === "error" ? null : (
-            <>
-              <Link className="button button-ghost button-compact" to="/login">
-                {t("nav.login")}
+    <div className={`dw-app${authenticated ? " dw-app-authenticated" : ""}`}>
+      {authenticated ? (
+        <aside className="dw-rail" aria-label={t("nav.primary")}>
+          <Link to="/" className="dw-rail-logo" aria-label={t("app.name")}>
+            <Icon name="spark" size={21} />
+          </Link>
+          <nav className="dw-rail-nav" aria-label={t("nav.primary")}>
+            <NavLink end to="/" className={navClass} aria-label={zh ? "我的世界" : "My world"}>
+              <Icon name="world" size={21} />
+              <span>{zh ? "我的世界" : "World"}</span>
+            </NavLink>
+            <NavLink to="/friends" className={navClass} aria-label={zh ? "一起创造" : "Together"}>
+              <Icon name="together" size={21} />
+              <span>{zh ? "一起创造" : "Together"}</span>
+            </NavLink>
+            <NavLink to="/explore" className={navClass} aria-label={zh ? "探索世界" : "Explore"}>
+              <Icon name="explore" size={21} />
+              <span>{zh ? "探索世界" : "Explore"}</span>
+            </NavLink>
+          </nav>
+          <div className="dw-rail-bottom">
+            <button
+              className="dw-round-button"
+              type="button"
+              onClick={() => setHelpOpen(true)}
+              aria-label={zh ? "体验指南" : "Guide"}
+              title={zh ? "体验指南" : "Guide"}
+            >
+              <Icon name="help" size={18} />
+            </button>
+            {user ? (
+              <Link to="/self" className="dw-rail-avatar" aria-label={zh ? "你的个人空间" : "Your profile"}>
+                {user.display_name.slice(0, 1).toUpperCase()}
               </Link>
-              <Link className="button button-compact" to="/register">
-                {t("nav.register")}
-              </Link>
-            </>
-          )}
-        </div>
-      </header>
-      {mode === "fixture" ? <FixtureBanner /> : null}
-      {metaStatus === "error" ? <p className="fixture-banner">{t("mode.unavailableBanner")}</p> : null}
-      <main className="site-main" id="main-content">
-        {status === "error" ? (
-          <div className="page">
-            <ErrorNotice error={authError} onRetry={() => void refresh()} />
+            ) : null}
           </div>
-        ) : (
-          <Outlet />
-        )}
-      </main>
-      <footer className="site-footer">
-        <div className="footer-line">
-          <span>{t("footer.status")}</span>
+        </aside>
+      ) : null}
+
+      <div className="dw-shell-frame">
+        <a className="skip-link" href="#main-content">
+          {t("a11y.skip")}
+        </a>
+        <header className="dw-top">
+          <div className="dw-brand-line">
+            <Link className="dw-brand" to="/" aria-label={t("app.name")}>
+              derive world<span>.</span>
+            </Link>
+            <span className="dw-brand-divider" aria-hidden="true" />
+            <span className="dw-prototype-status">
+              <span className="dw-status-dot" aria-hidden="true" />
+              {zh ? "living experience / 02" : "living experience / 02"}
+            </span>
+          </div>
+          <div className="dw-top-actions">
+            {authenticated ? (
+              <button
+                className="dw-top-button dw-ai-entry"
+                type="button"
+                onClick={() => setAIOpen(true)}
+                aria-label={zh ? "设置 AI 模型" : "AI settings"}
+              >
+                <Icon name="gear" size={16} />
+                <span>{zh ? "设置 AI" : "AI setup"}</span>
+              </button>
+            ) : null}
+            <button className="dw-top-button" type="button" onClick={() => setHelpOpen(true)}>
+              <Icon name="help" size={16} />
+              <span>{zh ? "如何体验" : "How it works"}</span>
+            </button>
+            <span className="dw-mode-wrap" title={mode === "fixture" ? (zh ? "Fixture 模式：AI 输出为确定性演示，不是真实模型" : "Fixture mode: AI output is deterministic demo output, not a real model") : (zh ? "真实模型模式" : "Real model mode")}>
+              <ModeBadge mode={mode} />
+            </span>
+            <LanguageToggle />
+            {authenticated && user ? (
+              <details className="dw-profile" ref={profileRef}>
+                <summary aria-label={zh ? "账户菜单" : "Account menu"}>
+                  <span className="dw-profile-avatar">{user.display_name.slice(0, 1).toUpperCase()}</span>
+                  <span className="dw-profile-name">{user.display_name}</span>
+                </summary>
+                <div className="dw-profile-popover">
+                  <div className="dw-profile-id">
+                    <strong>{user.display_name}</strong>
+                    <small>@{user.handle}</small>
+                  </div>
+                  <Link to="/self">
+                    <Icon name="user" size={15} />
+                    {t("nav.self")}
+                  </Link>
+                  <Link to="/objects">
+                    <Icon name="layers" size={15} />
+                    {t("nav.objects")}
+                  </Link>
+                  <Link to="/settings">
+                    <Icon name="gear" size={15} />
+                    {t("nav.settings")}
+                  </Link>
+                  <button type="button" onClick={() => setAIOpen(true)}>
+                    <Icon name="spark" size={15} />
+                    {zh ? "设置 AI" : "AI setup"}
+                  </button>
+                  <button type="button" onClick={() => void logout()}>
+                    <Icon name="logout" size={15} />
+                    {t("auth.signOut")}
+                  </button>
+                  {logoutError ? (
+                    <span className="dw-form-error" role="alert">
+                      {t("auth.logoutFailed")}
+                    </span>
+                  ) : null}
+                </div>
+              </details>
+            ) : status === "error" ? null : (
+              <>
+                <Link className="dw-top-button" to="/login">
+                  {t("nav.login")}
+                </Link>
+                <Link className="dw-top-button dw-top-button-primary" to="/register">
+                  {t("nav.register")}
+                </Link>
+              </>
+            )}
+          </div>
+        </header>
+
+        <main className="dw-main" id="main-content">
+          {status === "error" ? (
+            <div className="dw-page">
+              <ErrorNotice error={authError} onRetry={() => void refresh()} />
+            </div>
+          ) : (
+            <Outlet />
+          )}
+        </main>
+
+        <footer className="dw-footer">
+          <span>
+            {t("footer.status")}
+            {metaStatus === "error" ? ` · ${t("mode.unavailableBanner")}` : ""}
+          </span>
+          <span className="dw-footer-mode">
+            {mode === "fixture"
+              ? zh
+                ? "FIXTURE 模式 · AI 输出为确定性演示，不是真实模型"
+                : "FIXTURE MODE · AI output is deterministic demo output, not a real model"
+              : zh
+                ? "REAL 模式 · 服务器已配置真实模型"
+                : "REAL MODE · a real model is configured on the server"}
+          </span>
           <span>{t("footer.license")}</span>
-        </div>
-        <span className="footer-release">{t("footer.release")}</span>
-      </footer>
+        </footer>
+      </div>
+
+      <AISettingsDialog open={aiOpen} onClose={() => setAIOpen(false)} />
+      <HelpDialog open={helpOpen} onClose={() => setHelpOpen(false)} />
     </div>
   );
 }

@@ -4,7 +4,9 @@ package app
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
+	"math"
 	"net/http"
 	"strconv"
 	"time"
@@ -39,6 +41,66 @@ func (a *App) worldStage(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	httpx.WriteJSON(w, http.StatusOK, stage)
+}
+
+// worldLayout returns the caller's private spatial positions. Another user's
+// layout is never visible and layouts never affect object state.
+func (a *App) worldLayout(w http.ResponseWriter, r *http.Request) {
+	if a.worldServiceUnavailable(w, r) {
+		return
+	}
+	principal := principalFrom(r.Context())
+	layout, err := a.world.Layout(r.Context(), principal.User.ID)
+	if err != nil {
+		a.writeDomainError(w, r, err)
+		return
+	}
+	httpx.WriteJSON(w, http.StatusOK, layout)
+}
+
+// saveWorldLayout upserts one node position. The object must remain visible to
+// the caller; the position is view state only.
+func (a *App) saveWorldLayout(w http.ResponseWriter, r *http.Request) {
+	if a.worldServiceUnavailable(w, r) {
+		return
+	}
+	principal := principalFrom(r.Context())
+	if !a.checkCSRF(w, r, principal) {
+		return
+	}
+	if a.rejectActorOverrideInBody(w, r) {
+		return
+	}
+	var input struct {
+		ObjectID string  `json:"object_id"`
+		X        float64 `json:"x"`
+		Y        float64 `json:"y"`
+	}
+	if err := httpx.DecodeJSON(w, r, &input, a.config.MaxRequestBytes); err != nil {
+		a.writeDomainError(w, r, err)
+		return
+	}
+	objectID, err := uuid.Parse(input.ObjectID)
+	if err != nil {
+		httpx.WriteError(w, r, httpx.NewError(httpx.CodeInvalidRequest, "object_id is invalid"))
+		return
+	}
+	if math.IsNaN(input.X) || math.IsNaN(input.Y) ||
+		math.IsInf(input.X, 0) || math.IsInf(input.Y, 0) ||
+		input.X < -10000 || input.X > 10000 || input.Y < -10000 || input.Y > 10000 {
+		httpx.WriteError(w, r, httpx.NewError(httpx.CodeInvalidRequest, "position is out of bounds"))
+		return
+	}
+	item, err := a.world.SaveLayout(r.Context(), principal.User.ID, objectID, input.X, input.Y)
+	if errors.Is(err, world.ErrLayoutObjectNotFound) {
+		httpx.WriteError(w, r, httpx.NewError(httpx.CodeNotFound, "not found"))
+		return
+	}
+	if err != nil {
+		a.writeDomainError(w, r, err)
+		return
+	}
+	httpx.WriteJSON(w, http.StatusOK, item)
 }
 
 // pulse merges real object changes with real social and publication signals.

@@ -57,12 +57,13 @@ test("Living world: one person creates a scene, inspects the lens, publishes, an
 
     await page.goto("/explore");
     await expect(page.getByTestId("explore-page")).toBeVisible();
-    await expect(page.locator(".dw-featured-world")).toContainText(sceneTitle);
-    await expect(page.getByRole("heading", { name: sceneTitle })).toBeVisible();
-    await page.getByRole("link", { name: new RegExp(sceneTitle) }).click();
-    await expect(page.getByRole("heading", { name: "Create an independent branch" })).toBeVisible();
-    await page.getByRole("button", { name: "Derive my own version" }).click();
-    await expect(page.getByRole("button", { name: "Create my branch" })).toBeVisible();
+    const publicLink = page.getByRole("link", { name: new RegExp(sceneTitle) }).first();
+    await expect(publicLink).toBeVisible();
+    await publicLink.click();
+    await expect(page.getByTestId("explore-detail")).toContainText(sceneTitle);
+    await expect(page.getByTestId("explore-detail").getByRole("heading", { name: sceneTitle, level: 2 })).toBeVisible();
+    await page.getByRole("button", { name: "Create my branch" }).click();
+    await expect(page.getByRole("dialog")).toContainText("Create my branch");
 
     await page.goto("/");
     await page.screenshot({ path: testInfo.outputPath("living-world-stage.png"), fullPage: true });
@@ -84,24 +85,26 @@ test("Living world: two people become friends and exchange direct messages", asy
 
     await first.page.goto("/friends");
     await expect(first.page.getByTestId("friends-page")).toBeVisible();
-    await first.page.getByRole("button", { name: "Find a friend" }).click();
-    await first.page.getByPlaceholder("Friend's handle").fill(bob.handle);
-    await first.page.getByRole("button", { name: "Send request" }).click();
-    await expect(first.page.getByText("Friend request sent.")).toBeVisible();
+    await first.page.locator(".dw-head-actions").getByRole("button", { name: "Find a friend" }).click();
+    await first.page.locator("#dw-friend-search").fill(bob.handle);
+    await expect(first.page.locator("#dw-friend-search")).toHaveValue(bob.handle);
+    await expect(first.page.getByRole("button", { name: "+ Add friend" })).toBeVisible({ timeout: 15_000 });
+    await first.page.getByRole("button", { name: "+ Add friend" }).click();
+    await expect(first.page.getByText("Friend request sent. Waiting for them to accept.")).toBeVisible();
 
     await second.page.goto("/friends");
-    await expect(second.page.getByRole("button", { name: "Accept" })).toBeVisible();
-    await second.page.getByRole("button", { name: "Accept" }).click();
-    await expect(second.page.getByText(alice.displayName)).toBeVisible();
+    await expect(second.page.locator(".dw-incoming-requests")).toContainText(alice.displayName);
+    await second.page.locator(".dw-incoming-requests").getByRole("button", { name: "Accept" }).click();
+    await expect(second.page.getByRole("button", { name: new RegExp(alice.displayName) }).first()).toBeVisible();
 
     await first.page.reload();
-    await first.page.getByRole("button", { name: new RegExp(bob.displayName) }).click();
-    await first.page.getByPlaceholder("Write a message").fill("Want to build this together?");
+    await first.page.getByRole("button", { name: new RegExp(bob.displayName) }).first().click();
+    await first.page.getByLabel("Message to friend").fill("Want to build this together?");
     await first.page.getByRole("button", { name: "Send", exact: true }).click();
     await expect(first.page.getByText("Want to build this together?")).toBeVisible();
 
     await second.page.reload();
-    await second.page.getByRole("button", { name: new RegExp(alice.displayName) }).click();
+    await second.page.getByRole("button", { name: new RegExp(alice.displayName) }).first().click();
     await expect(second.page.getByText("Want to build this together?")).toBeVisible();
     await second.page.screenshot({ path: testInfo.outputPath("living-world-friends.png"), fullPage: true });
   } finally {

@@ -122,9 +122,10 @@ scope.
 
 ## Data limits
 
-- The published `v0.1.0` has a 22-table schema. This development branch adds a
-  version-6 migration with social, publication, scene, report, and public
-  derivation tables (30 tables total). Earlier migrations are not rewritten.
+- The published `v0.1.0` has a 22-table schema. This development branch adds
+  version-6 social/publication/scene tables and version-7 privacy-aware account
+  discovery plus user-private World Stage layout state (31 tables total).
+  Earlier migrations are not rewritten.
 - Object state is capped at 64 KiB; `shared_context` at 8 KiB.
 - AI proposal input storage is capped at 64 KiB.
   Proposal creation and apply have distinct limits: apply obeys the 64 KiB

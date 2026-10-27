@@ -1,31 +1,45 @@
 // SPDX-License-Identifier: Apache-2.0
 
-// Package world builds read-only projections for the World Stage and Living
-// Pulse. It owns no state and never writes objects, events, or permissions.
+// Package world builds projections for the World Stage and Living Pulse. The
+// stage and pulse are read-only. User layout preferences are the only state
+// this package writes; they are keyed by (user, object) and never alter object
+// state, versions, ownership, membership, permissions, or derivation lineage.
 package world
 
 import (
 	"context"
+	"errors"
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
+// ErrLayoutObjectNotFound hides an object that the caller cannot see.
+var ErrLayoutObjectNotFound = errors.New("layout object not found")
+
 // StageObject is one visible object on the stage.
 type StageObject struct {
-	ID                   string      `json:"id"`
-	ObjectType           string      `json:"object_type"`
-	PresentationTemplate string      `json:"presentation_template"`
-	Title                string      `json:"title"`
-	Version              int         `json:"version"`
-	OwnerID              string      `json:"owner_id"`
-	Permissions          []string    `json:"permissions"`
-	Role                 string      `json:"role"`
-	UpdatedAt            time.Time   `json:"updated_at"`
-	MemberCount          int         `json:"member_count"`
-	BranchCount          int         `json:"branch_count"`
-	LatestEvent          *StageEvent `json:"latest_event"`
+	ID                   string `json:"id"`
+	ObjectType           string `json:"object_type"`
+	PresentationTemplate string `json:"presentation_template"`
+	Title                string `json:"title"`
+	// Note, Purpose, DoneCount, and TotalCount are the minimal visible
+	// projection needed to render a world node without exposing the whole
+	// object state or issuing N object requests.
+	Note        string      `json:"note"`
+	Purpose     string      `json:"purpose,omitempty"`
+	DoneCount   int         `json:"done_count"`
+	TotalCount  int         `json:"total_count"`
+	Version     int         `json:"version"`
+	OwnerID     string      `json:"owner_id"`
+	Permissions []string    `json:"permissions"`
+	Role        string      `json:"role"`
+	UpdatedAt   time.Time   `json:"updated_at"`
+	MemberCount int         `json:"member_count"`
+	BranchCount int         `json:"branch_count"`
+	LatestEvent *StageEvent `json:"latest_event"`
 }
 
 // StageEvent is a safe latest-event projection.
@@ -78,6 +92,23 @@ func NewService(db *pgxpool.Pool) *Service {
 func (s *Service) Stage(ctx context.Context, userID uuid.UUID) (*Stage, error) {
 	rows, err := s.db.Query(ctx, `
 SELECT o.id, o.object_type, o.presentation_template, COALESCE(o.state->>'title',''),
+       COALESCE(NULLIF(o.state->>'premise',''), NULLIF(o.state->>'summary',''),
+                NULLIF(o.state->>'prompt',''), '') AS note,
+       COALESCE(o.state->>'purpose','') AS purpose,
+       (SELECT count(*)
+          FROM jsonb_array_elements(
+                 CASE WHEN jsonb_typeof(o.state->'elements') = 'array'
+                      THEN o.state->'elements' ELSE '[]'::jsonb END) AS element
+         WHERE element->>'status' = 'done')
+       + (SELECT count(*)
+            FROM jsonb_array_elements(
+                   CASE WHEN jsonb_typeof(o.state->'checklist') = 'array'
+                        THEN o.state->'checklist' ELSE '[]'::jsonb END) AS item
+           WHERE item->>'done' = 'true') AS done_count,
+       (CASE WHEN jsonb_typeof(o.state->'elements') = 'array'
+             THEN jsonb_array_length(o.state->'elements') ELSE 0 END)
+       + (CASE WHEN jsonb_typeof(o.state->'checklist') = 'array'
+               THEN jsonb_array_length(o.state->'checklist') ELSE 0 END) AS total_count,
        o.version, o.owner_id, m.permissions, o.updated_at,
        (SELECT count(*) FROM object_memberships mm
          WHERE mm.object_id = o.id AND mm.revoked_at IS NULL) AS member_count,
@@ -127,7 +158,8 @@ SELECT o.id, o.object_type, o.presentation_template, COALESCE(o.state->>'title',
 			actorName   *string
 		)
 		if err := rows.Scan(&id, &object.ObjectType, &object.PresentationTemplate,
-			&object.Title, &object.Version, &ownerID, &permissions, &object.UpdatedAt,
+			&object.Title, &object.Note, &object.Purpose, &object.DoneCount, &object.TotalCount,
+			&object.Version, &ownerID, &permissions, &object.UpdatedAt,
 			&object.MemberCount, &object.BranchCount, &eventType, &actorType, &eventAt,
 			&action, &actorName); err != nil {
 			return nil, err
@@ -244,6 +276,78 @@ func summarize(eventType, action string) string {
 	default:
 		return eventType
 	}
+}
+
+// LayoutItem is one user-private position on the spatial World Stage.
+type LayoutItem struct {
+	ObjectID  string    `json:"object_id"`
+	X         float64   `json:"x"`
+	Y         float64   `json:"y"`
+	UpdatedAt time.Time `json:"updated_at"`
+}
+
+// Layout is the caller's private world-view projection.
+type Layout struct {
+	Items       []LayoutItem `json:"items"`
+	GeneratedAt time.Time    `json:"generated_at"`
+}
+
+// Layout returns only positions for objects the caller can currently read.
+// Stale positions for revoked memberships are never returned.
+func (s *Service) Layout(ctx context.Context, userID uuid.UUID) (*Layout, error) {
+	rows, err := s.db.Query(ctx, `
+SELECT l.object_id, l.x, l.y, l.updated_at
+  FROM user_world_layouts l
+  JOIN living_objects o ON o.id = l.object_id AND o.status = 'active'
+  JOIN object_memberships m
+    ON m.object_id = o.id AND m.user_id = l.user_id AND m.revoked_at IS NULL
+ WHERE l.user_id = $1
+ ORDER BY l.updated_at DESC, l.object_id
+ LIMIT 500`, userID.String())
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	items := make([]LayoutItem, 0, 32)
+	for rows.Next() {
+		var item LayoutItem
+		if err := rows.Scan(&item.ObjectID, &item.X, &item.Y, &item.UpdatedAt); err != nil {
+			return nil, err
+		}
+		items = append(items, item)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return &Layout{Items: items, GeneratedAt: time.Now().UTC()}, nil
+}
+
+// SaveLayout upserts one user-private node position. The INSERT ... SELECT
+// makes visibility a precondition: a caller cannot create a layout row for an
+// object it cannot read.
+func (s *Service) SaveLayout(ctx context.Context, userID, objectID uuid.UUID,
+	x, y float64) (*LayoutItem, error) {
+	var item LayoutItem
+	err := s.db.QueryRow(ctx, `
+INSERT INTO user_world_layouts (user_id, object_id, x, y)
+SELECT $1, o.id, $3, $4
+  FROM living_objects o
+  JOIN object_memberships m
+    ON m.object_id = o.id AND m.user_id = $1 AND m.revoked_at IS NULL
+ WHERE o.id = $2 AND o.status = 'active'
+ON CONFLICT (user_id, object_id)
+DO UPDATE SET x = EXCLUDED.x, y = EXCLUDED.y, updated_at = now()
+RETURNING object_id, x, y, updated_at`,
+		userID.String(), objectID.String(), x, y).
+		Scan(&item.ObjectID, &item.X, &item.Y, &item.UpdatedAt)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return nil, ErrLayoutObjectNotFound
+	}
+	if err != nil {
+		return nil, err
+	}
+	return &item, nil
 }
 
 func roleFromPermissions(permissions []string) string {

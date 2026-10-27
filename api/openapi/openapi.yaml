@@ -1421,6 +1421,54 @@ paths:
           $ref: '#/components/responses/Unauthenticated'
         '429':
           $ref: '#/components/responses/RateLimited'
+  /api/v1/world/layout:
+    get:
+      operationId: getWorldLayout
+      summary: Read the caller's private World Stage layout
+      description: Layout is user-private view state. It never contains or changes object state, versions, ownership, membership, permissions, or derivation lineage. Positions for objects the caller can no longer read are omitted.
+      responses:
+        '200':
+          description: The caller's visible layout positions.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WorldLayout'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+    put:
+      operationId: saveWorldLayout
+      summary: Save one private node position
+      parameters:
+      - $ref: '#/components/parameters/CSRFToken'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SaveWorldLayout'
+      responses:
+        '200':
+          description: The saved position.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WorldLayoutItem'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '413':
+          $ref: '#/components/responses/PayloadTooLarge'
+        '415':
+          $ref: '#/components/responses/UnsupportedMediaType'
+        '429':
+          $ref: '#/components/responses/RateLimited'
   /api/v1/pulse:
     get:
       operationId: getLivingPulse
@@ -1617,6 +1665,81 @@ paths:
           $ref: '#/components/responses/Unauthenticated'
         '429':
           $ref: '#/components/responses/RateLimited'
+  /api/v1/social/user-search:
+    get:
+      operationId: searchUsers
+      summary: Find accounts by nickname or handle
+      description: >-
+        Authenticated, query-scoped discovery. It is not a directory: the query
+        must contain at least two characters, results are capped, blocked
+        accounts are excluded, accounts that opted out are never returned, and
+        email is never exposed.
+      parameters:
+      - name: q
+        in: query
+        required: true
+        schema:
+          type: string
+          minLength: 2
+          maxLength: 32
+      responses:
+        '200':
+          description: Up to eight matching accounts with the caller's friendship relation.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserSearchResultList'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+  /api/v1/social/discoverability:
+    get:
+      operationId: getDiscoverability
+      summary: Read the caller's account-discovery preference
+      responses:
+        '200':
+          description: Whether the caller may appear in account discovery.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Discoverability'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+    patch:
+      operationId: setDiscoverability
+      summary: Change the caller's account-discovery preference
+      parameters:
+      - $ref: '#/components/parameters/CSRFToken'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/DiscoverabilityUpdate'
+      responses:
+        '200':
+          description: The saved preference.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Discoverability'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '413':
+          $ref: '#/components/responses/PayloadTooLarge'
+        '415':
+          $ref: '#/components/responses/UnsupportedMediaType'
+        '429':
+          $ref: '#/components/responses/RateLimited'
   /api/v1/social/friend-requests:
     get:
       operationId: listFriendRequests
@@ -1775,6 +1898,13 @@ paths:
         required: false
         schema:
           type: string
+      - name: latest
+        in: query
+        required: false
+        description: When set to 1, returns the newest page in ascending seq order instead of the oldest page after cursor.
+        schema:
+          type: string
+          enum: ['1']
       responses:
         '200':
           description: The pairwise thread.
@@ -4107,6 +4237,17 @@ components:
           enum: [collaborative_v1, interactive_v1, living_scene_v1]
         title:
           type: string
+        note:
+          type: string
+          description: A short visible premise, summary, or prompt. Never the full object state.
+        purpose:
+          type: string
+        done_count:
+          type: integer
+          minimum: 0
+        total_count:
+          type: integer
+          minimum: 0
         version:
           type: integer
         owner_id:
@@ -4154,6 +4295,53 @@ components:
         generated_at:
           type: string
           format: date-time
+    WorldLayoutItem:
+      type: object
+      additionalProperties: false
+      required: [object_id, x, y, updated_at]
+      properties:
+        object_id:
+          type: string
+          format: uuid
+        x:
+          type: number
+          minimum: -10000
+          maximum: 10000
+        y:
+          type: number
+          minimum: -10000
+          maximum: 10000
+        updated_at:
+          type: string
+          format: date-time
+    WorldLayout:
+      type: object
+      additionalProperties: false
+      required: [items, generated_at]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/WorldLayoutItem'
+        generated_at:
+          type: string
+          format: date-time
+    SaveWorldLayout:
+      type: object
+      additionalProperties: false
+      required: [object_id, x, y]
+      properties:
+        object_id:
+          type: string
+          format: uuid
+        x:
+          type: number
+          minimum: -10000
+          maximum: 10000
+        y:
+          type: number
+          minimum: -10000
+          maximum: 10000
     PulseItem:
       type: object
       additionalProperties: false
@@ -4420,6 +4608,45 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/FriendRequest'
+    UserSearchResult:
+      type: object
+      additionalProperties: false
+      required: [user_id, handle, display_name, relation]
+      properties:
+        user_id:
+          type: string
+          format: uuid
+        handle:
+          type: string
+        display_name:
+          type: string
+        relation:
+          type: string
+          enum: [none, friend, incoming, outgoing]
+    UserSearchResultList:
+      type: object
+      additionalProperties: false
+      required: [items]
+      properties:
+        items:
+          type: array
+          maxItems: 8
+          items:
+            $ref: '#/components/schemas/UserSearchResult'
+    Discoverability:
+      type: object
+      additionalProperties: false
+      required: [discoverable]
+      properties:
+        discoverable:
+          type: boolean
+    DiscoverabilityUpdate:
+      type: object
+      additionalProperties: false
+      required: [discoverable]
+      properties:
+        discoverable:
+          type: boolean
     SendFriendRequest:
       type: object
       additionalProperties: false

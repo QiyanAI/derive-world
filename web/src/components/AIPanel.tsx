@@ -135,6 +135,13 @@ export default function AIPanel({ object, canContribute, onChanged }: Props) {
       const result = await sendAIMessage(activeConversation, content);
       setMessages((previous) => [...previous, result.user_message, result.assistant_message]);
       setDraft("");
+      const trace = { mode: result.model_mode, at: new Date().toISOString() };
+      try {
+        window.sessionStorage.setItem("dw:last-ai-inference", JSON.stringify(trace));
+      } catch {
+        // Session storage is optional; the event still updates an open dialog.
+      }
+      window.dispatchEvent(new CustomEvent("dw:ai-inference", { detail: trace }));
       if (result.context_stale) {
         setNotice(t("workspace.aiStale"));
       } else if (result.parse_status === "structured" && result.proposed_actions.length === 0) {

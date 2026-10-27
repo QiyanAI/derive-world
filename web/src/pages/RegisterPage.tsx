@@ -18,7 +18,7 @@ export default function RegisterPage() {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const next = safeNext(searchParams.get("next"));
-  const destination = next || "/welcome";
+  const destination = next || "/";
   const [email, setEmail] = useState("");
   const [handle, setHandle] = useState("");
   const [displayName, setDisplayName] = useState("");

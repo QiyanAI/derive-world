@@ -68,16 +68,20 @@ const (
 	ActionSocialUnblock        Action = "social.unblock"
 	ActionSocialMessageSend    Action = "social.message_send"
 	ActionSocialDiscussionPost Action = "social.discussion_post"
-	ActionPublicationCreate    Action = "publication.create"
-	ActionPublicationActivate  Action = "publication.activate"
-	ActionPublicationRevoke    Action = "publication.revoke"
-	ActionPublicationConsent   Action = "publication.consent"
-	ActionPublicationDerive    Action = "publication.derive"
-	ActionPublicationReport    Action = "publication.report"
+	// ActionSocialDiscoverabilityUpdate is registered by migration 00007. It
+	// records a deliberate account-discovery privacy change.
+	ActionSocialDiscoverabilityUpdate Action = "social.discoverability_update"
+	ActionPublicationCreate           Action = "publication.create"
+	ActionPublicationActivate         Action = "publication.activate"
+	ActionPublicationRevoke           Action = "publication.revoke"
+	ActionPublicationConsent          Action = "publication.consent"
+	ActionPublicationDerive           Action = "publication.derive"
+	ActionPublicationReport           Action = "publication.report"
 )
 
 // AllActions is the normative G00 49-action set plus the living-world additions
-// registered by migration 00006.
+// registered by migration 00006 and the discovery-privacy action registered by
+// migration 00007.
 func AllActions() []Action {
 	return []Action{
 		ActionAuthRegister, ActionAuthLogin, ActionAuthLoginFailed, ActionAuthLogout,
@@ -99,6 +103,7 @@ func AllActions() []Action {
 		ActionSocialFriendRequest, ActionSocialFriendAccept, ActionSocialFriendDecline,
 		ActionSocialFriendRemove, ActionSocialBlock, ActionSocialUnblock,
 		ActionSocialMessageSend, ActionSocialDiscussionPost,
+		ActionSocialDiscoverabilityUpdate,
 		ActionPublicationCreate, ActionPublicationActivate, ActionPublicationRevoke,
 		ActionPublicationConsent, ActionPublicationDerive, ActionPublicationReport,
 	}

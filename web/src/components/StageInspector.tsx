@@ -12,7 +12,8 @@ import { useI18n } from "../i18n";
 import AIPanel from "./AIPanel";
 import LensPanel from "./LensPanel";
 import ObjectWorkTab from "./ObjectWorkTab";
-import SceneWorkTab from "./SceneWorkTab";
+import WorldWorkPanel from "./v2/WorldWorkPanel";
+import Icon from "./v2/Icon";
 
 export type StageInspectorTab = "work" | "branch" | "lens" | "ai";
 
@@ -256,6 +257,7 @@ export default function StageInspector({
   tab,
   loading,
   error,
+  sourceTitle = "",
   onTab,
   onClose,
   onUpdated,
@@ -267,6 +269,7 @@ export default function StageInspector({
   tab: StageInspectorTab;
   loading: boolean;
   error: unknown;
+  sourceTitle?: string;
   onTab: (tab: StageInspectorTab) => void;
   onClose: () => void;
   onUpdated: (updated: ObjectView) => Promise<void> | void;
@@ -291,9 +294,11 @@ export default function StageInspector({
     { id: "ai", label: t("stage.tab.ai") }
   ];
 
+  const livingScene = object?.object_type === "living_scene";
+
   return (
     <section
-      className="card stage-inspector"
+      className={`card stage-inspector dw-inspector${livingScene ? " dw-inspector-world" : ""}`}
       aria-label={t("stage.inspectorLabel")}
       data-testid="stage-inspector"
       onKeyDown={(event) => {
@@ -303,25 +308,38 @@ export default function StageInspector({
         }
       }}
     >
-      <div className="stage-inspector-head">
-        <div>
-          <p className="eyebrow">{t("stage.inspectorEyebrow")}</p>
-          <h2 ref={headingRef} tabIndex={-1}>
-            {object ? objectTitle(object) || t("common.untitled") : t("stage.inspectorTitle")}
+      {livingScene ? (
+        <>
+          <button className="dw-inspector-close" type="button" onClick={onClose} aria-label={t("common.close")}>
+            <Icon name="close" size={17} />
+          </button>
+          <h2 ref={headingRef} tabIndex={-1} className="dw-visually-hidden">
+            {objectTitle(object ?? null) || t("common.untitled")}
           </h2>
-        </div>
-        <button className="text-button" type="button" onClick={onClose}>
-          {t("common.close")}
-        </button>
-      </div>
+        </>
+      ) : (
+        <>
+          <div className="stage-inspector-head">
+            <div>
+              <p className="eyebrow">{t("stage.inspectorEyebrow")}</p>
+              <h2 ref={headingRef} tabIndex={-1}>
+                {object ? objectTitle(object) || t("common.untitled") : t("stage.inspectorTitle")}
+              </h2>
+            </div>
+            <button className="text-button" type="button" onClick={onClose}>
+              {t("common.close")}
+            </button>
+          </div>
 
-      {object ? (
-        <p className="muted stage-inspector-meta">
-          {t(`object.create.${object.object_type === "living_scene" ? "scene" : object.object_type}` as never)}
-          {" · "}
-          {t("object.version")} v{object.version}
-        </p>
-      ) : null}
+          {object ? (
+            <p className="muted stage-inspector-meta">
+              {t(`object.create.${object.object_type === "living_scene" ? "scene" : object.object_type}` as never)}
+              {" · "}
+              {t("object.version")} v{object.version}
+            </p>
+          ) : null}
+        </>
+      )}
 
       {loading ? <p className="muted">{t("common.loading")}</p> : null}
       {error ? <ErrorNotice error={error} compact onRetry={() => void onReload()} /> : null}
@@ -329,7 +347,7 @@ export default function StageInspector({
       {object ? (
         <>
           <div
-            className="stage-inspector-tabs"
+            className="stage-inspector-tabs dw-inspector-tabs"
             role="tablist"
             aria-label={t("stage.inspectorLabel")}
             onKeyDown={(event) => {
@@ -382,12 +400,14 @@ export default function StageInspector({
           >
             {tab === "work" ? (
               object.object_type === "living_scene" ? (
-                <SceneWorkTab
+                <WorldWorkPanel
                   object={object}
                   canContribute={canContribute}
-                  canManage={canManage}
+                  sourceTitle={sourceTitle}
                   onUpdated={onUpdated}
                   onReload={onReload}
+                  onBranch={() => onTab("branch")}
+                  onAI={() => onTab("ai")}
                 />
               ) : (
                 <ObjectWorkTab

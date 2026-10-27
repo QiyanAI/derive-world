@@ -38,7 +38,8 @@ export async function register(page: Page, actor: Actor): Promise<void> {
   await page.goto("/register");
   await fillRegistration(page, actor);
   await page.getByRole("button", { name: "Create account" }).click();
-  await expect(page).toHaveURL(/\/welcome/);
+  await expect(page).not.toHaveURL(/\/register/);
+  await expect(page.getByTestId("world-onboarding")).toBeVisible();
 }
 
 export async function registerFromInvite(page: Page, actor: Actor): Promise<void> {

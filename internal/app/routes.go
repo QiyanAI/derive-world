@@ -78,6 +78,8 @@ func (a *App) registerBusinessRoutes(mux *http.ServeMux) {
 
 		// living-world World Stage, Living Pulse, Derive Lens, and diagnostics.
 		{method: http.MethodGet, pattern: "/api/v1/world/stage", auth: true, handler: a.worldStage},
+		{method: http.MethodGet, pattern: "/api/v1/world/layout", auth: true, handler: a.worldLayout},
+		{method: http.MethodPut, pattern: "/api/v1/world/layout", auth: true, handler: a.saveWorldLayout},
 		{method: http.MethodGet, pattern: "/api/v1/pulse", auth: true, handler: a.pulse},
 		{method: http.MethodGet, pattern: "/api/v1/system/status", auth: true, handler: a.systemStatus},
 		{method: http.MethodGet, pattern: "/api/v1/system/model-check", auth: true, handler: a.modelCheck},
@@ -88,6 +90,9 @@ func (a *App) registerBusinessRoutes(mux *http.ServeMux) {
 		{method: http.MethodPost, pattern: "/api/v1/objects/{id}/discussions", auth: true, handler: a.postDiscussion},
 
 		// living-world Social: friendships, blocks, direct human messages.
+		{method: http.MethodGet, pattern: "/api/v1/social/user-search", auth: true, handler: a.searchUsers},
+		{method: http.MethodGet, pattern: "/api/v1/social/discoverability", auth: true, handler: a.getDiscoverability},
+		{method: http.MethodPatch, pattern: "/api/v1/social/discoverability", auth: true, handler: a.setDiscoverability},
 		{method: http.MethodGet, pattern: "/api/v1/social/friends", auth: true, handler: a.listFriends},
 		{method: http.MethodGet, pattern: "/api/v1/social/friend-requests", auth: true, handler: a.listFriendRequests},
 		{method: http.MethodPost, pattern: "/api/v1/social/friend-requests", auth: true, handler: a.sendFriendRequest},

@@ -415,7 +415,7 @@ SELECT status FROM publications WHERE id = $1 FOR UPDATE`,
 	}
 	if _, err := tx.Exec(ctx, `
 UPDATE publication_consents
-   SET status = $2, responded_at = now()
+   SET status = $2, responded_at = GREATEST(clock_timestamp(), created_at)
  WHERE id = $1`, consentID.String(), newStatus); err != nil {
 		return nil, err
 	}

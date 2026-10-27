@@ -8,6 +8,7 @@ import "./styles/g02.css";
 import "./styles/g03.css";
 import "./styles/g05.css";
 import "./styles/living-world.css";
+import "./styles/v2.css";
 
 const rootElement = document.getElementById("root");
 if (!rootElement) {

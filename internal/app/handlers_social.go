@@ -65,6 +65,86 @@ func (a *App) listFriendRequests(w http.ResponseWriter, r *http.Request) {
 	}{Items: items})
 }
 
+// searchUsers is query-scoped, authenticated account discovery. It is not a
+// directory endpoint: an empty query is rejected and results are capped.
+func (a *App) searchUsers(w http.ResponseWriter, r *http.Request) {
+	if a.socialServiceUnavailable(w, r) {
+		return
+	}
+	principal := principalFrom(r.Context())
+	if !a.allowUserLimit(w, r, principal.User.ID, a.userSearchLimiter, 60,
+		"user_search_rate_limited", "too many account searches") {
+		return
+	}
+	items, err := a.social.SearchUsers(r.Context(), principal.User.ID, r.URL.Query().Get("q"))
+	if err != nil {
+		a.writeDomainError(w, r, err)
+		return
+	}
+	httpx.WriteJSON(w, http.StatusOK, struct {
+		Items []social.UserSearchResult `json:"items"`
+	}{Items: items})
+}
+
+func (a *App) getDiscoverability(w http.ResponseWriter, r *http.Request) {
+	if a.identity == nil {
+		httpx.WriteError(w, r, httpx.NewError(httpx.CodeInternal, "service unavailable"))
+		return
+	}
+	principal := principalFrom(r.Context())
+	discoverable, err := a.identity.Discoverability(r.Context(), principal.User.ID)
+	if err != nil {
+		a.writeDomainError(w, r, err)
+		return
+	}
+	httpx.WriteJSON(w, http.StatusOK, struct {
+		Discoverable bool `json:"discoverable"`
+	}{Discoverable: discoverable})
+}
+
+func (a *App) setDiscoverability(w http.ResponseWriter, r *http.Request) {
+	if a.identity == nil {
+		httpx.WriteError(w, r, httpx.NewError(httpx.CodeInternal, "service unavailable"))
+		return
+	}
+	principal := principalFrom(r.Context())
+	if !a.checkCSRF(w, r, principal) {
+		return
+	}
+	if a.rejectActorOverrideInBody(w, r) {
+		return
+	}
+	body, err := a.readRequestBody(w, r)
+	if err != nil {
+		a.writeDomainError(w, r, err)
+		return
+	}
+	if field := detectActorOverride(r, body); field != "" {
+		a.rejectActorOverride(w, r, &principal.User.ID, field)
+		return
+	}
+	var input struct {
+		Discoverable *bool `json:"discoverable"`
+	}
+	if err := httpx.DecodeJSON(w, r, &input, a.config.MaxRequestBytes); err != nil {
+		a.writeDomainError(w, r, err)
+		return
+	}
+	if input.Discoverable == nil {
+		httpx.WriteError(w, r, httpx.NewError(httpx.CodeInvalidRequest, "discoverable is required"))
+		return
+	}
+	if err := a.identity.SetDiscoverability(r.Context(), principal.User.ID,
+		*input.Discoverable, httpx.RequestIDFromContext(r.Context()),
+		httpx.HashIPBytes(a.config.IPHashPepper, httpx.ClientIP(r, a.config.TrustProxyHeaders))); err != nil {
+		a.writeDomainError(w, r, err)
+		return
+	}
+	httpx.WriteJSON(w, http.StatusOK, struct {
+		Discoverable bool `json:"discoverable"`
+	}{Discoverable: *input.Discoverable})
+}
+
 func (a *App) sendFriendRequest(w http.ResponseWriter, r *http.Request) {
 	if a.socialServiceUnavailable(w, r) {
 		return
@@ -272,6 +352,18 @@ func (a *App) listMessages(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	principal := principalFrom(r.Context())
+	if r.URL.Query().Get("latest") == "1" {
+		items, err := a.social.ListRecentMessages(r.Context(), principal.User.ID, withID, limit)
+		if err != nil {
+			a.writeDomainError(w, r, err)
+			return
+		}
+		httpx.WriteJSON(w, http.StatusOK, struct {
+			Items      []social.Message `json:"items"`
+			NextCursor *string          `json:"next_cursor"`
+		}{Items: items, NextCursor: nil})
+		return
+	}
 	items, next, err := a.social.ListMessages(r.Context(), principal.User.ID, withID, cursor, limit)
 	if err != nil {
 		a.writeDomainError(w, r, err)
