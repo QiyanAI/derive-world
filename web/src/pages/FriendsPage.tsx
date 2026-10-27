@@ -153,7 +153,7 @@ export default function FriendsPage() {
       return;
     }
     await act("request", async () => {
-      await sendFriendRequest(handleDraft.trim());
+      await sendFriendRequest(handleDraft.trim().replace(/^@/, ""));
       setHandleDraft("");
       setNotice(t("friends.requestSent"));
     });
