@@ -1137,3 +1137,9 @@
 .dw-friend-discovery .friend-row{gap:10px;align-items:center;display:flex;flex-wrap:wrap}
 .dw-friend-discovery .friend-row>span:nth-child(2){flex:1;min-width:120px;display:flex;flex-direction:column}
 @media(max-width:720px){.dw-together-live-scene{min-height:300px}.dw-together-live-map{padding:12px}.dw-together-live-scene:before{width:90%}}
+
+.dw-invite-friend{border:1px solid rgba(146,188,230,.3);background:rgba(48,61,95,.22);border-radius:18px;margin:16px 0;padding:16px}
+.dw-invite-friend h3{font-size:15px;margin:0 0 8px}
+.dw-invite-friend .inline-field{align-items:center;flex-wrap:wrap}
+.dw-invite-friend select{min-width:min(100%,220px);flex:1;max-width:100%}
+@media(max-width:520px){.dw-invite-friend .inline-field{display:flex;flex-direction:column;align-items:stretch}}
