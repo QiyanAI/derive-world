@@ -243,7 +243,7 @@ export default function WorldStagePage() {
         .map((child) => visit(child, depth + 1))
         .filter((position): position is { x: number; y: number; depth: number } => position !== null);
       const x = childPositions.length
-        ? (childPositions[0].x + childPositions[childPositions.length - 1].x) / 2
+        ? ((childPositions[0]?.x ?? 200) + (childPositions[childPositions.length - 1]?.x ?? 200)) / 2
         : 200 + nextLeaf++ * 290;
       const result = { x, y: 178 + depth * 278, depth };
       placed.set(object.id, result);
