@@ -217,6 +217,32 @@ export default function InvitationsPanel({ objectID, canInvite, canManage }: Pro
           {t("workspace.createInvite")}
         </button>
       </div>
+      {canInvite && acceptedFriends.length > 0 ? (
+        <div className="dw-invite-friend">
+          <h3>{lang === "zh" ? "邀请已添加的好友" : "Invite a friend to create together"}</h3>
+          <p className="form-hint">{lang === "zh" ?
+            "选择已同意的好友。一次性邀请通过私信发送，对方接受后才能访问。" :
+            "Only accepted friends can be invited. A one-use private invitation requires acceptance."}</p>
+          <div className="inline-field">
+            <select aria-label={lang === "zh" ? "选择好友" : "Choose friend"}
+              value={inviteFriendID} onChange={(event) => setInviteFriendID(event.target.value)}>
+              <option value="">{lang === "zh" ? "选择好友" : "Choose a friend"}</option>
+              {acceptedFriends.map((friend) => (
+                <option key={friend.user_id} value={friend.user_id}>
+                  {friend.display_name} (@{friend.handle})
+                </option>
+              ))}
+            </select>
+            <button type="button" className="button button-small"
+              data-testid="invite-accepted-friend"
+              disabled={!inviteFriendID || invitingFriend || busy}
+              onClick={() => void inviteAcceptedFriend()}>
+              {invitingFriend ? t("common.loading") :
+                (lang === "zh" ? "邀请一起创造" : "Invite to collaborate")}
+            </button>
+          </div>
+        </div>
+      ) : null}
       {notice ? <StatusNotice>{notice}</StatusNotice> : null}
       {createdLink ? (
         <div className="link-once">
