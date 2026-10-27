@@ -54,12 +54,12 @@ func TestV2FriendDiscoveryIsExplicitlyOptIn(t *testing.T) {
     }
     if len(search("@"+bob.handle)) != 1 { t.Fatal("opt-in handle search failed") }
     if len(search("v2-private")) != 0 { t.Fatal("private account leaked") }
-    if len(search("%")) != 0 { t.Fatal("wildcard enumeration enabled") }
+    if len(search("%_")) != 0 { t.Fatal("wildcard enumeration enabled") }
 
     status, body, _ = alice.call(t, http.MethodPost, "/api/v1/social/blocks", callOptions{
         Body: map[string]any{"blocked_user_id": bob.id.String()},
     })
-    if status != http.StatusCreated && status != http.StatusOK {
+    if status != http.StatusNoContent {
         t.Fatalf("block status = %d body = %s", status, body)
     }
     if len(search("v2-target")) != 0 { t.Fatal("blocked user leaked into search") }
