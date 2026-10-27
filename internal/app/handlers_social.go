@@ -31,7 +31,7 @@ func parseUUIDParam(r *http.Request, name string) (uuid.UUID, bool) {
 func (a *App) searchDiscoverableFriends(w http.ResponseWriter, r *http.Request) {
     if a.socialServiceUnavailable(w, r) { return }
     principal := principalFrom(r.Context())
-    if !a.allowUserLimit(w, r, principal.User.ID, a.friendRequestLimiter, 20,
+    if !a.allowUserLimit(w, r, principal.User.ID, a.discoveryLimiter, 30,
         "discovery_rate_limited", "too many discovery requests") { return }
     q := r.URL.Query().Get("q")
     if len(q) > 160 {
