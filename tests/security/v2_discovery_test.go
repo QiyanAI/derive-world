@@ -66,7 +66,7 @@ func TestV2FriendDiscoveryIsExplicitlyOptIn(t *testing.T) {
 	if len(matches) != 1 || matches[0].UserID != bob.id.String() {
 		t.Fatalf("opt-in results = %+v", matches)
 	}
-	if len(search("@" + bob.handle)) != 1 {
+	if len(search("@"+bob.handle)) != 1 {
 		t.Fatal("opt-in handle search failed")
 	}
 	if len(search("v2-private")) != 0 {
