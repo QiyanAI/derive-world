@@ -7,6 +7,9 @@ import {
   listDirectMessages,
   listFriendRequests,
   listFriends,
+  searchDiscoverableFriends,
+  getDiscoveryPreference,
+  setDiscoveryPreference,
   markDirectMessagesRead,
   newClientMessageID,
   removeFriend,
@@ -16,6 +19,7 @@ import {
   unblockUser,
   type Block,
   type DirectMessage,
+  type DiscoveryCandidate,
   type Friend,
   type FriendRequest
 } from "../api";
@@ -40,6 +44,37 @@ export default function FriendsPage() {
   const [busy, setBusy] = useState("");
   const [loading, setLoading] = useState(true);
   const [manageOpen, setManageOpen] = useState(false);
+  const [discoveryResults, setDiscoveryResults] = useState<DiscoveryCandidate[]>([]);
+  const [searching, setSearching] = useState(false);
+  const [discoverable, setDiscoverable] = useState(false);
+  const [updatingPreference, setUpdatingPreference] = useState(false);
+
+  useEffect(() => {
+    if (status !== "authenticated") return;
+    const controller = new AbortController();
+    void getDiscoveryPreference(controller.signal)
+      .then((value) => { if (!controller.signal.aborted) setDiscoverable(value.discoverable); })
+      .catch((failure) => { if (!controller.signal.aborted) setError(failure); });
+    return () => controller.abort();
+  }, [status]);
+
+  useEffect(() => {
+    if (!manageOpen || status !== "authenticated" || handleDraft.trim().length < 2) {
+      setDiscoveryResults([]);
+      setSearching(false);
+      return;
+    }
+    const controller = new AbortController();
+    setSearching(true);
+    const timer = window.setTimeout(() => {
+      void searchDiscoverableFriends(handleDraft.trim(), controller.signal)
+        .then((result) => { if (!controller.signal.aborted) setDiscoveryResults(result.items); })
+        .catch((failure) => { if (!controller.signal.aborted) setError(failure); })
+        .finally(() => { if (!controller.signal.aborted) setSearching(false); });
+    }, 400);
+    return () => { window.clearTimeout(timer); controller.abort(); };
+  }, [manageOpen, handleDraft, status]);
+
 
   const timeFormatter = useMemo(
     () =>
@@ -218,7 +253,53 @@ export default function FriendsPage() {
                 {t("friends.sendRequest")}
               </button>
             </form>
-            <p className="form-hint">{t("friends.addHint")}</p>
+            <p className="form-hint">{lang === "zh"
+              ? "输入昵称或 @账号查找主动允许被发现的人。也可直接向已知的准确 @账号发送申请。"
+              : "Search by name or @handle among people who opted in. You can also request a known exact @handle."}</p>
+            <label className="check-row">
+              <input type="checkbox" checked={discoverable} disabled={updatingPreference}
+                onChange={(event) => {
+                  const next = event.target.checked;
+                  setUpdatingPreference(true);
+                  void setDiscoveryPreference(next)
+                    .then((result) => setDiscoverable(result.discoverable))
+                    .catch(setError)
+                    .finally(() => setUpdatingPreference(false));
+                }} />
+              <span>{lang === "zh" ? "允许别人按昵称或账号找到我（默认关闭）"
+                : "Allow people to find me by name or handle (off by default)"}</span>
+            </label>
+            {handleDraft.trim().length >= 2 ? (
+              <section className="dw-friend-discovery" aria-live="polite">
+                <h3>{lang === "zh" ? "查找结果" : "Find people"}</h3>
+                {searching ? <p className="muted">{t("common.loading")}</p> : null}
+                {!searching && discoveryResults.length === 0 ?
+                  <p className="muted">{lang === "zh" ? "没有匹配的公开账号；对方可能未开启可发现。" : "No opt-in matches found."}</p> : null}
+                <ul className="friend-list">
+                  {discoveryResults.map((candidate) => {
+                    const friend = friends.some((item) => item.user_id === candidate.user_id);
+                    const pending = incoming.some((item) => item.user_id === candidate.user_id) ||
+                      outgoing.some((item) => item.user_id === candidate.user_id);
+                    return (
+                      <li key={candidate.user_id} className="friend-row">
+                        <span className="avatar avatar-small" aria-hidden="true">{candidate.display_name.slice(0, 1)}</span>
+                        <span><strong>{candidate.display_name}</strong><small>@{candidate.handle}</small></span>
+                        <button type="button" className="button button-small"
+                          disabled={busy !== "" || friend || pending}
+                          onClick={() => void act("request", async () => {
+                            await sendFriendRequest(candidate.handle);
+                            setNotice(t("friends.requestSent"));
+                          })}>
+                          {friend ? (lang === "zh" ? "已是好友" : "Friends") :
+                            pending ? (lang === "zh" ? "申请处理中" : "Pending") :
+                            (lang === "zh" ? "添加好友" : "Add friend")}
+                        </button>
+                      </li>
+                    );
+                  })}
+                </ul>
+              </section>
+            ) : null}
           </section>
 
           <section className="dw-friend-requests" hidden={incoming.length === 0 && outgoing.length === 0 && !manageOpen}>
