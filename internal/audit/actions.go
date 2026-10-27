@@ -68,6 +68,7 @@ const (
 	ActionSocialUnblock        Action = "social.unblock"
 	ActionSocialMessageSend    Action = "social.message_send"
 	ActionSocialDiscussionPost Action = "social.discussion_post"
+	ActionSocialDiscoveryPreference Action = "social.discovery_preference"
 	ActionPublicationCreate    Action = "publication.create"
 	ActionPublicationActivate  Action = "publication.activate"
 	ActionPublicationRevoke    Action = "publication.revoke"
@@ -98,7 +99,7 @@ func AllActions() []Action {
 		ActionSystemStartup, ActionSystemShutdown, ActionSystemMigration, ActionSystemConfigError,
 		ActionSocialFriendRequest, ActionSocialFriendAccept, ActionSocialFriendDecline,
 		ActionSocialFriendRemove, ActionSocialBlock, ActionSocialUnblock,
-		ActionSocialMessageSend, ActionSocialDiscussionPost,
+		ActionSocialMessageSend, ActionSocialDiscussionPost, ActionSocialDiscoveryPreference,
 		ActionPublicationCreate, ActionPublicationActivate, ActionPublicationRevoke,
 		ActionPublicationConsent, ActionPublicationDerive, ActionPublicationReport,
 	}
