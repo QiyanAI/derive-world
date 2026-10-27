@@ -223,6 +223,54 @@ export default function WorldStagePage() {
     return [...candidates].sort((left, right) => right.updated_at.localeCompare(left.updated_at))[0] ?? null;
   }, [stage]);
 
+
+  const graph = useMemo(() => {
+    const nodes = stage?.objects ?? [];
+    const byId = new Map(nodes.map((node) => [node.id, node]));
+    const placed = new Map<string, { x: number; y: number; depth: number }>();
+    const visiting = new Set<string>();
+    let nextLeaf = 0;
+    let maxDepth = 0;
+
+    const visit = (object: StageObject, depth: number): { x: number; y: number; depth: number } | null => {
+      const existing = placed.get(object.id);
+      if (existing) return existing;
+      if (visiting.has(object.id) || depth > 24) return null;
+      visiting.add(object.id);
+      maxDepth = Math.max(maxDepth, depth);
+      const children = (childrenOf.get(object.id) ?? []).filter((child) => byId.has(child.id));
+      const childPositions = children
+        .map((child) => visit(child, depth + 1))
+        .filter((position): position is { x: number; y: number; depth: number } => position !== null);
+      const x = childPositions.length
+        ? (childPositions[0].x + childPositions[childPositions.length - 1].x) / 2
+        : 200 + nextLeaf++ * 290;
+      const result = { x, y: 178 + depth * 278, depth };
+      placed.set(object.id, result);
+      visiting.delete(object.id);
+      return result;
+    };
+    roots.forEach((root) => visit(root, 0));
+    nodes.forEach((node) => visit(node, 0));
+    const xs = [...placed.values()].map((position) => position.x);
+    const minX = Math.min(200, ...xs);
+    const maxX = Math.max(200, ...xs);
+    const width = Math.max(940, maxX - minX + 400);
+    const offset = width / 2 - (maxX + minX) / 2;
+    const positions = new Map(
+      [...placed].map(([id, p]) => [id, { x: p.x + offset, y: p.y, depth: p.depth }])
+    );
+    const height = Math.max(580, 178 + maxDepth * 278 + 200);
+    const edges = (stage?.edges ?? [])
+      .map((edge) => {
+        const parent = positions.get(edge.parent_id);
+        const child = positions.get(edge.child_id);
+        return parent && child ? { id: `${edge.parent_id}:${edge.child_id}`, parent, child } : null;
+      })
+      .filter((edge): edge is { id: string; parent: {x:number;y:number;depth:number}; child: {x:number;y:number;depth:number} } => edge !== null);
+    return { positions, width, height, edges };
+  }, [stage, roots, childrenOf]);
+
   const branchCount = stage?.edges.length ?? 0;
   const displayName = user?.display_name ?? "";
 
@@ -236,23 +284,26 @@ export default function WorldStagePage() {
     return t("object.create.collaborative");
   }
 
-  function renderNode(object: StageObject, depth: number, visited: Set<string>) {
-    if (visited.has(object.id) || depth > 5) {
-      return null;
-    }
-    const nextVisited = new Set(visited);
-    nextVisited.add(object.id);
-    const children = childrenOf.get(object.id) ?? [];
+
+  function renderNode(object: StageObject) {
+    const point = graph.positions.get(object.id);
+    if (!point) return null;
+    const canDerive = object.permissions.includes("derive");
     return (
-      <li key={object.id} className="stage-node-wrap">
+      <li
+        key={object.id}
+        className="stage-node-wrap dw-orb-wrap"
+        style={{ left: point.x - 110, top: point.y - 110 }}
+      >
         <article
-          data-testid="dw-stage-node"
-          className={`stage-node stage-node-${object.object_type}${
+          className={`stage-node dw-world-orb stage-node-${object.object_type}${
             selectedId === object.id ? " stage-node-selected" : ""
           }`}
+          data-testid="dw-stage-node"
           aria-current={selectedId === object.id ? "true" : undefined}
-          draggable={object.permissions.includes("derive")}
+          draggable={canDerive}
           onDragStart={(event) => {
+            if (!canDerive) return;
             event.dataTransfer.setData("text/x-derive-object", object.id);
             event.dataTransfer.effectAllowed = "copy";
             setDraggingId(object.id);
@@ -260,9 +311,7 @@ export default function WorldStagePage() {
           onDragEnd={() => setDraggingId(null)}
         >
           <div className="stage-node-top">
-            <span className={`template-badge template-${object.object_type}`}>
-              {typeLabel(object.object_type)}
-            </span>
+            <span className={`template-badge template-${object.object_type}`}>{typeLabel(object.object_type)}</span>
             <span className="version-badge">v{object.version}</span>
           </div>
           <h3>
@@ -273,7 +322,8 @@ export default function WorldStagePage() {
               data-stage-object={object.id}
               aria-label={t("stage.selectNamed", { title: object.title || t("common.untitled") })}
             >
-              {object.title || t("common.untitled")}
+              <span className="dw-orb-mark" aria-hidden="true">✧</span>
+              <span className="dw-orb-name">{object.title || t("common.untitled")}</span>
             </button>
           </h3>
           <p className="stage-node-meta">
@@ -291,50 +341,18 @@ export default function WorldStagePage() {
               {object.latest_event.actor_name ? ` · ${object.latest_event.actor_name}` : ""}
             </p>
           ) : null}
-          {selectedId === object.id ? <div className="stage-node-actions">
-            <button
-              className="button button-small"
-              type="button"
-              onClick={() => openInspector(object.id, "work")}
-            >
-              {t("stage.workHere")}
-            </button>
-            {object.permissions.includes("derive") ? (
-              <button
-                className="button button-ghost button-small"
-                type="button"
-                onClick={() => openInspector(object.id, "branch")}
-              >
-                {t("stage.branchHere")}
+          {selectedId === object.id ? (
+            <div className="stage-node-actions">
+              <button className="button button-small" type="button" onClick={() => openInspector(object.id, "work")}>
+                {t("stage.workHere")}
               </button>
-            ) : null}
-            <button
-              className="button button-ghost button-small"
-              type="button"
-              onClick={() => openInspector(object.id, "lens")}
-            >
-              {t("stage.lensHere")}
-            </button>
-            <button
-              className="button button-ghost button-small"
-              type="button"
-              onClick={() => openInspector(object.id, "ai")}
-            >
-              {t("stage.aiHere")}
-            </button>
-            <Link className="text-link" to={`/objects/${object.id}`}>
-              {t("stage.openPage")}
-            </Link>
-          </div> : null}
-          {object.permissions.includes("derive") ? (
-            <p className="stage-drag-hint">{t("stage.dragHint")}</p>
+              {canDerive ? <button className="button button-ghost button-small" type="button" onClick={() => openInspector(object.id, "branch")}>{t("stage.branchHere")}</button> : null}
+              <button className="button button-ghost button-small" type="button" onClick={() => openInspector(object.id, "lens")}>{t("stage.lensHere")}</button>
+              <button className="button button-ghost button-small" type="button" onClick={() => openInspector(object.id, "ai")}>{t("stage.aiHere")}</button>
+              <Link className="text-link" to={`/objects/${object.id}`}>{t("stage.openPage")}</Link>
+            </div>
           ) : null}
         </article>
-        {children.length > 0 ? (
-          <ul className="stage-children">
-            {children.map((child) => renderNode(child, depth + 1, nextVisited))}
-          </ul>
-        ) : null}
       </li>
     );
   }
@@ -344,8 +362,9 @@ export default function WorldStagePage() {
       <div className="page-heading with-actions stage-heading">
         <div>
           <p className="eyebrow">{t("stage.eyebrow")}</p>
-          <h1>{t("stage.title", { name: displayName })}</h1>
-          <p className="lead">{t("stage.lead")}</p>
+          <h1 className="dw-world-hero-title">{lang === "zh" ? <>让一个念头，<em>长出自己的未来。</em></> : <>Let an idea <em>grow its own future.</em></>}</h1>
+          <p className="lead">{lang === "zh" ? "触碰一个创造物，直接改变它。衍生一条分支，看看不同的选择会走向哪里。" : "Touch a creation to change it. Derive a new direction and see what becomes possible."}</p>
+          <p className="dw-world-hello">{lang === "zh" ? `属于 ${displayName} 的持续世界` : `${displayName}'s living world`}</p>
         </div>
         <div className="stage-create">
           <Link className="button" to="/objects/new?template=living_scene&purpose=project">
@@ -362,7 +381,7 @@ export default function WorldStagePage() {
 
       {error ? <ErrorNotice error={error} onRetry={() => void load()} /> : null}
 
-      <div className="stage-stats">
+      <div className="stage-stats dw-world-facts">
         <span>
           <strong>{stage?.objects.length ?? 0}</strong> {t("stage.statObjects")}
         </span>
@@ -436,10 +455,22 @@ export default function WorldStagePage() {
               </div>
             </div>
           ) : (
-            <div className="dw-stage-viewport" data-testid="dw-stage-viewport" data-zoom={zoom.toFixed(2)} style={{ transform: `scale(${zoom})` }}>
-              <ul className="stage-roots">{roots.map((object) => renderNode(object, 0, new Set()))}</ul>
+            <div className="dw-stage-scrollspace" style={{ width: graph.width * zoom, height: graph.height * zoom }}>
+              <div className="dw-stage-viewport" data-testid="dw-stage-viewport" data-zoom={zoom.toFixed(2)} style={{ width: graph.width, height: graph.height, transform: `scale(${zoom})` }}>
+                <svg className="dw-world-lines" viewBox={`0 0 ${graph.width} ${graph.height}`} aria-hidden="true" preserveAspectRatio="none">
+                  {graph.edges.map((edge) => (
+                    <path key={edge.id} d={`M ${edge.parent.x} ${edge.parent.y} C ${edge.parent.x} ${edge.parent.y + 145}, ${edge.child.x} ${edge.child.y - 145}, ${edge.child.x} ${edge.child.y}`} />
+                  ))}
+                </svg>
+                <ul className="stage-roots">{(stage?.objects ?? []).map((object) => renderNode(object))}</ul>
+              </div>
             </div>
           )}
+          {continueObject ? (
+            <button className="dw-ai-orb" type="button" onClick={() => openInspector(selectedId ?? continueObject.id, "ai")} aria-label={lang === "zh" ? "向当前世界的 Personal AI 寻求协助" : "Ask your Personal AI about this world"}>
+              <span aria-hidden="true">✧</span><small>{lang === "zh" ? "AI 在此" : "AI here"}</small>
+            </button>
+          ) : null}
           {inspectorOpen ? <div className="dw-stage-inspector-dock">
 {inspectorOpen ? (
             <StageInspector

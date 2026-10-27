@@ -11,6 +11,8 @@ test("V2: context-first navigation, world zoom and exact-handle friend discovery
   const stage = page.getByTestId("world-stage");
   await expect(stage).toBeVisible();
   await expect(stage.getByTestId("dw-stage-viewport")).toHaveAttribute("data-zoom", "1.00");
+  await expect(stage.getByTestId("dw-stage-node")).toHaveCount(1);
+  await expect(stage.locator(".dw-world-lines")).toBeVisible();
   await stage.getByTestId("dw-stage-zoom-in").click();
   await expect(stage.getByTestId("dw-stage-viewport")).toHaveAttribute("data-zoom", "1.15");
   await stage.getByTestId("dw-stage-zoom-reset").click();
