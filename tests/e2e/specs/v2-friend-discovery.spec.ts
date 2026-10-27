@@ -33,7 +33,11 @@ test("V2: opt-in nickname discovery sends a real friend request without exposing
 
     await bob.goto("/friends");
     await bob.getByRole("button", { name: "Accept" }).click();
-    await expect(bob.getByText(aliceUser.displayName)).toBeVisible();
+    await expect(bob.locator(".dw-friend-list").getByText(aliceUser.displayName)).toBeVisible();
+
+    await bob.getByRole("checkbox", { name: /Allow people to find me/ }).uncheck();
+    await expect(bob.getByRole("checkbox", { name: /Allow people to find me/ })).not.toBeChecked();
+    await expect(bob.getByRole("checkbox", { name: /Allow people to find me/ })).toBeEnabled();
 
     await alice.goto("/objects/new?template=living_scene&purpose=project&first=1");
     await alice.getByRole("button", { name: "Create object" }).click();
@@ -56,9 +60,7 @@ test("V2: opt-in nickname discovery sends a real friend request without exposing
     await bob.goto(invitationURL!);
     await bob.getByRole("button", { name: "Accept invitation" }).click();
     await expect(bob).toHaveURL(/\/objects\/[0-9a-f-]{36}/);
-    await bob.getByRole("checkbox", { name: /Allow people to find me/ }).uncheck();
-    await expect(bob.getByRole("checkbox", { name: /Allow people to find me/ })).not.toBeChecked();
-    await expect(bob.getByRole("checkbox", { name: /Allow people to find me/ })).toBeEnabled();
+
   } finally {
     await aliceContext.close();
     await bobContext.close();
