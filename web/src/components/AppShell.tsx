@@ -45,8 +45,8 @@ export default function AppShell() {
   }, [location.pathname, t]);
 
   return (
-    <div className="app-shell">
-      <a className="skip-link" href="#main-content">
+    <div className={`app-shell dw-shell${authenticated ? " dw-auth" : ""}`}>
+      {authenticated ? <aside className="dw-rail" aria-label={t("nav.primary")}><Link to="/" className="dw-rail-logo" aria-label={t("app.name")}>✧</Link><nav className="dw-rail-nav"><NavLink end to="/" className={({isActive})=>isActive?"dw-rail-link active":"dw-rail-link"}>◉<small>{t("nav.world")}</small></NavLink><NavLink to="/friends" className={({isActive})=>isActive?"dw-rail-link active":"dw-rail-link"}>◎<small>{t("nav.friends")}</small></NavLink><NavLink to="/explore" className={({isActive})=>isActive?"dw-rail-link active":"dw-rail-link"}>✦<small>{t("nav.explore")}</small></NavLink></nav><Link to="/self" className="dw-rail-avatar" aria-label={t("nav.self")}>☺</Link></aside> : null}<a className="skip-link" href="#main-content">
         {t("a11y.skip")}
       </a>
       <header className="site-header">
@@ -60,17 +60,11 @@ export default function AppShell() {
           </span>
         </Link>
         <nav className="main-nav" aria-label={t("nav.primary")}>
-          <NavLink to="/" end className={navClass}>
-            {t("nav.world")}
-          </NavLink>
+          
           {authenticated ? (
             <>
-              <NavLink to="/friends" className={navClass}>
-                {t("nav.friends")}
-              </NavLink>
-              <NavLink to="/explore" className={navClass}>
-                {t("nav.explore")}
-              </NavLink>
+              
+              
               <NavLink to="/objects" className={navClass}>
                 {t("nav.objects")}
               </NavLink>
@@ -87,7 +81,7 @@ export default function AppShell() {
           ) : null}
         </nav>
         <div className="header-actions">
-          <ModeBadge mode={mode} />
+          {authenticated ? <Link className="button button-ghost button-compact dw-ai-setup" to="/settings#ai-connection">{t("system.modelMode")} ⚙</Link> : null}<ModeBadge mode={mode} />
           <LanguageToggle />
           {authenticated && user ? (
             <>

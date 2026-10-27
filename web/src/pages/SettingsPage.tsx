@@ -172,8 +172,8 @@ export default function SettingsPage() {
         </div>
       </section>
 
-      <section className="card system-status-card">
-        <h2>{t("settings.system")}</h2>
+      <section className="card system-status-card" id="ai-connection">
+        <h2>{t("settings.system")}</h2><p className="muted">{lang === "zh" ? "连接 AI：请通过实例本机的安全启动器设置 API Key；网页仅显示运行状态与连接检测，不读取或保存密钥。" : "Connect AI through the instance local secure launcher. This page only shows status and connection diagnostics; it never receives secrets."}</p>
         <p className="muted">{t("settings.systemHint")}</p>
         {system ? (
           <>

@@ -199,10 +199,10 @@ export default function FriendsPage() {
       <div className="friends-layout">
         <aside className="friends-side">
           <section className="card">
-            <h2>{t("friends.add")}</h2>
+            <h2>{t("friends.add")}</h2><p className="muted">{lang === "zh" ? "输入对方准确的 @账号发送好友申请。添加好友不会自动开放私人世界。" : "Enter an exact @handle to request friendship. Friends do not automatically see private worlds."}</p>
             <form className="inline-field" onSubmit={submitRequest}>
               <input
-                placeholder={t("friends.handlePlaceholder")}
+                placeholder={lang === "zh" ? "输入好友 @账号" : "Enter exact @handle"}
                 value={handleDraft}
                 maxLength={32}
                 onChange={(event) => setHandleDraft(event.target.value)}
