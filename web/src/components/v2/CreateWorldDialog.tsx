@@ -24,10 +24,6 @@ export default function CreateWorldDialog({
 
   useLayoutEffect(() => {
     if (open) {
-      setTitle("");
-      setKind("project");
-      setError("");
-      setBusy(false);
       window.setTimeout(() => inputRef.current?.focus(), 60);
     }
   }, [open]);

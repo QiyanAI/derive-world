@@ -677,6 +677,7 @@ export default function FriendsPage() {
       </div>
 
       <FriendSearchDialog
+        key={searchOpen ? "open" : "closed"}
         open={searchOpen}
         onClose={() => setSearchOpen(false)}
         onRefresh={load}

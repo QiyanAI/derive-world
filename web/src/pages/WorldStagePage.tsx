@@ -541,6 +541,7 @@ export default function WorldStagePage() {
       </p>
 
       <CreateWorldDialog
+        key={createOpen ? "open" : "closed"}
         open={createOpen}
         onClose={() => setCreateOpen(false)}
         onCreated={(object) => {

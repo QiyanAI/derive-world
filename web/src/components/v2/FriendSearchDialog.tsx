@@ -61,10 +61,6 @@ export default function FriendSearchDialog({
     if (!open) {
       return;
     }
-    setQuery("");
-    setResults([]);
-    setNotice("");
-    setError("");
     const controller = new AbortController();
     void loadRequests(controller.signal);
     getDiscoverability(controller.signal)
