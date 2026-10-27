@@ -298,8 +298,8 @@ export default function ExplorePage() {
           <p>{t("explore.emptyBody")}</p>
         </div>
       ) : null}
-      {worlds.length > 0 ? (() => {
-        const featured = worlds[0];
+      {worlds[0] ? (() => {
+        const featured = worlds[0]!;
         const preview = publicPreview(featured);
         return (
           <section className="dw-featured-world" aria-label={lang === "zh" ? "精选公开世界" : "Featured public world"}>
