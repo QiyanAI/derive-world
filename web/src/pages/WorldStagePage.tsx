@@ -58,6 +58,7 @@ export default function WorldStagePage() {
       return next;
     });
   }, [layoutKey]);
+  const nodeDrag = useRef<{ id: string; pointer: number; startX: number; startY: number; nodeX: number; nodeY: number } | null>(null);
   const selectRequest = useRef(0);
 
   const load = useCallback(async (signal?: AbortSignal) => {
@@ -345,6 +346,27 @@ export default function WorldStagePage() {
             type="button"
             title={lang === "zh" ? "方向键移动世界节点，Shift 加速" : "Arrow keys move this world node; Shift for larger steps"}
             aria-label={lang === "zh" ? `移动 ${object.title}` : `Move ${object.title}`}
+            onPointerDown={(event) => {
+              if (event.button !== 0) return;
+              event.preventDefault();
+              event.stopPropagation();
+              event.currentTarget.setPointerCapture(event.pointerId);
+              nodeDrag.current = { id: object.id, pointer: event.pointerId, startX: event.clientX,
+                startY: event.clientY, nodeX: point.x, nodeY: point.y };
+            }}
+            onPointerMove={(event) => {
+              const drag = nodeDrag.current;
+              if (!drag || drag.id !== object.id || drag.pointer !== event.pointerId) return;
+              event.preventDefault();
+              moveWorldNode(object.id,
+                Math.max(110, Math.min(graph.width - 110, drag.nodeX + (event.clientX - drag.startX) / zoom)),
+                Math.max(110, Math.min(graph.height - 110, drag.nodeY + (event.clientY - drag.startY) / zoom)));
+            }}
+            onPointerUp={(event) => {
+              if (nodeDrag.current?.pointer === event.pointerId) nodeDrag.current = null;
+              if (event.currentTarget.hasPointerCapture(event.pointerId)) event.currentTarget.releasePointerCapture(event.pointerId);
+            }}
+            onPointerCancel={() => { nodeDrag.current = null; }}
             onKeyDown={(event) => {
               const step = event.shiftKey ? 40 : 12;
               const delta = event.key === "ArrowLeft" ? [-step, 0] :
