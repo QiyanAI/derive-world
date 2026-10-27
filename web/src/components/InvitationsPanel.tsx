@@ -4,8 +4,12 @@ import {
   createInvitation,
   getSystemStatus,
   listInvitations,
+  listFriends,
+  sendDirectMessage,
+  newClientMessageID,
   revokeInvitation,
   type Invitation,
+  type Friend,
   type InvitationPermission
 } from "../api";
 import { ErrorNotice, StatusNotice } from "../errors";
@@ -45,6 +49,9 @@ export default function InvitationsPanel({ objectID, canInvite, canManage }: Pro
   const [error, setError] = useState<unknown>(null);
   const [busy, setBusy] = useState(false);
   const [publicBaseURL, setPublicBaseURL] = useState("");
+  const [acceptedFriends, setAcceptedFriends] = useState<Friend[]>([]);
+  const [inviteFriendID, setInviteFriendID] = useState("");
+  const [invitingFriend, setInvitingFriend] = useState(false);
 
   const timeFormatter = useMemo(
     () =>
@@ -70,6 +77,7 @@ export default function InvitationsPanel({ objectID, canInvite, canManage }: Pro
       getSystemStatus()
         .then((status) => setPublicBaseURL(status.public_base_url))
         .catch(() => setPublicBaseURL(""));
+      listFriends().then((response) => setAcceptedFriends(response.items)).catch(setError);
     }
   }, [canInvite, canManage, refresh]);
 
