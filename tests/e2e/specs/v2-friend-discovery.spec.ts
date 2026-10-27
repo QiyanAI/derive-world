@@ -46,7 +46,10 @@ test("V2: opt-in nickname discovery sends a real friend request without exposing
     await alice.goto(worldURL.pathname + "?tab=access");
     const inviteSelect = alice.getByLabel("Choose friend");
     await expect(inviteSelect).toBeVisible();
-    await inviteSelect.selectOption({ label: bobUser.displayName + " (@" + bobUser.handle + ")" });
+    const friendOption = inviteSelect.getByRole("option", { name: new RegExp(bobUser.handle) });
+    const friendValue = await friendOption.getAttribute("value");
+    expect(friendValue).toBeTruthy();
+    await inviteSelect.selectOption(friendValue!);
     await alice.getByTestId("invite-accepted-friend").click();
     await expect(alice.getByText("Invitation sent by private message; access requires acceptance.")).toBeVisible();
 
