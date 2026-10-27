@@ -1106,3 +1106,14 @@
 @media(max-width:920px){.dw-together-world,.dw-public-experience{grid-template-columns:minmax(0,1fr)!important}.dw-people-panel{max-height:none}.dw-discovery-grid>li:only-child .dw-public-world-card{display:flex}.dw-discovery-grid>li:only-child .dw-public-art{height:160px;width:100%}}
 @media(max-width:720px){.dw-world-first-actions{flex-direction:column;align-items:center;width:100%}.dw-first-choice{width:min(100%,310px)}.dw-together-stage{padding:16px;min-height:420px}.dw-public-stage{min-height:390px}.dw-public-world-art{width:190px}.dw-context-hub{margin-top:12px}}
 @media(prefers-reduced-motion:reduce){.dw-first-choice{transition:none!important}}
+
+/* V2 public discovery: feature real, consented publication data only. */
+.dw-featured-world{position:relative;isolation:isolate;display:flex;align-items:flex-end;min-height:390px;overflow:hidden;margin:0 0 22px;border-radius:28px;border:1px solid rgba(200,210,250,.17);background:radial-gradient(ellipse at 74% 40%,rgba(122,83,178,.44),transparent 43%),radial-gradient(ellipse at 25% 82%,rgba(60,109,153,.3),transparent 52%),#111626}
+.dw-featured-world-art{position:absolute;inset:0;display:grid;place-items:center;pointer-events:none;overflow:hidden}
+.dw-featured-world-orb{width:245px;height:245px;display:grid;place-items:center;border-radius:50%;font-size:84px;color:rgba(228,222,255,.82);background:radial-gradient(circle at 35% 26%,rgba(255,255,255,.56),rgba(158,140,212,.34) 36%,rgba(50,41,97,.2) 73%,transparent);box-shadow:0 0 0 32px rgba(173,166,237,.035),0 0 0 68px rgba(173,166,237,.03),0 0 100px rgba(168,148,241,.21);transform:translate(30%,-9%)}
+.dw-featured-world-content{position:relative;z-index:1;width:min(100%,650px);padding:46px 44px;background:linear-gradient(90deg,rgba(13,17,32,.81),rgba(13,17,32,0))}
+.dw-featured-world-title{font-size:clamp(29px,4vw,48px);line-height:1.15;letter-spacing:-.055em;color:#f1f0fb;font-weight:760;margin:12px 0}
+.dw-featured-world-summary{color:#d1d5e5;line-height:1.65;max-width:450px;display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:3;overflow:hidden}
+.dw-featured-world-byline{color:#bdc4d8;font-size:13px;margin:18px 0}
+.dw-featured-world-content .button{display:inline-flex}
+@media(max-width:700px){.dw-featured-world{min-height:410px}.dw-featured-world-content{padding:30px 23px}.dw-featured-world-orb{width:180px;height:180px;transform:translate(20%,-35%)}}
