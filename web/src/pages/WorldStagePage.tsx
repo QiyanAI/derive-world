@@ -369,7 +369,7 @@ export default function WorldStagePage() {
             onPointerCancel={() => { nodeDrag.current = null; }}
             onKeyDown={(event) => {
               const step = event.shiftKey ? 40 : 12;
-              const delta = event.key === "ArrowLeft" ? [-step, 0] :
+              const delta: [number, number] | null = event.key === "ArrowLeft" ? [-step, 0] :
                 event.key === "ArrowRight" ? [step, 0] :
                 event.key === "ArrowUp" ? [0, -step] :
                 event.key === "ArrowDown" ? [0, step] : null;
