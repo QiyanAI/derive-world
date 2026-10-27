@@ -32,6 +32,32 @@ export default function WorldStagePage() {
   const [inspectorTab, setInspectorTab] = useState<StageInspectorTab>("work");
   const [draggingId, setDraggingId] = useState<string | null>(null);
   const [zoom, setZoom] = useState(1);
+  const [nodePositions, setNodePositions] = useState<Record<string, { x: number; y: number }>>({});
+  const layoutKey = `dw:layout:v2:${user?.id ?? "anonymous"}`;
+  useEffect(() => {
+    try {
+      const saved: unknown = JSON.parse(window.localStorage.getItem(layoutKey) || "{}");
+      const validated: Record<string, { x: number; y: number }> = {};
+      if (saved && typeof saved === "object" && !Array.isArray(saved)) {
+        for (const [id, point] of Object.entries(saved)) {
+          const p = point as { x?: number; y?: number } | null;
+          if (/^[0-9a-f-]{36}$/i.test(id) && p &&
+              Number.isFinite(p.x) && Number.isFinite(p.y) &&
+              p.x! >= 110 && p.x! < 20000 && p.y! >= 110 && p.y! < 20000) {
+            validated[id] = { x: p.x!, y: p.y! };
+          }
+        }
+      }
+      setNodePositions(validated);
+    } catch { setNodePositions({}); }
+  }, [layoutKey]);
+  const moveWorldNode = useCallback((id: string, x: number, y: number) => {
+    setNodePositions((previous) => {
+      const next = { ...previous, [id]: { x, y } };
+      try { window.localStorage.setItem(layoutKey, JSON.stringify(next)); } catch { /* optional storage */ }
+      return next;
+    });
+  }, [layoutKey]);
   const selectRequest = useRef(0);
 
   const load = useCallback(async (signal?: AbortSignal) => {
@@ -261,6 +287,10 @@ export default function WorldStagePage() {
       [...placed].map(([id, p]) => [id, { x: p.x + offset, y: p.y, depth: p.depth }])
     );
     const height = Math.max(580, 178 + maxDepth * 278 + 200);
+    for (const [id, point] of Object.entries(nodePositions)) {
+      const prior = positions.get(id);
+      if (prior) positions.set(id, { ...prior, x: point.x, y: point.y });
+    }
     const edges = (stage?.edges ?? [])
       .map((edge) => {
         const parent = positions.get(edge.parent_id);
@@ -269,7 +299,7 @@ export default function WorldStagePage() {
       })
       .filter((edge): edge is { id: string; parent: {x:number;y:number;depth:number}; child: {x:number;y:number;depth:number} } => edge !== null);
     return { positions, width, height, edges };
-  }, [stage, roots, childrenOf]);
+  }, [stage, roots, childrenOf, nodePositions]);
 
   const branchCount = stage?.edges.length ?? 0;
   const displayName = user?.display_name ?? "";
@@ -310,6 +340,23 @@ export default function WorldStagePage() {
           }}
           onDragEnd={() => setDraggingId(null)}
         >
+          <button
+            className="dw-node-move-handle"
+            type="button"
+            title={lang === "zh" ? "方向键移动世界节点，Shift 加速" : "Arrow keys move this world node; Shift for larger steps"}
+            aria-label={lang === "zh" ? `移动 ${object.title}` : `Move ${object.title}`}
+            onKeyDown={(event) => {
+              const step = event.shiftKey ? 40 : 12;
+              const delta = event.key === "ArrowLeft" ? [-step, 0] :
+                event.key === "ArrowRight" ? [step, 0] :
+                event.key === "ArrowUp" ? [0, -step] :
+                event.key === "ArrowDown" ? [0, step] : null;
+              if (!delta) return;
+              event.preventDefault();
+              moveWorldNode(object.id, Math.max(110, Math.min(graph.width - 110, point.x + delta[0])),
+                Math.max(110, Math.min(graph.height - 110, point.y + delta[1])));
+            }}
+          >⠿</button>
           <div className="stage-node-top">
             <span className={`template-badge template-${object.object_type}`}>{typeLabel(object.object_type)}</span>
             <span className="version-badge">v{object.version}</span>
