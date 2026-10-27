@@ -1106,3 +1106,9 @@
 @media(max-width:920px){.dw-together-world,.dw-public-experience{grid-template-columns:minmax(0,1fr)!important}.dw-people-panel{max-height:none}.dw-discovery-grid>li:only-child .dw-public-world-card{display:flex}.dw-discovery-grid>li:only-child .dw-public-art{height:160px;width:100%}}
 @media(max-width:720px){.dw-world-first-actions{flex-direction:column;align-items:center;width:100%}.dw-first-choice{width:min(100%,310px)}.dw-together-stage{padding:16px;min-height:420px}.dw-public-stage{min-height:390px}.dw-public-world-art{width:190px}.dw-context-hub{margin-top:12px}}
 @media(prefers-reduced-motion:reduce){.dw-first-choice{transition:none!important}}
+
+/* V2: intentional presentation-only spatial arrangement handle. */
+.dw-node-move-handle{position:absolute;z-index:4;top:-12px;right:0;width:32px;height:32px;border-radius:50%;border:1px solid rgba(180,211,235,.45);color:#dcebf7;background:#283548;cursor:grab;touch-action:none;user-select:none;display:grid;place-items:center;font-size:19px;box-shadow:0 4px 12px #0005}
+.dw-node-move-handle:active{cursor:grabbing}
+.dw-node-move-handle:focus-visible{outline:3px solid #98d9ee;outline-offset:3px}
+@media(prefers-reduced-motion:reduce){.dw-node-move-handle{transition:none}}
