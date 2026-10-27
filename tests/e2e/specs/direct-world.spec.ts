@@ -63,12 +63,12 @@ test("First use: choose a project, change it in place, and create a real branch 
   await inspector.getByRole("button", { name: "Preview branch" }).click();
   await expect(inspector.getByTestId("stage-branch-preview")).toBeVisible();
   await expect(inspector.getByTestId("stage-branch-preview")).toContainText("Ship the first outcome");
-  await expect(stage.locator(".stage-board").getByText("Direct branch")).toHaveCount(0);
+  await expect(stage.locator(".stage-roots").getByText("Direct branch")).toHaveCount(0);
 
   // Confirm creates a real server branch and the new node appears on the stage.
   await inspector.getByRole("button", { name: "Create this branch" }).click();
-  await expect(stage.locator(".stage-board").getByText("Direct branch")).toBeVisible();
-  await expect(stage.locator(".stage-board").getByText("Direct branch")).toHaveCount(1);
+  await expect(stage.locator(".stage-roots").getByText("Direct branch")).toBeVisible();
+  await expect(stage.locator(".stage-roots").getByText("Direct branch")).toHaveCount(1);
 
   // Keyboard: Escape closes the inspector and returns focus to the trigger.
   await inspector.press("Escape");

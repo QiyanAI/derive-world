@@ -4,6 +4,9 @@ import { register, uniqueActor } from "../support/actors";
 
 test("V2: context-first navigation, world zoom and exact-handle friend discovery", async ({ page }) => {
   await register(page, uniqueActor("v2experience", "V2 Experience"));
+  await page.goto("/objects/new?template=living_scene&purpose=project&first=1");
+  await page.getByRole("button", { name: "Create object" }).click();
+  await expect(page).toHaveURL(/\/objects\/[0-9a-f-]{36}/);
   await page.goto("/");
   const stage = page.getByTestId("world-stage");
   await expect(stage).toBeVisible();
