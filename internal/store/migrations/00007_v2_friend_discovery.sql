@@ -10,6 +10,10 @@ CREATE TABLE social_discovery_settings (
 CREATE INDEX social_discovery_enabled_idx ON social_discovery_settings (user_id)
     WHERE discoverable = true;
 GRANT SELECT, INSERT, UPDATE ON social_discovery_settings TO derive_world_app;
+INSERT INTO audit_actions (action, description) VALUES
+    ('social.discovery_preference', 'Caller changed own opt-in discoverability')
+ON CONFLICT (action) DO NOTHING;
+UPDATE app_meta SET value = '7', updated_at = now() WHERE key = 'schema_version';
 
 -- +goose Down
 -- Forward-only user privacy preferences: rollback is intentionally prohibited.
