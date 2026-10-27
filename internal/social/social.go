@@ -113,12 +113,19 @@ SELECT COALESCE((SELECT discoverable FROM social_discovery_settings WHERE user_i
 }
 
 // SetDiscoveryEnabled changes only the caller's own opt-in setting.
-func (s *Service) SetDiscoveryEnabled(ctx context.Context, userID uuid.UUID, enabled bool) error {
-    _, err := s.db.Exec(ctx, `
+func (s *Service) SetDiscoveryEnabled(ctx context.Context, userID uuid.UUID, enabled bool, requestID string, ipHash []byte) error {
+    tx, err := s.db.BeginTx(ctx, pgx.TxOptions{IsoLevel: pgx.ReadCommitted})
+    if err != nil { return err }
+    defer func() { _ = tx.Rollback(ctx) }()
+    _, err = tx.Exec(ctx, `
 INSERT INTO social_discovery_settings (user_id, discoverable) VALUES ($1,$2)
 ON CONFLICT (user_id) DO UPDATE SET discoverable = EXCLUDED.discoverable, updated_at = now()`,
         userID.String(), enabled)
-    return err
+    if err != nil { return err }
+    if err := s.writeAudit(ctx, tx, userID, audit.ActionSocialDiscoveryPreference,
+        "social_discovery_settings", &userID, requestID, ipHash,
+        map[string]any{"discoverable": enabled}); err != nil { return err }
+    return tx.Commit(ctx)
 }
 
 // SearchDiscovery only returns actively opted-in users and excludes blocked pairs.
@@ -136,8 +143,9 @@ SELECT u.id, u.handle, u.display_name
  WHERE u.status = 'active' AND u.id <> $1
    AND (u.handle ILIKE $2 OR u.display_name ILIKE $3)
    AND NOT EXISTS (SELECT 1 FROM user_blocks b
-                   WHERE (b.blocker_id = $1 AND b.blocked_id = u.id)
-                      OR (b.blocker_id = u.id AND b.blocked_id = $1))
+                   WHERE b.revoked_at IS NULL
+                     AND ((b.blocker_id = $1 AND b.blocked_id = u.id)
+                       OR (b.blocker_id = u.id AND b.blocked_id = $1)))
  ORDER BY CASE WHEN lower(u.handle) = lower($4) THEN 0 ELSE 1 END,
           lower(u.display_name), u.handle
  LIMIT 10`, userID.String(), escaped+"%", "%"+escaped+"%", term)
