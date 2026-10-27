@@ -16,7 +16,6 @@ export default function CreateWorldDialog({
 }) {
   const { lang } = useI18n();
   const zh = lang === "zh";
-  const [title, setTitle] = useState("");
   const [kind, setKind] = useState<"project" | "story">("project");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
@@ -30,7 +29,7 @@ export default function CreateWorldDialog({
 
   async function submit(event: FormEvent) {
     event.preventDefault();
-    const clean = (title || inputRef.current?.value || "").trim();
+    const clean = (inputRef.current?.value ?? "").trim();
     if (!clean) {
       setError(zh ? "先写下一个想开始的念头。" : "Write the idea you want to begin with.");
       inputRef.current?.focus();
@@ -108,8 +107,7 @@ export default function CreateWorldDialog({
           id="dw-new-world-title"
           className="dw-input"
           maxLength={200}
-          value={title}
-          onChange={(event) => setTitle(event.target.value)}
+          defaultValue=""
           placeholder={zh ? "例如：一座能听见风的城市…" : "For example: a city that can hear the wind…"}
           autoComplete="off"
         />
