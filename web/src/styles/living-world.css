@@ -1112,3 +1112,28 @@
 .dw-node-move-handle:active{cursor:grabbing}
 .dw-node-move-handle:focus-visible{outline:3px solid #98d9ee;outline-offset:3px}
 @media(prefers-reduced-motion:reduce){.dw-node-move-handle{transition:none}}
+
+.dw-together-live-map{position:relative;margin-bottom:18px;padding:20px 16px 16px;border:1px solid rgba(135,177,211,.22);border-radius:24px;background:radial-gradient(circle at 50% 48%,rgba(103,79,170,.23),transparent 55%),linear-gradient(130deg,rgba(24,34,53,.82),rgba(16,25,42,.88));overflow:hidden}
+.dw-together-live-map>.eyebrow{text-align:center;font-size:11px;letter-spacing:.17em}
+.dw-together-live-map>.form-hint{text-align:center}
+.dw-together-live-scene{min-height:330px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:12px;position:relative}
+.dw-together-live-scene:before,.dw-together-live-scene:after{content:"";position:absolute;border:1px dashed rgba(155,165,222,.22);border-radius:50%;pointer-events:none}
+.dw-together-live-scene:before{width:min(85%,480px);aspect-ratio:1}
+.dw-together-live-scene:after{width:min(58%,320px);aspect-ratio:1}
+.dw-together-live-core{position:relative;z-index:1;text-align:center;max-width:320px;padding:15px 14px;border-radius:24px;background:rgba(18,27,50,.82);border:1px solid rgba(144,159,220,.26);box-shadow:0 14px 44px #03071099}
+.dw-together-live-core>span{font-size:36px;color:#ac9df5}
+.dw-together-live-core h2{font-size:clamp(16px,2.2vw,22px);margin:8px 0}
+.dw-together-live-core p{font-size:12px;margin:0 0 12px;color:#aebed2}
+.dw-together-live-people{z-index:1;display:flex;align-items:center;justify-content:center;gap:12px;flex-wrap:wrap;max-width:640px}
+.dw-together-person{border:1px solid rgba(153,188,214,.25);background:rgba(27,40,62,.95);padding:9px 12px;border-radius:18px;color:inherit;display:flex;flex-direction:column;align-items:center;gap:4px;min-width:76px;cursor:pointer}
+.dw-together-person .avatar{width:44px;height:44px;border-radius:50%;display:grid;place-items:center}
+.dw-together-person strong{font-size:12px;max-width:105px;overflow-wrap:anywhere}
+.dw-together-person small{font-size:10px;max-width:105px;overflow-wrap:anywhere;color:#aebed2}
+.dw-together-person[aria-pressed="true"]{border-color:#8fdbdf;box-shadow:0 0 0 2px #8fdbdf55}
+.dw-together-person:focus-visible{outline:3px solid #96dcfb;outline-offset:3px}
+.dw-together-me{cursor:default;border-color:rgba(115,205,166,.5)}
+.dw-friend-discovery{padding:10px 0}
+.dw-friend-discovery h3{margin:4px 0 8px;font-size:14px}
+.dw-friend-discovery .friend-row{gap:10px;align-items:center;display:flex;flex-wrap:wrap}
+.dw-friend-discovery .friend-row>span:nth-child(2){flex:1;min-width:120px;display:flex;flex-direction:column}
+@media(max-width:720px){.dw-together-live-scene{min-height:300px}.dw-together-live-map{padding:12px}.dw-together-live-scene:before{width:90%}}
