@@ -60,6 +60,7 @@ test("Living world: one person creates a scene, inspects the lens, publishes, an
     await expect(page.getByRole("heading", { name: sceneTitle })).toBeVisible();
     await page.getByRole("link", { name: new RegExp(sceneTitle) }).click();
     await expect(page.getByRole("heading", { name: "Create an independent branch" })).toBeVisible();
+    await page.getByRole("button", { name: "Derive my own version" }).click();
     await expect(page.getByRole("button", { name: "Create my branch" })).toBeVisible();
 
     await page.goto("/");
@@ -82,6 +83,7 @@ test("Living world: two people become friends and exchange direct messages", asy
 
     await first.page.goto("/friends");
     await expect(first.page.getByTestId("friends-page")).toBeVisible();
+    await first.page.getByRole("button", { name: "Find a friend" }).click();
     await first.page.getByPlaceholder("Friend's handle").fill(bob.handle);
     await first.page.getByRole("button", { name: "Send request" }).click();
     await expect(first.page.getByText("Friend request sent.")).toBeVisible();

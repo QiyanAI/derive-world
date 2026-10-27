@@ -27,7 +27,7 @@ test("Published untrusted title and body render as text, not executable HTML", a
   await expect(page).toHaveURL(/\/explore\/[0-9a-f-]{36}/);
 
   const publicWorld = page.locator(".public-world");
-  await expect(page.getByRole("heading", { name: new RegExp(actor.handle) })).toBeVisible();
+  await expect(publicWorld.getByRole("heading", { name: new RegExp(actor.handle) })).toBeVisible();
   await expect(publicWorld.getByText(summary, { exact: false })).toBeVisible();
   await expect(page.locator('img[src="x"]')).toHaveCount(0);
   const executed = await page.evaluate(
