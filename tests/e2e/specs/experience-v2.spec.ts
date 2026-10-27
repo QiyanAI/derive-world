@@ -18,6 +18,8 @@ test("V2: context-first navigation, world zoom and exact-handle friend discovery
   await stage.getByTestId("dw-stage-zoom-reset").click();
   await expect(stage.getByTestId("dw-stage-viewport")).toHaveAttribute("data-zoom", "1.00");
   await page.goto("/friends");
+  await expect(page.getByTestId("dw-together-world")).toBeVisible();
+  await expect(page.getByRole("link", { name: "Create a world to share" })).toBeVisible();
   await page.getByRole("button", { name: "Find a friend" }).click();
   await expect(page.getByPlaceholder("Friend's handle")).toBeFocused();
   await page.goto("/explore");
