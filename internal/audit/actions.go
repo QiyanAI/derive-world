@@ -68,7 +68,6 @@ const (
 	ActionSocialUnblock        Action = "social.unblock"
 	ActionSocialMessageSend    Action = "social.message_send"
 	ActionSocialDiscussionPost Action = "social.discussion_post"
-	ActionSocialDiscoveryPreference Action = "social.discovery_preference"
 	ActionPublicationCreate    Action = "publication.create"
 	ActionPublicationActivate  Action = "publication.activate"
 	ActionPublicationRevoke    Action = "publication.revoke"
@@ -76,6 +75,10 @@ const (
 	ActionPublicationDerive    Action = "publication.derive"
 	ActionPublicationReport    Action = "publication.report"
 )
+
+// ActionSocialDiscoveryPreference belongs to migration 00007 and is kept separate
+// to preserve the frozen layout of the original audit action group.
+const ActionSocialDiscoveryPreference Action = "social.discovery_preference"
 
 // AllActions is the normative G00 49-action set plus the living-world additions
 // registered by migration 00006.
