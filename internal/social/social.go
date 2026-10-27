@@ -95,6 +95,65 @@ func NewService(db *pgxpool.Pool, auditWriter *audit.Writer) *Service {
 	return &Service{db: db, audit: auditWriter}
 }
 
+// DiscoveryCandidate is deliberately limited to opt-in account information.
+// It never includes email, private AI context, memberships, or object data.
+type DiscoveryCandidate struct {
+    UserID string `json:"user_id"`
+    Handle string `json:"handle"`
+    DisplayName string `json:"display_name"`
+}
+
+// DiscoveryEnabled reads only the requesting account's opt-in setting.
+func (s *Service) DiscoveryEnabled(ctx context.Context, userID uuid.UUID) (bool, error) {
+    var enabled bool
+    err := s.db.QueryRow(ctx, `
+SELECT COALESCE((SELECT discoverable FROM social_discovery_settings WHERE user_id = $1), false)`,
+       userID.String()).Scan(&enabled)
+    return enabled, err
+}
+
+// SetDiscoveryEnabled changes only the caller's own opt-in setting.
+func (s *Service) SetDiscoveryEnabled(ctx context.Context, userID uuid.UUID, enabled bool) error {
+    _, err := s.db.Exec(ctx, `
+INSERT INTO social_discovery_settings (user_id, discoverable) VALUES ($1,$2)
+ON CONFLICT (user_id) DO UPDATE SET discoverable = EXCLUDED.discoverable, updated_at = now()`,
+        userID.String(), enabled)
+    return err
+}
+
+// SearchDiscovery only returns actively opted-in users and excludes blocked pairs.
+// Fixed size and escaped prefix/substring matching avoid unrestricted enumeration.
+func (s *Service) SearchDiscovery(ctx context.Context, userID uuid.UUID, query string) ([]DiscoveryCandidate, error) {
+    term := strings.TrimSpace(strings.TrimPrefix(strings.TrimSpace(query), "@"))
+    if utf8.RuneCountInString(term) < 2 || utf8.RuneCountInString(term) > 40 {
+        return nil, fmt.Errorf("%w: search length", ErrInvalidRequest)
+    }
+    escaped := strings.NewReplacer(`\`, `\\`, "%", `\%`, "_", `\_`).Replace(term)
+    rows, err := s.db.Query(ctx, `
+SELECT u.id, u.handle, u.display_name
+  FROM users u
+  JOIN social_discovery_settings opt ON opt.user_id = u.id AND opt.discoverable = true
+ WHERE u.status = 'active' AND u.id <> $1
+   AND (u.handle ILIKE $2 OR u.display_name ILIKE $3)
+   AND NOT EXISTS (SELECT 1 FROM user_blocks b
+                   WHERE (b.blocker_id = $1 AND b.blocked_id = u.id)
+                      OR (b.blocker_id = u.id AND b.blocked_id = $1))
+ ORDER BY CASE WHEN lower(u.handle) = lower($4) THEN 0 ELSE 1 END,
+          lower(u.display_name), u.handle
+ LIMIT 10`, userID.String(), escaped+"%", "%"+escaped+"%", term)
+    if err != nil { return nil, err }
+    defer rows.Close()
+    matches := make([]DiscoveryCandidate, 0, 10)
+    for rows.Next() {
+        var candidate DiscoveryCandidate
+        if err := rows.Scan(&candidate.UserID, &candidate.Handle, &candidate.DisplayName); err != nil {
+            return nil, err
+        }
+        matches = append(matches, candidate)
+    }
+    return matches, rows.Err()
+}
+
 // ListFriends returns accepted friends with unread message counts.
 func (s *Service) ListFriends(ctx context.Context, userID uuid.UUID) ([]Friend, error) {
 	rows, err := s.db.Query(ctx, `
