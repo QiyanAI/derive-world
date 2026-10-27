@@ -99,6 +99,7 @@ type App struct {
 	publicationLimiter   *httpx.Limiter
 	socialWriteLimiter   *httpx.Limiter
 	friendRequestLimiter *httpx.Limiter
+	discoveryLimiter     *httpx.Limiter
 	reportLimiter        *httpx.Limiter
 	modelCheckLimiter    *httpx.Limiter
 	rateAuthLimit        int
@@ -206,6 +207,7 @@ func New(options Options) (*App, error) {
 	application.publicationLimiter = httpx.NewLimiterWithBurst(10, time.Hour, 3)
 	application.socialWriteLimiter = httpx.NewLimiterWithBurst(60, time.Minute, 20)
 	application.friendRequestLimiter = httpx.NewLimiterWithBurst(20, time.Hour, 5)
+	application.discoveryLimiter = httpx.NewLimiterWithBurst(30, time.Minute, 5)
 	application.reportLimiter = httpx.NewLimiterWithBurst(5, time.Hour, 2)
 	application.modelCheckLimiter = httpx.NewLimiterWithBurst(5, time.Hour, 2)
 	if options.Store != nil {

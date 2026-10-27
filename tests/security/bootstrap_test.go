@@ -49,8 +49,8 @@ func TestMigrationIdempotent(t *testing.T) {
 		"SELECT value FROM app_meta WHERE key = 'schema_version'").Scan(&schemaVersion); err != nil {
 		t.Fatalf("read app_meta: %v", err)
 	}
-	if schemaVersion != "6" {
-		t.Fatalf("schema_version = %q, want 6", schemaVersion)
+	if schemaVersion != "7" {
+		t.Fatalf("schema_version = %q, want 7", schemaVersion)
 	}
 
 	var migrationTableExists bool
@@ -107,7 +107,7 @@ func TestFrozenSchemaShape(t *testing.T) {
 		"object_proposals", "audit_actions",
 		"friendships", "user_blocks", "direct_messages", "object_discussions",
 		"publications", "publication_consents", "publication_derivations",
-		"publication_reports",
+		"publication_reports", "social_discovery_settings",
 	}
 	for _, table := range businessTables {
 		var exists bool
@@ -124,8 +124,8 @@ func TestFrozenSchemaShape(t *testing.T) {
 	if err := database.Pool().QueryRow(ctx, "SELECT count(*) FROM audit_actions").Scan(&auditActions); err != nil {
 		t.Fatalf("count audit actions: %v", err)
 	}
-	if auditActions != 63 {
-		t.Fatalf("audit_actions rows = %d, want 63", auditActions)
+	if auditActions != 64 {
+		t.Fatalf("audit_actions rows = %d, want 64", auditActions)
 	}
 
 	var sourceColumns int

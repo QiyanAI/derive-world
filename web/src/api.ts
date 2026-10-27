@@ -1042,6 +1042,24 @@ export async function postDiscussion(
   });
 }
 
+export interface DiscoveryCandidate {
+  user_id: string;
+  handle: string;
+  display_name: string;
+}
+
+export async function searchDiscoverableFriends(query: string, signal?: AbortSignal): Promise<{ items: DiscoveryCandidate[] }> {
+  return request(`/api/v1/social/discovery?q=${encodeURIComponent(query)}`, { signal });
+}
+
+export async function getDiscoveryPreference(signal?: AbortSignal): Promise<{ discoverable: boolean }> {
+  return request("/api/v1/social/discovery/me", { signal });
+}
+
+export async function setDiscoveryPreference(discoverable: boolean): Promise<{ discoverable: boolean }> {
+  return request("/api/v1/social/discovery/me", { method: "PUT", body: { discoverable } });
+}
+
 export async function listFriends(signal?: AbortSignal): Promise<{ items: Friend[] }> {
   return request("/api/v1/social/friends", { signal });
 }

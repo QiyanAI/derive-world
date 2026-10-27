@@ -1602,6 +1602,71 @@ paths:
           $ref: '#/components/responses/UnsupportedMediaType'
         '429':
           $ref: '#/components/responses/RateLimited'
+  /api/v1/social/discovery:
+    get:
+      operationId: searchDiscoverableFriends
+      summary: Search only accounts that explicitly opted in to discoverability
+      description: Authenticated, limited to ten results, excluding blocked pairs; never reveals email or private data.
+      parameters:
+      - name: q
+        in: query
+        required: true
+        schema:
+          type: string
+          minLength: 2
+          maxLength: 40
+      responses:
+        '200':
+          description: Opted-in discoverable accounts.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DiscoveryCandidateList'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+  /api/v1/social/discovery/me:
+    get:
+      operationId: getDiscoveryPreference
+      summary: Read caller's own discoverability preference
+      responses:
+        '200':
+          description: Discoverability setting, false by default.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DiscoveryPreference'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+    put:
+      operationId: setDiscoveryPreference
+      summary: Opt in or opt out for the authenticated caller only
+      parameters:
+      - $ref: '#/components/parameters/CSRFToken'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/DiscoveryPreference'
+      responses:
+        '200':
+          description: Updated preference.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DiscoveryPreference'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '429':
+          $ref: '#/components/responses/RateLimited'
   /api/v1/social/friends:
     get:
       operationId: listFriends
@@ -4364,6 +4429,36 @@ components:
         client_message_id:
           type: string
           format: uuid
+    DiscoveryCandidate:
+      type: object
+      additionalProperties: false
+      required: [user_id, handle, display_name]
+      properties:
+        user_id:
+          type: string
+          format: uuid
+        handle:
+          type: string
+        display_name:
+          type: string
+    DiscoveryCandidateList:
+      type: object
+      additionalProperties: false
+      required: [items]
+      properties:
+        items:
+          type: array
+          maxItems: 10
+          items:
+            $ref: '#/components/schemas/DiscoveryCandidate'
+    DiscoveryPreference:
+      type: object
+      additionalProperties: false
+      required: [discoverable]
+      properties:
+        discoverable:
+          type: boolean
+          default: false
     Friend:
       type: object
       additionalProperties: false

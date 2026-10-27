@@ -226,6 +226,7 @@ func assertTableOwnership(t *testing.T, root string, packages map[string]listedP
 		"model_invocations": "model",
 		"audit_events":      "audit", "audit_actions": "audit",
 		"idempotency_keys": "store", "schema_migrations": "store",
+		"social_discovery_settings": "social",
 		// G01 bootstrap infrastructure; not part of the 22 business tables.
 		"app_meta": "store",
 	}
