@@ -13,7 +13,7 @@ const navClass = ({ isActive }: { isActive: boolean }) =>
   isActive ? "nav-link nav-link-active" : "nav-link";
 
 export default function AppShell() {
-  const { t } = useI18n();
+  const { t, lang } = useI18n();
   const { mode, status: metaStatus } = useMeta();
   const { status, user, logout, logoutError, authError, refresh } = useAuth();
   const location = useLocation();
@@ -81,7 +81,7 @@ export default function AppShell() {
           ) : null}
         </nav>
         <div className="header-actions">
-          {authenticated ? <Link className="button button-ghost button-compact dw-ai-setup" to="/settings#ai-connection">{t("system.modelMode")} ⚙</Link> : null}<ModeBadge mode={mode} />
+          {authenticated ? <Link className="button button-ghost button-compact dw-ai-setup" to="/settings#ai-connection">{lang === "zh" ? "设置 AI" : "AI setup"} ⚙</Link> : null}<ModeBadge mode={mode} />
           <LanguageToggle />
           {authenticated && user ? (
             <>

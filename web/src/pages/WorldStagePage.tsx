@@ -18,7 +18,7 @@ import { useAuth } from "../auth";
 import { useI18n } from "../i18n";
 
 export default function WorldStagePage() {
-  const { t } = useI18n();
+  const { t, lang } = useI18n();
   const { user } = useAuth();
   const [stage, setStage] = useState<WorldStage | null>(null);
   const [confirmations, setConfirmations] = useState<Confirmation[]>([]);
@@ -31,6 +31,7 @@ export default function WorldStagePage() {
   const [inspectorOpen, setInspectorOpen] = useState(false);
   const [inspectorTab, setInspectorTab] = useState<StageInspectorTab>("work");
   const [draggingId, setDraggingId] = useState<string | null>(null);
+  const [zoom, setZoom] = useState(1);
   const selectRequest = useRef(0);
 
   const load = useCallback(async (signal?: AbortSignal) => {
@@ -245,6 +246,7 @@ export default function WorldStagePage() {
     return (
       <li key={object.id} className="stage-node-wrap">
         <article
+          data-testid="dw-stage-node"
           className={`stage-node stage-node-${object.object_type}${
             selectedId === object.id ? " stage-node-selected" : ""
           }`}
@@ -289,7 +291,7 @@ export default function WorldStagePage() {
               {object.latest_event.actor_name ? ` · ${object.latest_event.actor_name}` : ""}
             </p>
           ) : null}
-          <div className="stage-node-actions">
+          {selectedId === object.id ? <div className="stage-node-actions">
             <button
               className="button button-small"
               type="button"
@@ -323,7 +325,7 @@ export default function WorldStagePage() {
             <Link className="text-link" to={`/objects/${object.id}`}>
               {t("stage.openPage")}
             </Link>
-          </div>
+          </div> : null}
           {object.permissions.includes("derive") ? (
             <p className="stage-drag-hint">{t("stage.dragHint")}</p>
           ) : null}
@@ -394,6 +396,18 @@ export default function WorldStagePage() {
             }
           }}
         >
+          <div className="dw-stage-topbar">
+            <div className="dw-stage-topbar-title">
+              <strong>{lang === "zh" ? "正在演化的世界" : "Your living world"}</strong>
+              <small>{lang === "zh" ? "选择一个创造物，直接改变或衍生" : "Select a creation to change or derive it"}</small>
+            </div>
+            <div className="dw-stage-zoom-controls" role="group" aria-label={lang === "zh" ? "世界视角缩放" : "World zoom controls"}>
+              <button type="button" data-testid="dw-stage-zoom-out" aria-label={lang === "zh" ? "缩小世界" : "Zoom out"} disabled={zoom <= 0.7} onClick={() => setZoom((value) => Math.max(0.7, Math.round((value - 0.15) * 100) / 100))}>−</button>
+              <output aria-live="off" aria-label={lang === "zh" ? "缩放比例" : "Zoom level"}>{Math.round(zoom * 100)}%</output>
+              <button type="button" data-testid="dw-stage-zoom-in" aria-label={lang === "zh" ? "放大世界" : "Zoom in"} disabled={zoom >= 1.45} onClick={() => setZoom((value) => Math.min(1.45, Math.round((value + 0.15) * 100) / 100))}>+</button>
+              <button type="button" data-testid="dw-stage-zoom-reset" aria-label={lang === "zh" ? "恢复世界视角" : "Reset view"} onClick={() => setZoom(1)}>↺</button>
+            </div>
+          </div>
           {draggingId ? <div className="stage-drop-target">{t("stage.dropBranch")}</div> : null}
           {loading && !stage ? <p className="muted">{t("common.loading")}</p> : null}
           {!loading && (stage?.objects.length ?? 0) === 0 ? (
@@ -422,8 +436,27 @@ export default function WorldStagePage() {
               </div>
             </div>
           ) : (
-            <ul className="stage-roots">{roots.map((object) => renderNode(object, 0, new Set()))}</ul>
+            <div className="dw-stage-viewport" data-testid="dw-stage-viewport" data-zoom={zoom.toFixed(2)} style={{ transform: `scale(${zoom})` }}>
+              <ul className="stage-roots">{roots.map((object) => renderNode(object, 0, new Set()))}</ul>
+            </div>
           )}
+          {inspectorOpen ? <div className="dw-stage-inspector-dock">
+{inspectorOpen ? (
+            <StageInspector
+              key={selected?.id ?? "none"}
+              object={selected}
+              tab={inspectorTab}
+              loading={selectedLoading}
+              error={selectedError}
+              onTab={setInspectorTab}
+              onClose={closeInspector}
+              onUpdated={handleObjectUpdated}
+              onReload={handleObjectReload}
+              onRefresh={() => load()}
+              onDerived={handleDerived}
+            />
+          ) : null}
+          </div> : null}
         </section>
         <aside className="stage-side">
           {continueObject ? (
@@ -443,21 +476,6 @@ export default function WorldStagePage() {
                 {t("stage.continueAction")}
               </Link>
             </section>
-          ) : null}
-          {inspectorOpen ? (
-            <StageInspector
-              key={selected?.id ?? "none"}
-              object={selected}
-              tab={inspectorTab}
-              loading={selectedLoading}
-              error={selectedError}
-              onTab={setInspectorTab}
-              onClose={closeInspector}
-              onUpdated={handleObjectUpdated}
-              onReload={handleObjectReload}
-              onRefresh={() => load()}
-              onDerived={handleDerived}
-            />
           ) : null}
           <PulsePanel compact refreshKey={stage?.generated_at ?? ""} />
           <section className="card">
@@ -480,14 +498,13 @@ export default function WorldStagePage() {
               </ul>
             )}
           </section>
-          <section className="card stage-quick">
-            <h2>{t("stage.quick")}</h2>
+          <details className="card stage-quick dw-stage-quick"><summary>{t("stage.quick")}</summary>
             <Link to="/objects">{t("nav.objects")}</Link>
             <Link to="/friends">{t("nav.friends")}</Link>
             <Link to="/ai">{t("nav.ai")}</Link>
             <Link to="/welcome">{t("nav.welcome")}</Link>
             <Link to="/settings">{t("nav.settings")}</Link>
-          </section>
+          </details>
         </aside>
       </div>
     </div>

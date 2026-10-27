@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: Apache-2.0
-import { useCallback, useEffect, useMemo, useState, type FormEvent } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent } from "react";
 import { Link } from "react-router";
 import {
   blockUser,
@@ -33,6 +33,7 @@ export default function FriendsPage() {
   const [selected, setSelected] = useState<Friend | null>(null);
   const [messages, setMessages] = useState<DirectMessage[]>([]);
   const [handleDraft, setHandleDraft] = useState("");
+  const friendHandleRef = useRef<HTMLInputElement>(null);
   const [messageDraft, setMessageDraft] = useState("");
   const [notice, setNotice] = useState("");
   const [error, setError] = useState<unknown>(null);
@@ -191,6 +192,9 @@ export default function FriendsPage() {
         <p className="eyebrow">{t("friends.eyebrow")}</p>
         <h1>{t("friends.title")}</h1>
         <p className="lead">{t("friends.lead")}</p>
+        <button className="button button-small dw-find-friend-button" type="button" onClick={() => { friendHandleRef.current?.scrollIntoView({ block: "center", behavior: "smooth" }); friendHandleRef.current?.focus(); }}>
+          {lang === "zh" ? "查找好友" : "Find a friend"}
+        </button>
       </div>
 
       {notice ? <StatusNotice>{notice}</StatusNotice> : null}
@@ -200,9 +204,11 @@ export default function FriendsPage() {
         <aside className="friends-side">
           <section className="card">
             <h2>{t("friends.add")}</h2><p className="muted">{lang === "zh" ? "输入对方准确的 @账号发送好友申请。添加好友不会自动开放私人世界。" : "Enter an exact @handle to request friendship. Friends do not automatically see private worlds."}</p>
-            <form className="inline-field" onSubmit={submitRequest}>
+            <form className="inline-field" onSubmit={submitRequest} data-testid="dw-find-friend-form">
               <input
-                placeholder={lang === "zh" ? "输入好友 @账号" : "Enter exact @handle"}
+                ref={friendHandleRef}
+                aria-label={lang === "zh" ? "好友的准确账号" : "Friend handle"}
+                placeholder={t("friends.handlePlaceholder")}
                 value={handleDraft}
                 maxLength={32}
                 onChange={(event) => setHandleDraft(event.target.value)}

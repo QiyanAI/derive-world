@@ -302,7 +302,11 @@ export default function ExplorePage() {
           const preview = publicPreview(world);
           return (
             <li key={world.id}>
-              <Link className="card public-card" to={`/explore/${world.id}`}>
+              <Link className="card public-card dw-public-world-card" to={`/explore/${world.id}`}>
+                <span className={`dw-public-art dw-public-art-${world.object_type}`} aria-hidden="true">
+                  <span className="dw-public-art-ring" />
+                  <span className="dw-public-art-orb">✦</span>
+                </span>
                 <span className="template-badge">{world.object_type}</span>
                 <h2>{preview.title}</h2>
                 <p>{preview.body || t("explore.noSummary")}</p>
