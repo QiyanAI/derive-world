@@ -29,7 +29,7 @@ import { useI18n } from "../i18n";
 
 export default function FriendsPage() {
   const { t, lang } = useI18n();
-  const { status } = useAuth();
+  const { status, user } = useAuth();
   const [friends, setFriends] = useState<Friend[]>([]);
   const [incoming, setIncoming] = useState<FriendRequest[]>([]);
   const [outgoing, setOutgoing] = useState<FriendRequest[]>([]);
@@ -397,6 +397,39 @@ export default function FriendsPage() {
         </aside>
 
         <section className="friends-thread dw-together-stage">
+          <div className="dw-together-live-map" data-testid="dw-together-live-map">
+            <p className="eyebrow">{lang === "zh" ? "真实连接中的共创世界" : "REAL PEOPLE · SHARED WORLDS"}</p>
+            <div className="dw-together-live-scene">
+              <div className="dw-together-live-core">
+                <span aria-hidden="true">✧</span>
+                <h2>{lang === "zh" ? "一起，创造新的可能" : "Create what's next together"}</h2>
+                <p>{lang === "zh" ? "好友不会自动获得私人世界访问权限。" : "Friendship never grants access to private worlds."}</p>
+                <Link className="button button-small" to="/objects?scope=shared">
+                  {lang === "zh" ? "进入共同世界" : "Enter shared worlds"}
+                </Link>
+              </div>
+              <div className="dw-together-live-people">
+                <div className="dw-together-person dw-together-me">
+                  <span className="avatar" aria-hidden="true">{(user?.display_name || "?").slice(0, 1)}</span>
+                  <strong>{lang === "zh" ? "我" : "Me"}</strong>
+                </div>
+                {friends.slice(0, 8).map((friend) => (
+                  <button className="dw-together-person" key={friend.user_id} type="button"
+                    aria-pressed={selected?.user_id === friend.user_id}
+                    onClick={() => setSelected(friend)}>
+                    <span className="avatar" aria-hidden="true">{friend.display_name.slice(0, 1)}</span>
+                    <strong>{friend.display_name}</strong>
+                    <small>@{friend.handle}</small>
+                  </button>
+                ))}
+              </div>
+            </div>
+            <p className="form-hint">{friends.length === 0
+              ? (lang === "zh" ? "添加真实好友后，他们会出现在这里。"
+                : "Your accepted friends will appear here.")
+              : (lang === "zh" ? "点选好友直接交流；在共同世界中进行有权限的创造。"
+                : "Select a person to message; collaborate only in worlds you may access.")}</p>
+          </div>
           {!selected ? (
             <div className="dw-together-empty"><div className="dw-together-orbit" aria-hidden="true"><span>✧</span><span>◎</span><span>✦</span></div><h2>{lang === "zh" ? "一起，让世界有更多可能。" : "Create something that grows together."}</h2><p>{friends.length === 0 ? (lang === "zh" ? "先通过 @账号添加好友，同意后即可交流和共同创造。" : "Add a friend with an exact @handle to talk and create together.") : t("friends.threadEmpty")}</p><button className="button button-small" type="button" onClick={() => { setManageOpen(true); window.requestAnimationFrame(() => friendHandleRef.current?.focus()); }}>{lang === "zh" ? "邀请朋友" : "Invite a friend"}</button></div>
           ) : (
