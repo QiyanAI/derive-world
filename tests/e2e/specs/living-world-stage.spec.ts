@@ -57,6 +57,7 @@ test("Living world: one person creates a scene, inspects the lens, publishes, an
 
     await page.goto("/explore");
     await expect(page.getByTestId("explore-page")).toBeVisible();
+    await expect(page.locator(".dw-featured-world")).toContainText(sceneTitle);
     await expect(page.getByRole("heading", { name: sceneTitle })).toBeVisible();
     await page.getByRole("link", { name: new RegExp(sceneTitle) }).click();
     await expect(page.getByRole("heading", { name: "Create an independent branch" })).toBeVisible();
