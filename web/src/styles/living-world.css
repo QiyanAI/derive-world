@@ -1117,3 +1117,27 @@
 .dw-featured-world-byline{color:#bdc4d8;font-size:13px;margin:18px 0}
 .dw-featured-world-content .button{display:inline-flex}
 @media(max-width:700px){.dw-featured-world{min-height:410px}.dw-featured-world-content{padding:30px 23px}.dw-featured-world-orb{width:180px;height:180px;transform:translate(20%,-35%)}}
+
+
+/* V2 Together: real, authorized shared worlds rendered as a spatial experience. */
+.dw-together-landing{min-height:550px;display:flex;flex-direction:column;justify-content:center;gap:18px}
+.dw-together-constellation{position:relative;min-height:505px;display:grid;place-items:center;isolation:isolate;overflow:hidden;border:1px solid rgba(155,174,216,.15);border-radius:28px;background:radial-gradient(circle at 50% 48%,rgba(66,100,110,.2),transparent 44%),radial-gradient(circle at 73% 27%,rgba(88,66,127,.19),transparent 38%),#101726}
+.dw-together-constellation:before,.dw-together-constellation:after{content:"";position:absolute;border:1px solid rgba(169,217,202,.17);border-radius:50%;width:450px;height:285px;transform:rotate(-16deg);pointer-events:none}
+.dw-together-constellation:after{width:315px;height:315px;transform:rotate(27deg);border-color:rgba(192,177,234,.15)}
+.dw-together-world-core{z-index:1;display:flex;align-items:center;flex-direction:column;text-align:center;width:min(100%,570px);padding:110px 32px 85px}
+.dw-together-world-symbol{font-size:58px;color:#baf2d4;text-shadow:0 0 52px rgba(130,228,183,.5)}
+.dw-together-world-core h2{font-size:clamp(24px,3.3vw,38px);color:#f1f4ff;letter-spacing:-.035em;margin:9px 0}
+.dw-together-world-core p:not(.eyebrow){color:#bcc8d7;line-height:1.6;max-width:420px}
+.dw-together-world-core .button{margin-top:12px}
+.dw-together-core-actions{display:flex;justify-content:center;flex-wrap:wrap;gap:16px;margin-top:20px}
+.dw-together-core-actions a,.dw-together-secondary-action{font:inherit;font-size:13px;color:#bde3d4;border:0;background:transparent;text-decoration:underline;cursor:pointer}
+.dw-together-secondary-action{margin-top:20px}
+.dw-together-person{position:absolute;z-index:2;display:flex;align-items:center;gap:8px;font:inherit;font-size:12px;color:#e4eaf2;background:rgba(35,45,63,.91);padding:8px 12px;border:1px solid rgba(202,227,235,.25);border-radius:30px;max-width:150px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+button.dw-together-person{cursor:pointer}
+.dw-together-person:hover,.dw-together-person:focus-visible{border-color:#a8e7d0}
+.dw-together-me{left:5%;top:14%}
+.dw-together-friend-0{right:6%;top:18%}
+.dw-together-friend-1{left:6%;bottom:17%}
+.dw-together-friend-2{right:6%;bottom:15%}
+.dw-together-world-switch{display:flex;flex-wrap:wrap;align-items:center;gap:14px;font-size:13px}.dw-together-world-switch a{color:var(--color-accent)}
+@media(max-width:700px){.dw-together-constellation{min-height:490px}.dw-together-world-core{padding:130px 17px 80px}.dw-together-person{font-size:10px;max-width:115px;padding:5px 7px}.dw-together-me{left:3%;top:7%}.dw-together-friend-0{right:3%;top:8%}.dw-together-friend-1{left:3%;bottom:8%}.dw-together-friend-2{right:3%;bottom:8%}.dw-together-constellation:before{width:330px;height:290px}}
