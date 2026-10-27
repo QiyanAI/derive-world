@@ -71,7 +71,9 @@ func (a *App) setDiscoveryPreference(w http.ResponseWriter, r *http.Request) {
         httpx.WriteError(w, r, httpx.NewError(httpx.CodeInvalidRequest, "discoverable required"))
         return
     }
-    if err := a.social.SetDiscoveryEnabled(r.Context(), principal.User.ID, *input.Discoverable); err != nil {
+    if err := a.social.SetDiscoveryEnabled(r.Context(), principal.User.ID, *input.Discoverable,
+        httpx.RequestIDFromContext(r.Context()),
+        httpx.HashIPBytes(a.config.IPHashPepper, httpx.ClientIP(r, a.config.TrustProxyHeaders))); err != nil {
         a.writeDomainError(w, r, err); return
     }
     httpx.WriteJSON(w, http.StatusOK, map[string]bool{"discoverable": *input.Discoverable})
