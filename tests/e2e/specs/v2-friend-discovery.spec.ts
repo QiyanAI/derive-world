@@ -22,6 +22,7 @@ test("V2: opt-in nickname discovery sends a real friend request without exposing
     await bob.getByRole("button", { name: "Find a friend" }).click();
     await bob.getByRole("checkbox", { name: /Allow people to find me/ }).check();
     await expect(bob.getByRole("checkbox", { name: /Allow people to find me/ })).toBeChecked();
+    await expect(bob.getByRole("checkbox", { name: /Allow people to find me/ })).toBeEnabled();
 
     await alice.getByPlaceholder("Friend's handle").fill("");
     await alice.getByPlaceholder("Friend's handle").fill(bobUser.handle);
@@ -32,6 +33,7 @@ test("V2: opt-in nickname discovery sends a real friend request without exposing
 
     await bob.getByRole("checkbox", { name: /Allow people to find me/ }).uncheck();
     await expect(bob.getByRole("checkbox", { name: /Allow people to find me/ })).not.toBeChecked();
+    await expect(bob.getByRole("checkbox", { name: /Allow people to find me/ })).toBeEnabled();
   } finally {
     await aliceContext.close();
     await bobContext.close();
