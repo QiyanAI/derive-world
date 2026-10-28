@@ -12,6 +12,18 @@ TypeScript SDK, the independent `content.structure` Provider, response-signed
 Provider transport, verified TLS, HMAC key rotation, and model budgets are
 implemented. This is a self-hostable OSS MVP, not a production platform.
 
+## Free worlds on the development branch
+
+- A free world is declarative data: creators define kinds, things, relations,
+  and one-pass rules. The server interprets that data; it never executes user
+  code, loads native plugins, renders 3D scenes, or launches external apps.
+- An unbound Personal AI can propose a complete world. The proposal is validated
+  before storage and creates nothing until a human approves the five-minute
+  confirmation.
+- Fixture output is deterministic demo data and is always labelled; real-model
+  output is a separate, operator-configured mode and is never implied by
+  fixture behaviour.
+
 ## Implemented in v0.1.0
 
 - Local registration, login, session rotation, logout, and session-bound CSRF.
