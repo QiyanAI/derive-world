@@ -1,10 +1,11 @@
 // SPDX-License-Identifier: Apache-2.0
 import { useCallback, useEffect, useRef, useState, type FormEvent, type PointerEvent as ReactPointerEvent } from "react";
-import { Link, useParams } from "react-router";
+import { Link, useParams, useSearchParams } from "react-router";
 import {
   applyAction,
   errorMessage,
   getObject,
+  getWorldCapabilities,
   openWorldState,
   type ObjectView,
   type OpenWorldField,
@@ -12,10 +13,14 @@ import {
   type OpenWorldNode,
   type OpenWorldPresentation,
   type OpenWorldState,
-  type OpenWorldView
+  type OpenWorldView,
+  type WorldCapabilityDescriptor,
+  type WorldExperience as WorldExperienceDocument
 } from "../api";
 import AIPanel from "../components/AIPanel";
 import Icon from "../components/v2/Icon";
+import WorldExperience from "../components/v2/WorldExperience";
+import WorldExperienceEditor from "../components/v2/WorldExperienceEditor";
 import WorldLookEditor from "../components/v2/WorldLookEditor";
 import WorldScene from "../components/v2/WorldScene";
 import { useI18n } from "../i18n";
@@ -32,7 +37,8 @@ type DragState = {
   moved: boolean;
 };
 
-type ViewMode = "structure" | "ai";
+type ViewMode = "structure" | "experience" | "ai";
+type WorldViewMode = OpenWorldView | "experience";
 
 function clamp(value: number, min: number, max: number): number {
   return Math.max(min, Math.min(max, value));
@@ -64,6 +70,7 @@ function valueLabel(value: unknown): string {
 
 export default function OpenWorldPage() {
   const { id = "" } = useParams();
+  const [searchParams] = useSearchParams();
   const { t, lang } = useI18n();
   const zh = lang === "zh";
   const [object, setObject] = useState<ObjectView | null>(null);
@@ -71,8 +78,12 @@ export default function OpenWorldPage() {
   const [error, setError] = useState<unknown>(null);
   const [notice, setNotice] = useState("");
   const [busy, setBusy] = useState("");
-  const [view, setView] = useState<OpenWorldView | "">("");
-  const [panel, setPanel] = useState<ViewMode>("structure");
+  const [view, setView] = useState<WorldViewMode | "">("");
+  const [panel, setPanel] = useState<ViewMode>(
+    searchParams.get("build") === "1" ? "experience" : "structure"
+  );
+  const [capabilities, setCapabilities] = useState<WorldCapabilityDescriptor[]>([]);
+  const [capabilityError, setCapabilityError] = useState("");
   const [premiseEditing, setPremiseEditing] = useState(false);
   const [premiseDraft, setPremiseDraft] = useState("");
   const [drag, setDrag] = useState<{ id: string; x: number; y: number } | null>(null);
@@ -97,15 +108,52 @@ export default function OpenWorldPage() {
     void load();
   }, [load]);
 
+  useEffect(() => {
+    let active = true;
+    getWorldCapabilities()
+      .then((items) => {
+        if (active) {
+          setCapabilities(items);
+          setCapabilityError("");
+        }
+      })
+      .catch(() => {
+        if (active) {
+          setCapabilityError(zh ? "无法加载能力目录。" : "The capability catalog could not be loaded.");
+        }
+      });
+    return () => {
+      active = false;
+    };
+  }, [zh]);
+
   const world = object ? openWorldState(object) : null;
-  const activeView: OpenWorldView = world ? view || world.views[0] || "scene" : "scene";
+  const activeView: WorldViewMode = world
+    ? view || (world.experience ? "experience" : world.views[0] || "scene")
+    : "scene";
   const canContribute = object?.permissions.includes("contribute") ?? false;
+  const hasExperience = Boolean(world?.experience);
 
   useEffect(() => {
-    if (world && (!view || !world.views.includes(view)) && world.views[0]) {
-      setView(world.views[0]);
+    if (!world) {
+      return;
+    }
+    if (view === "experience") {
+      if (!world.experience) {
+        setView(world.views[0] ?? "scene");
+      }
+      return;
+    }
+    if (view && !world.views.includes(view)) {
+      setView(world.experience ? "experience" : world.views[0] ?? "scene");
     }
   }, [world, view]);
+
+  useEffect(() => {
+    if (world?.experience && view === "") {
+      setView("experience");
+    }
+  }, [world?.experience, view]);
 
   useEffect(() => {
     function onMove(event: PointerEvent) {
@@ -193,6 +241,21 @@ export default function OpenWorldPage() {
     } finally {
       setBusy("");
     }
+  }
+
+  function invokeBehavior(behaviorID: string, entityID?: string, value?: unknown) {
+    const input: Record<string, unknown> = { behavior_id: behaviorID };
+    if (entityID) {
+      input.entity_id = entityID;
+    }
+    if (value !== undefined) {
+      input.value = value;
+    }
+    void run("invoke_behavior", input);
+  }
+
+  function saveExperience(experience: WorldExperienceDocument | null) {
+    void run("set_experience", { experience });
   }
 
   async function savePremise() {
@@ -292,6 +355,14 @@ export default function OpenWorldPage() {
             {t("openWorld.structure")}
           </button>
           <button
+            className={`dw-button dw-button-small ${panel === "experience" ? "dw-button-primary" : "dw-button-ghost"}`}
+            type="button"
+            onClick={() => setPanel("experience")}
+          >
+            <Icon name="layers" size={15} />
+            {t("openWorld.experience")}
+          </button>
+          <button
             className={`dw-button dw-button-small ${panel === "ai" ? "dw-button-primary" : "dw-button-ghost"}`}
             type="button"
             onClick={() => setPanel("ai")}
@@ -355,6 +426,16 @@ export default function OpenWorldPage() {
           </section>
 
           <div className="dw-open-viewbar" role="group" aria-label={t("openWorld.viewLabel")}>
+            {world.experience ? (
+              <button
+                type="button"
+                className={`dw-open-view${activeView === "experience" ? " is-active" : ""}`}
+                aria-pressed={activeView === "experience"}
+                onClick={() => setView("experience")}
+              >
+                {t("openWorld.experience")}
+              </button>
+            ) : null}
             {world.views.map((mode) => (
               <button
                 key={mode}
@@ -376,7 +457,18 @@ export default function OpenWorldPage() {
             </span>
           </div>
 
-          {world.nodes.length === 0 ? (
+          {activeView === "experience" && world.experience ? (
+            <WorldExperience
+              world={world}
+              experience={world.experience}
+              canContribute={canContribute}
+              busy={busy !== ""}
+              onInvoke={invokeBehavior}
+              onSetField={(entityID, field, value) =>
+                void run("set_node_field", { node_id: entityID, field, value })
+              }
+            />
+          ) : world.nodes.length === 0 ? (
             <div className="dw-open-empty">
               <Icon name="world" size={26} />
               <p>{t("openWorld.empty")}</p>
@@ -519,12 +611,31 @@ export default function OpenWorldPage() {
         <aside className="dw-open-panel">
           {panel === "ai" ? (
             <AIPanel object={object} canContribute={canContribute} onChanged={() => void load()} />
+          ) : panel === "experience" ? (
+            capabilityError ? (
+              <p className="dw-form-error" role="alert">
+                {capabilityError}
+              </p>
+            ) : capabilities.length === 0 ? (
+              <p className="dw-page-loading" role="status">
+                {t("common.loading")}
+              </p>
+            ) : (
+              <WorldExperienceEditor
+                world={world}
+                catalog={capabilities}
+                busy={busy !== ""}
+                canContribute={canContribute}
+                onSave={saveExperience}
+              />
+            )
           ) : (
             <StructurePanel
               key={object.id}
               world={world}
               busy={busy !== ""}
               canContribute={canContribute}
+              hasExperience={hasExperience}
               onAddKind={(input) => void run("add_kind", input)}
               onUpdateKind={(input) => void run("update_kind", input)}
               onRemoveKind={(kindID) => void run("remove_kind", { kind_id: kindID })}
@@ -718,6 +829,7 @@ function StructurePanel({
   world,
   busy,
   canContribute,
+  hasExperience,
   onAddKind,
   onUpdateKind,
   onRemoveKind,
@@ -732,6 +844,7 @@ function StructurePanel({
   world: OpenWorldState;
   busy: boolean;
   canContribute: boolean;
+  hasExperience: boolean;
   onAddKind: (input: Record<string, unknown>) => void;
   onUpdateKind: (input: Record<string, unknown>) => void;
   onRemoveKind: (kindID: string) => void;
@@ -962,15 +1075,19 @@ function StructurePanel({
 
   return (
     <div className="dw-open-structure" data-testid="open-world-structure">
-      <WorldLookEditor
-        world={world}
-        busy={busy}
-        canContribute={canContribute}
-        onSetPresentation={onSetPresentation}
-        onUpdateKind={(kindID, appearance, bindings) =>
-          onUpdateKind({ kind_id: kindID, appearance, bindings })
-        }
-      />
+      {hasExperience ? (
+        <p className="dw-open-hint">{t("openWorld.classicLookHidden")}</p>
+      ) : (
+        <WorldLookEditor
+          world={world}
+          busy={busy}
+          canContribute={canContribute}
+          onSetPresentation={onSetPresentation}
+          onUpdateKind={(kindID, appearance, bindings) =>
+            onUpdateKind({ kind_id: kindID, appearance, bindings })
+          }
+        />
+      )}
       <section>
         <h2>{t("openWorld.kinds")}</h2>
         <p className="dw-open-hint">{t("openWorld.kindsHint")}</p>

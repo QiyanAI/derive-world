@@ -1243,6 +1243,35 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/Confirmation'
+  /api/v1/world-capabilities:
+    get:
+      operationId: listWorldCapabilities
+      summary: List registered world experience capabilities
+      description: >
+        Presentation and behavior modules that any open world may compose.
+        The catalog drives the product palette and generated forms; capability
+        params are validated by the server, never interpreted as code.
+      security:
+        - cookieAuth: []
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Registered world capability descriptors.
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: false
+                required: [items]
+                properties:
+                  items:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/WorldCapabilityDescriptor"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "429":
+          $ref: "#/components/responses/RateLimited"
   /api/v1/capabilities:
     get:
       operationId: listCapabilities
@@ -2458,6 +2487,46 @@ components:
           schema:
             $ref: "#/components/schemas/Error"
   schemas:
+    LocalizedLabel:
+      type: object
+      additionalProperties: false
+      required: [en, zh]
+      properties:
+        en:
+          type: string
+        zh:
+          type: string
+    WorldCapabilityDescriptor:
+      type: object
+      additionalProperties: false
+      required: [id, kind, version, title, description]
+      properties:
+        id:
+          type: string
+        kind:
+          type: string
+          enum: [presentation, behavior]
+        version:
+          type: integer
+          minimum: 1
+        title:
+          $ref: "#/components/schemas/LocalizedLabel"
+        description:
+          $ref: "#/components/schemas/LocalizedLabel"
+        allows_children:
+          type: boolean
+        child_scope:
+          type: string
+        child_kind_prop:
+          type: string
+        params:
+          type: object
+          additionalProperties: true
+        actions:
+          type: array
+          items:
+            type: object
+            additionalProperties: true
     Meta:
       type: object
       additionalProperties: false
@@ -3077,6 +3146,8 @@ components:
             - remove_rule
             - set_views
             - set_presentation
+            - set_experience
+            - invoke_behavior
         input:
           type: object
           additionalProperties: true

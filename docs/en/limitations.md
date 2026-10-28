@@ -14,25 +14,41 @@ implemented. This is a self-hostable OSS MVP, not a production platform.
 
 ## Free worlds on the development branch
 
-- A free world is declarative data: creators define kinds, things, relations,
-  one-pass rules, and a scene. The scene defines a backdrop, hue range,
-  horizon, ambient particles, relation style, and each kind's shape, size,
-  motion, glow, label, and layer. A bounded linear binding maps a numeric or
-  flag field onto scale, glow, opacity, hue shift, or speed. A rule may carry
-  one comparison guard. The server interprets that data; it never executes
-  user code, loads native plugins, renders 3D scenes, or launches external
-  apps.
-- Every world uses the same 2D SVG scene renderer. A world cannot supply
-  images, fonts, scripts, shaders, a physics engine, or per-world render code.
-  Ambient motion is presentation only; state changes only through persisted
-  actions, and there is no autonomous simulation clock. Presentation is
-  inherited as part of `structure` when deriving.
+- A free world's content is declarative data: creators define kinds, things,
+  relations, one-pass rules, and an optional composed experience. Content is
+  not selected from a fixed product taxonomy.
+- An experience is a bounded tree of registered capabilities: layout, text,
+  vector space with arbitrary SVG paths, repeating collections, data tables,
+  field editors, meters, buttons, and choices. Reusable behaviors currently
+  cover state changes and numeric transfer. `GET
+  /api/v1/world-capabilities` publishes the same catalog that drives the
+  product palette and generated forms.
+- Adding a capability is a module change (Go validator/executor plus its
+  client renderer and descriptor), not a change to the world protocol. Every
+  registered capability is available to every world. The classic scene,
+  stage, cards, and timeline remain selectable views for the same world; a
+  world does not become a different object type when its experience changes.
+- The server interprets every value. It never executes user code, loads
+  external URLs, images, fonts or scripts, opens network access, renders 3D,
+  or runs a physics/audio engine. Strings are rendered as text, vector paths
+  use a restricted drawing-command grammar, and all values are bounded.
+- Bounds: 64 static view nodes, depth 8, 24 children per node, 24 behaviors,
+  8 actions per behavior, 4 KiB of props per node, 32 KiB per experience, 400
+  expanded render instances, and the existing 64 KiB object-state cap. Actions
+  remain single-pass and never chain.
+- `set_experience` and `invoke_behavior` require `contribute`; a caller
+  without read permission still receives 404. Every change uses the existing
+  row lock, `expected_version`, idempotency, event and audit path.
+- Deriving with `structure` copies the experience, remaps kind/entity UUIDs in
+  capability props, conditions and action params, and keeps local view and
+  behavior ids stable. The child is independent and revalidated; the parent is
+  unchanged.
 - The frozen `object.propose_change` capability keeps its published action
-  set. Scene-level presentation (`set_presentation`) is edited through the
-  product's human action API, not that capability. An object-bound AI can
-  still propose `update_kind` appearance/bindings and `add_rule` guards, and
-  an unbound AI can propose a complete world with presentation through
-  `world.create`; both remain human-approved.
+  set. Experience editing is a human product path. An object-bound AI can
+  still propose the existing structural actions, and an unbound AI can propose
+  a complete world through `world.create`; both remain human-approved. Rich
+  AI-authored experience documents are **not yet** available through that
+  frozen schema, and the 8 KiB model-output limit is binding for such work.
 - An unbound Personal AI can propose a complete world. The proposal is validated
   before storage and creates nothing until a human approves the five-minute
   confirmation.

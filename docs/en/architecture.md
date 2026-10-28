@@ -21,6 +21,7 @@ separate frontend server in the reference deployment.
 ```text
 web / sdk -> OpenAPI -> app -> {identity, personalai, objects, derive, trust, handoff, capability}
 objects -> store
+objects -> worldcap (pure validation/execution registry)
 derive -> objects (controlled interface) + store
 trust -> identity + objects (read-only) + store
 capability -> trust + objects + model (content capabilities only)
@@ -31,6 +32,20 @@ audit -> store
 `httpx`, `config`, and `model` depend only on the standard library and their
 frozen dependencies. `internal/arch/TestModuleBoundaries` enforces the forbidden
 edges, cycle freedom, submodule isolation, and the table-ownership matrix.
+
+## World experience capabilities
+
+`internal/worldcap` is a standard-library-only registry of presentation and
+behavior modules. The objects package owns the world document, permissions,
+persistence, events, audit and derivation; `worldcap` owns module descriptors,
+props/action validation, bounded condition evaluation and the `WorldAccess`
+mutation surface. A module cannot add an object type, table, permission,
+network call or user code path. The capability catalog is exposed at
+`GET /api/v1/world-capabilities`; the product palette and generated forms use
+that descriptor data, while presentation modules are paired with client
+renderers by id. The optional `experience` field in `open_world_v1` is the only
+world-protocol extension; existing scene/stage/cards/timeline views remain
+registered client modes.
 
 ## Capability scope
 

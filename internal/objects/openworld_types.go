@@ -9,6 +9,8 @@ import (
 	"unicode/utf8"
 
 	"github.com/google/uuid"
+
+	"github.com/QiyanAI/derive-world/internal/worldcap"
 )
 
 // open_world is a declarative world model. Users define their own kinds of
@@ -273,6 +275,10 @@ type OpenWorldState struct {
 	Views        []string              `json:"views"`
 	Tags         []string              `json:"tags"`
 	Presentation OpenWorldPresentation `json:"presentation"`
+	// Experience is the optional capability-composed experience. Worlds that
+	// predate it omit the field and keep using views/presentation exactly as
+	// before. Its presence never changes the core entity/field/rule model.
+	Experience *worldcap.Experience `json:"experience,omitempty"`
 }
 
 // OpenWorldAvailableViews is the frozen presentation vocabulary. A world
@@ -348,6 +354,7 @@ type OpenWorldContent struct {
 	Views        []string               `json:"views"`
 	Tags         []string               `json:"tags"`
 	Presentation *OpenWorldPresentation `json:"presentation"`
+	Experience   *worldcap.Experience   `json:"experience"`
 }
 
 func validOpenWorldFieldType(value string) bool {
@@ -906,6 +913,9 @@ func ValidateOpenWorldState(state *OpenWorldState) error {
 			}
 		}
 	}
+	if err := validateOpenWorldExperience(state); err != nil {
+		return err
+	}
 	views, err := normalizeOpenWorldViews(state.Views)
 	if err != nil {
 		return err
@@ -1026,6 +1036,13 @@ func OpenWorldDerivedState(title string, parent *OpenWorldState, selected map[st
 				ID: id.String(), TriggerID: nodeIDs[rule.TriggerID],
 				Condition: condition, Effects: effects,
 			})
+		}
+		if parent.Experience != nil {
+			experience, err := worldcap.RemapExperience(parent.Experience, kindIDs, nodeIDs)
+			if err != nil {
+				return nil, err
+			}
+			child.Experience = experience
 		}
 	}
 	if err := ValidateOpenWorldState(child); err != nil {

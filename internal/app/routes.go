@@ -84,6 +84,7 @@ func (a *App) registerBusinessRoutes(mux *http.ServeMux) {
 		{method: http.MethodGet, pattern: "/api/v1/system/status", auth: true, handler: a.systemStatus},
 		{method: http.MethodGet, pattern: "/api/v1/system/model-check", auth: true, handler: a.modelCheck},
 		{method: http.MethodGet, pattern: "/api/v1/stream", auth: true, handler: a.streamEvents},
+		{method: http.MethodGet, pattern: "/api/v1/world-capabilities", auth: true, allowPAT: true, patScope: identity.ScopeObjectsRead, handler: a.worldCapabilities},
 		{method: http.MethodGet, pattern: "/api/v1/objects/{id}/lens", auth: true, allowPAT: true, patScope: identity.ScopeObjectsRead, handler: a.getLens},
 		{method: http.MethodGet, pattern: "/api/v1/objects/{id}/versions/{version}", auth: true, allowPAT: true, patScope: identity.ScopeObjectsRead, handler: a.getObjectVersion},
 		{method: http.MethodGet, pattern: "/api/v1/objects/{id}/discussions", auth: true, allowPAT: true, patScope: identity.ScopeObjectsRead, handler: a.listDiscussions},

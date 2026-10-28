@@ -57,6 +57,7 @@
 
 | 方法 | 路径 | 认证 | 说明 |
 |---|---|---|---|
+| GET | `/api/v1/world-capabilities` | 会话或 PAT（`objects:read`） | 任意自由世界可组合的呈现与行为能力模块；描述数据驱动产品能力面板与生成的表单。 |
 | GET | `/api/v1/capabilities` | 会话或 PAT（`capabilities:invoke`） | 仅返回已启用描述符；永不含 Provider 地址或密钥。 |
 | GET | `/api/v1/capabilities/{capability_id}` | 会话或 PAT（`capabilities:invoke`） | 单个已启用描述符。 |
 | POST | `/api/v1/capabilities/{capability_id}/invoke` | 会话或 PAT（`capabilities:invoke` + 操作 scope） | 必须带 `Idempotency-Key`；所有执行经 Broker。 |

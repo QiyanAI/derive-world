@@ -1,0 +1,621 @@
+/* SPDX-License-Identifier: Apache-2.0 */
+/* Phase 2C: capability-composed world experiences and their editor. */
+
+.dw-experience {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  min-width: 0;
+  padding: 16px;
+  border: 1px solid rgba(198, 223, 246, 0.12);
+  border-radius: 22px;
+  background:
+    radial-gradient(circle at 12% 0%, rgba(178, 245, 204, 0.06), transparent 48%),
+    rgba(8, 12, 20, 0.72);
+}
+
+.dw-exp-stack {
+  min-width: 0;
+  border-radius: 16px;
+}
+
+.dw-exp-stack.dw-exp-tone-panel {
+  padding: 18px;
+  border: 1px solid rgba(198, 223, 246, 0.12);
+  background: rgba(255, 255, 255, 0.025);
+}
+
+.dw-exp-stack.dw-exp-tone-subtle {
+  padding: 12px;
+  background: rgba(255, 255, 255, 0.018);
+}
+
+.dw-exp-text {
+  margin: 0;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  line-height: 1.65;
+  color: #e7eff9;
+}
+
+.dw-exp-text.dw-exp-tone-muted {
+  color: #9dadc2;
+}
+
+.dw-exp-text.dw-exp-tone-accent {
+  color: #b6f4cf;
+}
+
+.dw-exp-button {
+  white-space: normal;
+}
+
+.dw-exp-choice {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.dw-exp-choice-prompt {
+  margin: 0;
+  color: #dbe7f7;
+  line-height: 1.6;
+}
+
+.dw-exp-choice-options {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.dw-exp-field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  color: #c8d6e8;
+  font-size: 12px;
+}
+
+.dw-exp-field-form {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+}
+
+.dw-exp-field-form .dw-input {
+  flex: 1;
+  min-width: 0;
+}
+
+.dw-exp-meter {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+  padding: 11px 13px;
+  border: 1px solid rgba(198, 223, 246, 0.12);
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.02);
+}
+
+.dw-exp-meter-head {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  color: #b9c8da;
+  font-size: 12px;
+}
+
+.dw-exp-meter-head strong {
+  color: #edf6ff;
+  font-variant-numeric: tabular-nums;
+}
+
+.dw-exp-meter-track {
+  height: 8px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.dw-exp-meter-track i {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: linear-gradient(90deg, #7ad8bb, #b6f4cf);
+  transition: width 240ms ease;
+}
+
+.dw-exp-meter-warm .dw-exp-meter-track i {
+  background: linear-gradient(90deg, #ffb184, #ffd8b8);
+}
+
+.dw-exp-table-wrap {
+  overflow-x: auto;
+  border: 1px solid rgba(198, 223, 246, 0.12);
+  border-radius: 14px;
+}
+
+.dw-exp-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12px;
+}
+
+.dw-exp-table th,
+.dw-exp-table td {
+  padding: 9px 11px;
+  border-bottom: 1px solid rgba(198, 223, 246, 0.08);
+  text-align: left;
+  vertical-align: top;
+}
+
+.dw-exp-table th {
+  color: #8fa1b8;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  background: rgba(255, 255, 255, 0.025);
+}
+
+.dw-exp-table td {
+  color: #dce7f5;
+  overflow-wrap: anywhere;
+}
+
+.dw-exp-table tr.is-interactive {
+  cursor: pointer;
+}
+
+.dw-exp-table tr.is-interactive:hover td,
+.dw-exp-table tr.is-interactive:focus-visible td {
+  background: rgba(178, 245, 204, 0.07);
+}
+
+.dw-exp-collection {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.dw-exp-collection-grid {
+  display: grid;
+  gap: 10px;
+}
+
+.dw-exp-collection-row {
+  flex-direction: row;
+  flex-wrap: wrap;
+}
+
+.dw-exp-collection-item {
+  min-width: 0;
+  padding: 10px;
+  border: 1px solid rgba(198, 223, 246, 0.09);
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.018);
+}
+
+.dw-exp-collection-list .dw-exp-collection-item {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+}
+
+.dw-exp-space {
+  position: relative;
+  overflow: hidden;
+  border: 1px solid rgba(198, 223, 246, 0.12);
+  border-radius: 18px;
+  background: #05070d;
+}
+
+.dw-exp-space svg {
+  display: block;
+  width: 100%;
+  height: auto;
+  aspect-ratio: 16 / 10;
+}
+
+.dw-exp-space-entity:focus-visible {
+  outline: none;
+}
+
+.dw-exp-space-entity:focus-visible path {
+  stroke: #ffffff;
+  stroke-width: 5;
+}
+
+.dw-exp-space-label {
+  fill: #dce7f5;
+  font-size: 18px;
+  font-weight: 600;
+  paint-order: stroke;
+  stroke: rgba(4, 7, 13, 0.7);
+  stroke-width: 4px;
+  pointer-events: none;
+}
+
+.dw-exp-space-label.is-hover {
+  opacity: 0;
+  transition: opacity 140ms ease;
+}
+
+.dw-exp-space-entity:hover .dw-exp-space-label.is-hover,
+.dw-exp-space-entity:focus-visible .dw-exp-space-label.is-hover {
+  opacity: 1;
+}
+
+.dw-exp-space-hint {
+  position: absolute;
+  left: 12px;
+  bottom: 8px;
+  margin: 0;
+  color: rgba(220, 231, 245, 0.52);
+  font-size: 10px;
+  letter-spacing: 0.05em;
+}
+
+.dw-exp-empty {
+  margin: 0;
+  padding: 10px 0;
+  color: #78899f;
+  font-size: 12px;
+}
+
+.dw-exp-unsupported {
+  margin: 0;
+  padding: 8px 10px;
+  border: 1px dashed rgba(255, 180, 160, 0.32);
+  border-radius: 10px;
+  color: #ffb9a8;
+  font-size: 12px;
+}
+
+/* Editor ------------------------------------------------------------------ */
+
+.dw-experience-editor {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.dw-exp-editor-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.dw-exp-editor-head h2 {
+  margin: 0 0 4px;
+}
+
+.dw-exp-draft-badge {
+  flex: none;
+  padding: 3px 7px;
+  border: 1px solid rgba(178, 245, 204, 0.34);
+  border-radius: 999px;
+  color: #b6f4cf;
+  font-size: 9px;
+  letter-spacing: 0.12em;
+}
+
+.dw-exp-scaffolds {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 7px;
+}
+
+.dw-exp-tree {
+  max-height: 220px;
+  overflow: auto;
+  padding: 6px;
+  border: 1px solid rgba(198, 223, 246, 0.1);
+  border-radius: 12px;
+  background: rgba(0, 0, 0, 0.16);
+}
+
+.dw-exp-tree-list,
+.dw-exp-tree-children {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.dw-exp-tree-node {
+  display: flex;
+  width: 100%;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 6px 8px;
+  border: 0;
+  border-radius: 8px;
+  color: #c8d7e9;
+  background: transparent;
+  font: inherit;
+  font-size: 12px;
+  text-align: left;
+  cursor: pointer;
+}
+
+.dw-exp-tree-node:hover {
+  background: rgba(255, 255, 255, 0.04);
+}
+
+.dw-exp-tree-node.is-selected {
+  color: #062017;
+  background: #b6f4cf;
+}
+
+.dw-exp-tree-node code {
+  font-size: 9px;
+  opacity: 0.65;
+}
+
+.dw-exp-inspector {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 12px;
+  border: 1px solid rgba(198, 223, 246, 0.12);
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.02);
+}
+
+.dw-exp-inspector-head {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.dw-exp-inspector-head strong {
+  color: #eef6ff;
+  font-size: 14px;
+}
+
+.dw-exp-inspector-head code {
+  color: #7f92aa;
+  font-size: 10px;
+}
+
+.dw-exp-node-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+}
+
+.dw-exp-schema-fields {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.dw-exp-field-label {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  color: #aebdd1;
+  font-size: 11px;
+}
+
+.dw-exp-field-label small {
+  color: #72849c;
+  font-size: 10px;
+  line-height: 1.5;
+}
+
+.dw-exp-field-label .dw-input,
+.dw-exp-field-label select,
+.dw-exp-field-label textarea {
+  width: 100%;
+}
+
+.dw-exp-fieldset {
+  margin: 0;
+  padding: 10px;
+  border: 1px solid rgba(198, 223, 246, 0.1);
+  border-radius: 12px;
+}
+
+.dw-exp-fieldset legend {
+  padding: 0 5px;
+  color: #b6f4cf;
+  font-size: 11px;
+}
+
+.dw-exp-array {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.dw-exp-array-row {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 9px;
+  border: 1px solid rgba(198, 223, 246, 0.1);
+  border-radius: 10px;
+  background: rgba(0, 0, 0, 0.14);
+}
+
+.dw-exp-array-row > .dw-icon-button {
+  align-self: flex-end;
+}
+
+.dw-exp-path {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 11px;
+}
+
+.dw-exp-check {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  color: #b5c5d9;
+  font-size: 11px;
+}
+
+.dw-exp-add {
+  border-top: 1px solid rgba(198, 223, 246, 0.09);
+  padding-top: 9px;
+}
+
+.dw-exp-add summary {
+  cursor: pointer;
+  color: #b6f4cf;
+  font-size: 11px;
+}
+
+.dw-exp-palette {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 6px;
+  margin-top: 8px;
+}
+
+.dw-exp-palette-item {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  padding: 8px;
+  border: 1px solid rgba(198, 223, 246, 0.12);
+  border-radius: 10px;
+  color: #dbe8f6;
+  background: rgba(255, 255, 255, 0.025);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.dw-exp-palette-item:hover:not(:disabled) {
+  border-color: rgba(178, 245, 204, 0.42);
+  background: rgba(178, 245, 204, 0.07);
+}
+
+.dw-exp-palette-item:disabled {
+  opacity: 0.42;
+  cursor: not-allowed;
+}
+
+.dw-exp-palette-item strong {
+  font-size: 11px;
+}
+
+.dw-exp-palette-item small {
+  color: #8395ab;
+  font-size: 9px;
+  line-height: 1.45;
+}
+
+.dw-exp-behaviors {
+  display: flex;
+  flex-direction: column;
+  gap: 9px;
+  border-top: 1px solid rgba(198, 223, 246, 0.12);
+  padding-top: 12px;
+}
+
+.dw-exp-section-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.dw-exp-section-head h3 {
+  margin: 0;
+  font-size: 13px;
+}
+
+.dw-exp-behavior {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 10px;
+  border: 1px solid rgba(198, 223, 246, 0.12);
+  border-radius: 12px;
+  background: rgba(0, 0, 0, 0.16);
+}
+
+.dw-exp-behavior-head {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.dw-exp-behavior-head code {
+  flex: none;
+  color: #8fa1b8;
+  font-size: 10px;
+}
+
+.dw-exp-behavior-head .dw-input {
+  flex: 1;
+  min-width: 0;
+}
+
+.dw-exp-actions-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.dw-exp-action {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+  padding: 8px;
+  border: 1px solid rgba(198, 223, 246, 0.09);
+  border-radius: 10px;
+}
+
+.dw-exp-action-head {
+  display: flex;
+  gap: 5px;
+  align-items: center;
+}
+
+.dw-exp-action-head .dw-input {
+  flex: 1;
+  min-width: 0;
+}
+
+.dw-exp-condition {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 6px;
+}
+
+.dw-exp-state-value {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.dw-exp-state-value code {
+  color: #b6f4cf;
+  font-size: 11px;
+}
+
+.dw-exp-save {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 7px;
+  border-top: 1px solid rgba(198, 223, 246, 0.12);
+  padding-top: 12px;
+}
+
+@media (max-width: 640px) {
+  .dw-experience {
+    padding: 10px;
+  }
+
+  .dw-exp-palette {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .dw-exp-condition {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}

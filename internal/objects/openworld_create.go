@@ -44,6 +44,9 @@ func buildOpenWorldState(title string, content OpenWorldContent) (*OpenWorldStat
 	if content.Presentation != nil {
 		state.Presentation = *content.Presentation
 	}
+	if content.Experience != nil {
+		state.Experience = content.Experience
+	}
 
 	kindIDs := make([]string, len(content.Kinds))
 	for index, kind := range content.Kinds {

@@ -9,6 +9,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- A capability-composed world experience layer for `open_world_v1`. A world may
+  store an optional `experience` document containing a tree of registered
+  presentation capabilities (`core.stack`, `core.text`, `core.space`,
+  `core.collection`, `core.table`, `core.field`, `core.button`, `core.choice`,
+  `core.meter`) and reusable behavior capabilities (`core.state`,
+  `core.transfer`). The server validates each module's props and actions,
+  executes one bounded pass, and records applied effects; the client renders
+  the same document through registered modules. `GET
+  /api/v1/world-capabilities` exposes the catalog that drives the product
+  palette and generated forms. Adding a module requires no change to the world
+  core protocol, and the classic scene/stage/cards/timeline views remain
+  selectable for the same world.
 - A data-defined world experience runtime for `open_world_v1`: a declarative
   scene (backdrop, hues, horizon, ambient particles, relation style), per-kind
   appearance (shape, size, motion, glow, label, layer), bounded field-to-visual

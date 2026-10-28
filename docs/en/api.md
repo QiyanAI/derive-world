@@ -64,6 +64,7 @@ budgets.
 
 | Method | Path | Authentication | Notes |
 |---|---|---|---|
+| GET | `/api/v1/world-capabilities` | Session or PAT (`objects:read`) | Presentation and behavior modules that any free world may compose. Descriptor data drives the product palette and generated forms. |
 | GET | `/api/v1/capabilities` | Session or PAT (`capabilities:invoke`) | Enabled descriptors only; never provider addresses or secrets. |
 | GET | `/api/v1/capabilities/{capability_id}` | Session or PAT (`capabilities:invoke`) | One enabled descriptor. |
 | POST | `/api/v1/capabilities/{capability_id}/invoke` | Session or PAT (`capabilities:invoke` + operation scope) | Requires `Idempotency-Key`; all execution passes through the Broker. |

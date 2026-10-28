@@ -18,6 +18,7 @@ Browser -> app (net/http, :8080) -> PostgreSQL 17
 ```text
 web / sdk -> OpenAPI -> app -> {identity, personalai, objects, derive, trust, handoff, capability}
 objects -> store
+objects -> worldcap（纯校验/执行注册表）
 derive -> objects（受控接口）+ store
 trust -> identity + objects（只读）+ store
 capability -> trust + objects + model（仅内容能力）
@@ -26,6 +27,10 @@ audit -> store
 ```
 
 `httpx`、`config`、`model` 只依赖标准库及其冻结依赖。`internal/arch/TestModuleBoundaries` 强制禁止边、无环、子 module 隔离与表归属矩阵。
+
+## 世界体验能力
+
+`internal/worldcap` 是只依赖标准库的呈现与行为能力模块注册表。objects 包拥有世界文档、权限、持久化、事件、审计与衍生；`worldcap` 拥有模块描述、props/动作校验、有界条件求值与 `WorldAccess` 变更面。模块不能增加对象类型、数据表、权限、网络调用或用户代码路径。能力目录由 `GET /api/v1/world-capabilities` 暴露；产品能力面板与生成的表单使用这些描述，呈现模块按 ID 与客户端渲染器配对。`open_world_v1` 中可选的 `experience` 字段是唯一的世界协议扩展；经典场景/舞台/卡片/时间线仍作为客户端已注册模式保留。
 
 ## 能力范围
 

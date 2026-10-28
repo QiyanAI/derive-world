@@ -489,6 +489,16 @@ export async function getObject(id: string, signal?: AbortSignal): Promise<Objec
   return request<ObjectView>(`/api/v1/objects/${encodeURIComponent(id)}`, { signal });
 }
 
+export async function getWorldCapabilities(
+  signal?: AbortSignal
+): Promise<WorldCapabilityDescriptor[]> {
+  const response = await request<{ items: WorldCapabilityDescriptor[] }>(
+    "/api/v1/world-capabilities",
+    { signal }
+  );
+  return response.items;
+}
+
 export async function deleteObject(id: string): Promise<void> {
   await request<void>(`/api/v1/objects/${encodeURIComponent(id)}`, { method: "DELETE" });
 }
@@ -906,6 +916,43 @@ export interface OpenWorldRule {
   effects: OpenWorldEffect[];
 }
 
+export interface WorldCondition {
+  entity_id?: string;
+  field?: string;
+  op?: string;
+  value?: unknown;
+  all?: WorldCondition[];
+  any?: WorldCondition[];
+  not?: WorldCondition;
+}
+
+export interface WorldAction {
+  capability: string;
+  action: string;
+  params: Record<string, unknown>;
+}
+
+export interface WorldBehavior {
+  id: string;
+  name?: string;
+  condition?: WorldCondition;
+  actions: WorldAction[];
+}
+
+export interface WorldViewNode {
+  id: string;
+  capability: string;
+  props: Record<string, unknown>;
+  children?: WorldViewNode[];
+  visible_when?: WorldCondition;
+}
+
+export interface WorldExperience {
+  protocol: 1;
+  root: WorldViewNode;
+  behaviors?: WorldBehavior[];
+}
+
 export interface OpenWorldState {
   title: string;
   premise: string;
@@ -916,6 +963,52 @@ export interface OpenWorldState {
   views: OpenWorldView[];
   tags?: string[];
   presentation: OpenWorldPresentation;
+  experience?: WorldExperience;
+}
+
+export interface LocalizedLabel {
+  en: string;
+  zh: string;
+}
+
+export interface WorldCapabilityProperty {
+  type: "string" | "number" | "integer" | "boolean" | "array" | "object";
+  title: LocalizedLabel;
+  description?: LocalizedLabel;
+  format?: string;
+  enum?: string[];
+  minimum?: number;
+  maximum?: number;
+  max_length?: number;
+  items?: WorldCapabilityProperty;
+  properties?: Record<string, WorldCapabilityProperty>;
+  required?: string[];
+}
+
+export interface WorldCapabilitySchema {
+  type: "object";
+  properties: Record<string, WorldCapabilityProperty>;
+  required?: string[];
+}
+
+export interface WorldCapabilityAction {
+  id: string;
+  title: LocalizedLabel;
+  description: LocalizedLabel;
+  params?: WorldCapabilitySchema;
+}
+
+export interface WorldCapabilityDescriptor {
+  id: string;
+  kind: "presentation" | "behavior";
+  version: number;
+  title: LocalizedLabel;
+  description: LocalizedLabel;
+  allows_children?: boolean;
+  child_scope?: "item";
+  child_kind_prop?: string;
+  params?: WorldCapabilitySchema;
+  actions?: WorldCapabilityAction[];
 }
 
 export interface OpenWorldKindInput {
@@ -968,6 +1061,7 @@ export interface OpenWorldContent {
   views?: OpenWorldView[];
   tags?: string[];
   presentation?: OpenWorldPresentation;
+  experience?: WorldExperience;
 }
 
 export const defaultOpenWorldAppearance: OpenWorldAppearance = {
@@ -1070,8 +1164,23 @@ export function openWorldState(object: ObjectView): OpenWorldState {
     rules: Array.isArray(state.rules) ? state.rules : [],
     views: views.length > 0 ? views : [...openWorldViews],
     tags: Array.isArray(state.tags) ? state.tags : [],
-    presentation: normalizePresentation(state.presentation)
+    presentation: normalizePresentation(state.presentation),
+    experience: normalizeExperience(state.experience)
   };
+}
+
+function normalizeExperience(value: unknown): WorldExperience | undefined {
+  if (!value || typeof value !== "object") {
+    return undefined;
+  }
+  const experience = value as Partial<WorldExperience>;
+  if (experience.protocol !== 1 || !experience.root || typeof experience.root !== "object") {
+    return undefined;
+  }
+  // Preserve the document as received. Rebuilding only known keys would make
+  // an older client silently delete fields introduced by a newer server when
+  // the user saves the experience again.
+  return experience as WorldExperience;
 }
 
 export interface StageEvent {

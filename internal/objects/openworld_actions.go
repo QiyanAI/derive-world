@@ -9,6 +9,8 @@ import (
 	"unicode/utf8"
 
 	"github.com/google/uuid"
+
+	"github.com/QiyanAI/derive-world/internal/worldcap"
 )
 
 // OpenWorldAppliedEffect is one consequence that actually ran. It is written
@@ -27,7 +29,7 @@ func isOpenWorldAction(action string) bool {
 		"add_node", "update_node", "remove_node", "move_node",
 		"set_node_field", "set_node_status", "touch_node",
 		"add_link", "remove_link", "add_rule", "remove_rule", "set_views",
-		"set_presentation":
+		"set_presentation", "set_experience", "invoke_behavior":
 		return true
 	default:
 		return false
@@ -142,6 +144,16 @@ type setOpenWorldViewsInput struct {
 
 type setOpenWorldPresentationInput struct {
 	Presentation OpenWorldPresentation `json:"presentation"`
+}
+
+type setOpenWorldExperienceInput struct {
+	Experience *worldcap.Experience `json:"experience"`
+}
+
+type invokeOpenWorldBehaviorInput struct {
+	BehaviorID string `json:"behavior_id"`
+	EntityID   string `json:"entity_id"`
+	Value      any    `json:"value"`
 }
 
 func decodeOpenWorldInput(raw json.RawMessage, destination any) error {
@@ -611,6 +623,50 @@ func planOpenWorldAction(action string, raw json.RawMessage, plan *ActionPlan) e
 			return err
 		}
 		plan.Input["presentation"] = presentation
+	case "set_experience":
+		// The key must be present, but an explicit null clears the experience.
+		if err := validateInputKeys(raw, nil, []string{"experience"}); err != nil {
+			return err
+		}
+		var present map[string]json.RawMessage
+		if err := decodeStrict(raw, &present); err != nil {
+			return fmt.Errorf("%w: input", ErrInvalidRequest)
+		}
+		if _, ok := present["experience"]; !ok {
+			return fmt.Errorf("%w: input.experience", ErrInvalidRequest)
+		}
+		var input setOpenWorldExperienceInput
+		if err := decodeOpenWorldInput(raw, &input); err != nil {
+			return err
+		}
+		// Full reference validation needs the current world and happens in
+		// applyOpenWorldAction, after the row lock. This phase only checks the
+		// exact input shape so proposals cannot smuggle other keys.
+		plan.Input["experience"] = input.Experience
+	case "invoke_behavior":
+		if err := validateInputKeys(raw, []string{"behavior_id"},
+			[]string{"behavior_id", "entity_id", "value"}); err != nil {
+			return err
+		}
+		var input invokeOpenWorldBehaviorInput
+		if err := decodeOpenWorldInput(raw, &input); err != nil {
+			return err
+		}
+		if !worldcap.ValidLocalID(input.BehaviorID) {
+			return fmt.Errorf("%w: input.behavior_id", ErrInvalidRequest)
+		}
+		if input.EntityID != "" {
+			if _, err := uuid.Parse(input.EntityID); err != nil {
+				return fmt.Errorf("%w: input.entity_id", ErrInvalidRequest)
+			}
+		}
+		plan.Input["behavior_id"] = input.BehaviorID
+		if input.EntityID != "" {
+			plan.Input["entity_id"] = input.EntityID
+		}
+		if input.Value != nil {
+			plan.Input["value"] = input.Value
+		}
 	default:
 		return fmt.Errorf("%w: action", ErrInvalidRequest)
 	}
@@ -971,6 +1027,9 @@ func applyOpenWorldAction(stateRaw, sharedRaw json.RawMessage, plan *ActionPlan)
 		if kind == nil {
 			return nil, nil, "", fmt.Errorf("%w: input.kind_id", ErrInvalidRequest)
 		}
+		if worldcap.ExperienceReferencesKind(state.Experience, kind.ID) {
+			return nil, nil, "", fmt.Errorf("%w: kind is used by the experience", ErrConflict)
+		}
 		for _, node := range state.Nodes {
 			if node.KindID == kind.ID {
 				return nil, nil, "", fmt.Errorf("%w: kind is still in use", ErrConflict)
@@ -1039,6 +1098,9 @@ func applyOpenWorldAction(stateRaw, sharedRaw json.RawMessage, plan *ActionPlan)
 		node := findOpenWorldNode(&state, input.NodeID)
 		if node == nil {
 			return nil, nil, "", fmt.Errorf("%w: input.node_id", ErrInvalidRequest)
+		}
+		if worldcap.ExperienceReferencesEntity(state.Experience, node.ID) {
+			return nil, nil, "", fmt.Errorf("%w: thing is used by the experience", ErrConflict)
 		}
 		nextNodes := make([]OpenWorldNode, 0, len(state.Nodes)-1)
 		for _, existing := range state.Nodes {
@@ -1252,6 +1314,38 @@ func applyOpenWorldAction(stateRaw, sharedRaw json.RawMessage, plan *ActionPlan)
 			return nil, nil, "", err
 		}
 		state.Presentation = presentation
+	case "set_experience":
+		var input setOpenWorldExperienceInput
+		if err := decodeOpenWorldInput(plan.RawInput, &input); err != nil {
+			return nil, nil, "", err
+		}
+		state.Experience = input.Experience
+	case "invoke_behavior":
+		var input invokeOpenWorldBehaviorInput
+		if err := decodeOpenWorldInput(plan.RawInput, &input); err != nil {
+			return nil, nil, "", err
+		}
+		behavior := worldcap.FindBehavior(state.Experience, input.BehaviorID)
+		if behavior == nil {
+			return nil, nil, "", fmt.Errorf("%w: input.behavior_id", ErrInvalidRequest)
+		}
+		if input.EntityID != "" && findOpenWorldNode(&state, input.EntityID) == nil {
+			return nil, nil, "", fmt.Errorf("%w: input.entity_id", ErrInvalidRequest)
+		}
+		applied, err := worldcap.ExecuteBehavior(
+			worldcap.Default(), behavior,
+			worldcap.Event{EntityID: input.EntityID, Value: input.Value},
+			openWorldCapabilityWorld{state: &state},
+		)
+		if err != nil {
+			return nil, nil, "", fmt.Errorf("%w: experience behavior", ErrInvalidRequest)
+		}
+		for _, effect := range applied {
+			plan.Effects = append(plan.Effects, OpenWorldAppliedEffect{
+				RuleID: behavior.ID, NodeID: effect.EntityID, Field: effect.Field,
+				Op: effect.Action, Value: effect.Value,
+			})
+		}
 	default:
 		return nil, nil, "", fmt.Errorf("%w: action", ErrInvalidRequest)
 	}
