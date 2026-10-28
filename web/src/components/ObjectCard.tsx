@@ -9,7 +9,14 @@ export default function ObjectCard({ item }: { item: ObjectListItem }) {
     dateStyle: "medium",
     timeStyle: "short"
   });
-  const collaborative = item.object_type === "collaborative";
+  const typeLabel =
+    item.object_type === "collaborative"
+      ? t("object.create.collaborative")
+      : item.object_type === "interactive"
+        ? t("object.create.interactive")
+        : item.object_type === "living_scene"
+          ? t("object.create.scene")
+          : t("object.create.open_world");
   return (
     <Link
       className={`object-card object-card-${item.object_type}`}
@@ -18,9 +25,7 @@ export default function ObjectCard({ item }: { item: ObjectListItem }) {
       data-object-id={item.id}
     >
       <div className="object-card-top">
-        <span className={`template-badge template-${item.object_type}`}>
-          {collaborative ? t("object.create.collaborative") : t("object.create.interactive")}
-        </span>
+        <span className={`template-badge template-${item.object_type}`}>{typeLabel}</span>
         <span className="version-badge">{t("objects.version", { version: item.version })}</span>
       </div>
       <h2>{item.title || t("common.unknown")}</h2>

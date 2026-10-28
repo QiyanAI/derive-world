@@ -49,8 +49,8 @@ func TestMigrationIdempotent(t *testing.T) {
 		"SELECT value FROM app_meta WHERE key = 'schema_version'").Scan(&schemaVersion); err != nil {
 		t.Fatalf("read app_meta: %v", err)
 	}
-	if schemaVersion != "7" {
-		t.Fatalf("schema_version = %q, want 7", schemaVersion)
+	if schemaVersion != "8" {
+		t.Fatalf("schema_version = %q, want 8", schemaVersion)
 	}
 
 	var migrationTableExists bool
@@ -212,7 +212,8 @@ SELECT pg_get_constraintdef(oid)
 	}
 	if !strings.Contains(templateCheck, "collaborative_v1") ||
 		!strings.Contains(templateCheck, "interactive_v1") ||
-		!strings.Contains(templateCheck, "living_scene_v1") {
+		!strings.Contains(templateCheck, "living_scene_v1") ||
+		!strings.Contains(templateCheck, "open_world_v1") {
 		t.Fatalf("template pairing constraint is incomplete: %s", templateCheck)
 	}
 

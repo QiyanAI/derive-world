@@ -24,7 +24,7 @@
       "format": "uuid",
       "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
     },
-    "object_type": { "type": "string", "enum": ["collaborative", "interactive"] },
+    "object_type": { "type": "string", "enum": ["collaborative", "interactive", "living_scene", "open_world"] },
     "object_state": { "type": "object" },
     "shared_context": { "type": "object" }
   }

@@ -144,6 +144,8 @@ export default function AIPanel({ object, canContribute, onChanged }: Props) {
       window.dispatchEvent(new CustomEvent("dw:ai-inference", { detail: trace }));
       if (result.context_stale) {
         setNotice(t("workspace.aiStale"));
+      } else if ((result.rejected_actions ?? 0) > 0) {
+        setNotice(t("ai.universal.rejected"));
       } else if (result.parse_status === "structured" && result.proposed_actions.length === 0) {
         setNotice(t("workspace.aiNoAction"));
       }
@@ -231,6 +233,19 @@ export default function AIPanel({ object, canContribute, onChanged }: Props) {
         <small>{canContribute ? t("workspace.permission.contribute") : t("workspace.permission.read")}</small>
       </div>
       <p className="muted">{t("workspace.aiIntro")}</p>
+      <div className="dw-ai-context-badge" data-testid="ai-world-context">
+        <span>
+          <strong>{t("ai.universal.context", { title: objectTitle || t("common.untitled") })}</strong>
+          <small>{t("ai.universal.identity")}</small>
+        </span>
+        <button
+          className="dw-text-button"
+          type="button"
+          onClick={() => window.dispatchEvent(new Event("dw:open-general-ai"))}
+        >
+          {t("ai.universal.switchGeneral")}
+        </button>
+      </div>
       {mode === "fixture" ? <p className="fixture-inline">{t("workspace.aiFixture")}</p> : null}
       {notice ? <StatusNotice>{notice}</StatusNotice> : null}
       {createdChild ? (

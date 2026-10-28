@@ -14,13 +14,13 @@ var frozenSchemaSHA256 = map[string]string{
 	"content.structure.input.json":      "7672be7270934bd658866a5d9accdadf1b123bbaea0f5c530885271fe590c956",
 	"content.structure.output.json":     "c888c861927200a4c68e90b10203b21a44a80a56409f5ad210d6e295ff8b6e43",
 	"object.context.input.json":         "613cf4b2c8bb5d2ffae46e2744cce869cc260c391ef9853b5a12d7522814fcad",
-	"object.context.output.json":        "364185d5019efc5a80385fbc4d509774d9e5cbbaab78b77087022171d0a56114",
-	"object.derive.input.json":          "6de3800778ca0436e4ef45888ad8592a99512fcd172904fa07edc4d5275cf079",
+	"object.context.output.json":        "893f512a900871a13a71c8a020575947c53deb7609034f90d333cd3ca748bbd7",
+	"object.derive.input.json":          "4bcf95752ea102924e5d1198203231da51dcb071f595e84b557449242099e32a",
 	"object.derive.output.json":         "4f25af988b607d7069b60ea9cba828866040434cda93883ae69c47f12b51bba8",
-	"object.propose_change.input.json":  "ac9f21fe52e2592d38a21e888661d70b1287d142d9ceb0be3a7e054b4b77b54d",
+	"object.propose_change.input.json":  "5569124947d34f759e636e55723b3a37365ea29ae1febdfc684d209939633099",
 	"object.propose_change.output.json": "25fe62327a9b5e555e20034bef34334458cb55f13844591a871f869b7922c88d",
 	"object.read.input.json":            "116a4e65a91b420567f86d0ce972c4963f71ea1f8f32ece2f0881334a1a1b4a2",
-	"object.read.output.json":           "a364edef410879f2c9bea0892275280163ae07aec561e6851458c8832742a521",
+	"object.read.output.json":           "fe958e5b3371b536d1764c4709b3a74a635fe0f6404af7f3fef98b428e9ae509",
 }
 
 func TestFrozenSchemaHashes(t *testing.T) {

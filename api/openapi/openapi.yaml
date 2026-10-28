@@ -2591,6 +2591,26 @@ components:
             - add_tag
             - remove_tag
             - cast_vote
+            - set_premise
+            - add_element
+            - update_element
+            - remove_element
+            - move_element
+            - add_kind
+            - update_kind
+            - remove_kind
+            - add_node
+            - update_node
+            - remove_node
+            - move_node
+            - set_node_field
+            - set_node_status
+            - touch_node
+            - add_link
+            - remove_link
+            - add_rule
+            - remove_rule
+            - set_views
         input:
           type: object
           description: Action input. The stored proposal input is limited to 64 KiB of canonical JSON; action-level field limits from the object contract still apply.
@@ -2615,7 +2635,7 @@ components:
           uniqueItems: true
           items:
             type: string
-            enum: [summary, body, checklist, tags, prompt, options]
+            enum: [summary, body, checklist, tags, prompt, options, premise, elements, structure, views]
         title:
           type: string
           minLength: 1
@@ -2861,7 +2881,7 @@ components:
       properties:
         object_type:
           type: string
-          enum: [collaborative, interactive]
+          enum: [collaborative, interactive, living_scene, open_world]
         title:
           type: string
           minLength: 1
@@ -2900,10 +2920,10 @@ components:
           format: uuid
         object_type:
           type: string
-          enum: [collaborative, interactive]
+          enum: [collaborative, interactive, living_scene, open_world]
         presentation_template:
           type: string
-          enum: [collaborative_v1, interactive_v1]
+          enum: [collaborative_v1, interactive_v1, living_scene_v1, open_world_v1]
         schema_version:
           type: integer
           const: 1
@@ -2982,7 +3002,7 @@ components:
           format: uuid
         object_type:
           type: string
-          enum: [collaborative, interactive]
+          enum: [collaborative, interactive, living_scene, open_world]
         title:
           type: string
         version:
@@ -3035,6 +3055,27 @@ components:
             - cast_vote
             - close_poll
             - set_shared_context
+            - set_purpose
+            - set_premise
+            - add_element
+            - update_element
+            - remove_element
+            - move_element
+            - add_kind
+            - update_kind
+            - remove_kind
+            - add_node
+            - update_node
+            - remove_node
+            - move_node
+            - set_node_field
+            - set_node_status
+            - touch_node
+            - add_link
+            - remove_link
+            - add_rule
+            - remove_rule
+            - set_views
         input:
           type: object
           additionalProperties: true
@@ -3140,7 +3181,7 @@ components:
           uniqueItems: true
           items:
             type: string
-            enum: [summary, body, checklist, tags, prompt, options]
+            enum: [summary, body, checklist, tags, prompt, options, premise, elements, structure, views]
     Lineage:
       type: object
       additionalProperties: false
@@ -3312,6 +3353,8 @@ components:
           enum:
           - collaborative
           - interactive
+          - living_scene
+          - open_world
         title:
           type: string
         inviter_name:
@@ -3347,6 +3390,8 @@ components:
           enum:
           - collaborative
           - interactive
+          - living_scene
+          - open_world
         version:
           type: integer
           minimum: 1
@@ -3357,6 +3402,8 @@ components:
           enum:
           - collaborative_v1
           - interactive_v1
+          - living_scene_v1
+          - open_world_v1
     AcceptedInvitation:
       type: object
       additionalProperties: false
@@ -3463,6 +3510,8 @@ components:
           enum:
           - collaborative
           - interactive
+          - living_scene
+          - open_world
         permitted_object_context:
           type: object
           additionalProperties: false
@@ -3856,6 +3905,10 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/AcceptedAction'
+        rejected_actions:
+          type: integer
+          minimum: 0
+          description: Model-proposed actions the server refused to turn into a proposal or confirmation.
         context_stale:
           type: boolean
         usage:
@@ -4131,11 +4184,13 @@ components:
           - derive.create
           - invitation.create
           - capability.invoke
+          - world.create
         resource_type:
           type: string
           enum:
           - living_object
           - capability_invocation
+          - personal_ai
         resource_id:
           type: string
           format: uuid
@@ -4188,6 +4243,11 @@ components:
             type: string
         source_version:
           type: integer
+        object_type:
+          type: string
+          enum: [collaborative, interactive, living_scene, open_world]
+        summary:
+          type: string
     ConfirmationList:
       type: object
       additionalProperties: false
@@ -4231,10 +4291,10 @@ components:
           format: uuid
         object_type:
           type: string
-          enum: [collaborative, interactive, living_scene]
+          enum: [collaborative, interactive, living_scene, open_world]
         presentation_template:
           type: string
-          enum: [collaborative_v1, interactive_v1, living_scene_v1]
+          enum: [collaborative_v1, interactive_v1, living_scene_v1, open_world_v1]
         title:
           type: string
         note:
@@ -4776,7 +4836,7 @@ components:
           type: string
         object_type:
           type: string
-          enum: [collaborative, interactive, living_scene]
+          enum: [collaborative, interactive, living_scene, open_world]
         presentation_template:
           type: string
         status:
@@ -4867,7 +4927,7 @@ components:
           type: string
         object_type:
           type: string
-          enum: [collaborative, interactive, living_scene]
+          enum: [collaborative, interactive, living_scene, open_world]
         presentation_template:
           type: string
         source_version:

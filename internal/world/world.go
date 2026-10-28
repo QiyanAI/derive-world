@@ -94,7 +94,8 @@ func (s *Service) Stage(ctx context.Context, userID uuid.UUID) (*Stage, error) {
 SELECT o.id, o.object_type, o.presentation_template, COALESCE(o.state->>'title',''),
        COALESCE(NULLIF(o.state->>'premise',''), NULLIF(o.state->>'summary',''),
                 NULLIF(o.state->>'prompt',''), '') AS note,
-       COALESCE(o.state->>'purpose','') AS purpose,
+       COALESCE(NULLIF(o.state->>'purpose',''),
+                CASE WHEN o.object_type = 'open_world' THEN 'open' ELSE '' END) AS purpose,
        (SELECT count(*)
           FROM jsonb_array_elements(
                  CASE WHEN jsonb_typeof(o.state->'elements') = 'array'
@@ -104,11 +105,18 @@ SELECT o.id, o.object_type, o.presentation_template, COALESCE(o.state->>'title',
             FROM jsonb_array_elements(
                    CASE WHEN jsonb_typeof(o.state->'checklist') = 'array'
                         THEN o.state->'checklist' ELSE '[]'::jsonb END) AS item
-           WHERE item->>'done' = 'true') AS done_count,
+           WHERE item->>'done' = 'true')
+       + (SELECT count(*)
+            FROM jsonb_array_elements(
+                   CASE WHEN jsonb_typeof(o.state->'nodes') = 'array'
+                        THEN o.state->'nodes' ELSE '[]'::jsonb END) AS scene_node
+           WHERE scene_node->>'status' = 'done') AS done_count,
        (CASE WHEN jsonb_typeof(o.state->'elements') = 'array'
              THEN jsonb_array_length(o.state->'elements') ELSE 0 END)
        + (CASE WHEN jsonb_typeof(o.state->'checklist') = 'array'
-               THEN jsonb_array_length(o.state->'checklist') ELSE 0 END) AS total_count,
+               THEN jsonb_array_length(o.state->'checklist') ELSE 0 END)
+       + (CASE WHEN jsonb_typeof(o.state->'nodes') = 'array'
+               THEN jsonb_array_length(o.state->'nodes') ELSE 0 END) AS total_count,
        o.version, o.owner_id, m.permissions, o.updated_at,
        (SELECT count(*) FROM object_memberships mm
          WHERE mm.object_id = o.id AND mm.revoked_at IS NULL) AS member_count,

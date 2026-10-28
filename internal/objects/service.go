@@ -364,6 +364,50 @@ SELECT `+objectColumns+`
 // Create inserts a new object, the owner membership, the creation event, and
 // the audit row in one transaction, then completes the idempotency record.
 func (s *Service) Create(ctx context.Context, actorID uuid.UUID, input CreateInput, route, idemKey string, leaseUntil time.Time, requestID string, ipHash []byte) (*ObjectView, error) {
+	tx, err := s.db.BeginTx(ctx, pgx.TxOptions{IsoLevel: pgx.ReadCommitted})
+	if err != nil {
+		return nil, err
+	}
+	defer func() { _ = tx.Rollback(ctx) }()
+
+	view, err := s.createObjectTx(ctx, tx, actorID, input, requestID, ipHash,
+		CreateOrigin{Actor: audit.UserActor(actorID)})
+	if err != nil {
+		return nil, err
+	}
+	body, err := json.Marshal(view)
+	if err != nil {
+		return nil, err
+	}
+	if err := s.idem.Complete(ctx, tx, actorID, route, idemKey, leaseUntil, 201, body); err != nil {
+		return nil, err
+	}
+	if err := tx.Commit(ctx); err != nil {
+		return nil, err
+	}
+	return view, nil
+}
+
+// CreateOrigin carries the server-derived actor and confirmation provenance of
+// a creation. A human creation uses audit.UserActor; an AI-approved world uses
+// the Personal AI actor plus the confirmation that the human approved.
+type CreateOrigin struct {
+	Actor          audit.Actor
+	ConfirmationID *uuid.UUID
+	ConfirmedBy    *uuid.UUID
+}
+
+// CreateWithinTx creates one object inside an existing transaction. It is the
+// only entry point used by a human approval of a Personal AI world.create
+// confirmation; it deliberately does not own idempotency, because the
+// confirmation's single-use transition is the idempotency boundary.
+func (s *Service) CreateWithinTx(ctx context.Context, tx pgx.Tx, actorID uuid.UUID,
+	input CreateInput, requestID string, ipHash []byte, origin CreateOrigin) (*ObjectView, error) {
+	return s.createObjectTx(ctx, tx, actorID, input, requestID, ipHash, origin)
+}
+
+func (s *Service) createObjectTx(ctx context.Context, tx pgx.Tx, actorID uuid.UUID,
+	input CreateInput, requestID string, ipHash []byte, origin CreateOrigin) (*ObjectView, error) {
 	state, shared, err := ValidateCreate(input)
 	if err != nil {
 		return nil, err
@@ -374,13 +418,9 @@ func (s *Service) Create(ctx context.Context, actorID uuid.UUID, input CreateInp
 		template = TemplateInteractive
 	case TypeLivingScene:
 		template = TemplateLivingScene
+	case TypeOpenWorld:
+		template = TemplateOpenWorld
 	}
-
-	tx, err := s.db.BeginTx(ctx, pgx.TxOptions{IsoLevel: pgx.ReadCommitted})
-	if err != nil {
-		return nil, err
-	}
-	defer func() { _ = tx.Rollback(ctx) }()
 
 	objectID, err := uuid.NewV7()
 	if err != nil {
@@ -407,31 +447,44 @@ VALUES ($1,$2,$3,$2)`, objectID.String(), actorID.String(), permissions); err !=
 		return nil, err
 	}
 
+	actor := origin.Actor
+	if actor.Type == "" {
+		actor = audit.UserActor(actorID)
+	}
 	eventPayload := map[string]any{
 		"state":                 json.RawMessage(state),
 		"object_type":           input.ObjectType,
 		"presentation_template": template,
 	}
-	if err := appendEvent(ctx, tx, actorID, objectID, 1, "object.created", eventPayload); err != nil {
+	auditMetadata := map[string]any{
+		"object_type":           input.ObjectType,
+		"presentation_template": template,
+	}
+	if origin.ConfirmationID != nil {
+		eventPayload["confirmation_id"] = origin.ConfirmationID.String()
+		auditMetadata["confirmation_id"] = origin.ConfirmationID.String()
+	}
+	if origin.ConfirmedBy != nil {
+		eventPayload["confirmed_by_user_id"] = origin.ConfirmedBy.String()
+		auditMetadata["confirmed_by_user_id"] = origin.ConfirmedBy.String()
+	}
+	if _, err := appendEventReturningID(ctx, tx, actor, objectID, 1, "object.created", eventPayload); err != nil {
 		return nil, err
 	}
 	if err := s.audit.Write(ctx, tx, audit.Event{
-		Actor:        audit.UserActor(actorID),
+		Actor:        actor,
 		Action:       audit.ActionObjectCreate,
 		ResourceType: "living_object",
 		ResourceID:   &objectID,
 		Decision:     "allow",
 		RequestID:    requestID,
 		IPHash:       ipHash,
-		Metadata: map[string]any{
-			"object_type":           input.ObjectType,
-			"presentation_template": template,
-		},
+		Metadata:     auditMetadata,
 	}); err != nil {
 		return nil, err
 	}
 
-	view := ObjectView{
+	return &ObjectView{
 		ID:                   objectID.String(),
 		ObjectType:           input.ObjectType,
 		PresentationTemplate: template,
@@ -446,18 +499,7 @@ VALUES ($1,$2,$3,$2)`, objectID.String(), actorID.String(), permissions); err !=
 		Role:                 "owner",
 		CreatedAt:            createdAt,
 		UpdatedAt:            updatedAt,
-	}
-	body, err := json.Marshal(view)
-	if err != nil {
-		return nil, err
-	}
-	if err := s.idem.Complete(ctx, tx, actorID, route, idemKey, leaseUntil, 201, body); err != nil {
-		return nil, err
-	}
-	if err := tx.Commit(ctx); err != nil {
-		return nil, err
-	}
-	return &view, nil
+	}, nil
 }
 
 // ApplyAction executes one whitelisted state action under a row lock and a
@@ -534,6 +576,9 @@ SELECT `+objectColumns+`
 	}
 	if plan.Action == "set_shared_context" {
 		eventPayload["shared_context_changed"] = true
+	}
+	if len(plan.Effects) > 0 {
+		eventPayload["effects"] = plan.Effects
 	}
 	if err := appendEvent(ctx, tx, actorID, objectID, newVersion, "object.state_changed", eventPayload); err != nil {
 		return nil, err

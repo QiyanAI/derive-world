@@ -20,6 +20,8 @@ const (
 
 var alwaysRedactedKeys = map[string]bool{
 	"text": true, "body": true, "summary": true, "prompt": true, "title": true,
+	// Free-world actions can carry user-authored prose at the top level.
+	"premise": true, "name": true, "label": true, "value": true,
 }
 
 // canonicalInputHash computes SHA-256 over the canonical

@@ -253,6 +253,9 @@ SELECT id, object_id, permissions, constraints
 	}
 	effective.RequireConfirmation[ConfirmationDeriveCreate] = true
 	effective.RequireConfirmation[ConfirmationCapabilityInvoke] = true
+	// World creation is structurally confirmation-only for the unbound AI.
+	// Recording it here keeps the effective decision honest for any caller.
+	effective.RequireConfirmation[ConfirmationWorldCreate] = true
 	effective.MaxAIActionsPerHour = mergedConstraints.MaxAIActionsPerHour
 	return effective, nil
 }

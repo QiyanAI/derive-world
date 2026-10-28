@@ -210,7 +210,15 @@ export default function SelfPage() {
               typeof createdChild.state.title === "string" ? createdChild.state.title : createdChild.id,
             version: createdChild.version
           })}{" "}
-          <Link to={`/objects/${createdChild.id}?tab=work`}>{t("workspace.openCreated")} →</Link>
+          <Link
+            to={
+              createdChild.object_type === "open_world"
+                ? `/worlds/${createdChild.id}`
+                : `/objects/${createdChild.id}?tab=work`
+            }
+          >
+            {t("workspace.openCreated")} →
+          </Link>
         </p>
       ) : null}
       {error ? <ErrorNotice error={error} onRetry={() => void load()} /> : null}
@@ -380,7 +388,9 @@ export default function SelfPage() {
                 ? t("confirmation.deriveSummary")
                 : item.action === "capability.invoke"
                   ? t("confirmation.capabilitySummary")
-                  : t("confirmation.invitationSummary");
+                  : item.action === "world.create"
+                    ? t("confirmation.worldSummary")
+                    : t("confirmation.invitationSummary");
             const stale =
               typeof item.bound_version === "number" &&
               item.target_object_version > 0 &&
@@ -397,6 +407,16 @@ export default function SelfPage() {
                   })}
                 </small>
                 <p>{summary}</p>
+                {item.effect?.summary ? <p>{item.effect.summary}</p> : null}
+                {typeof item.effect?.node_count === "number" ? (
+                  <small>
+                    {t("openWorld.summary", {
+                      kinds: item.effect.kind_count ?? 0,
+                      nodes: item.effect.node_count ?? 0,
+                      rules: item.effect.rule_count ?? 0
+                    })}
+                  </small>
+                ) : null}
                 {item.effect?.title ? (
                   <small>
                     {t("confirmation.childTitle")}: {item.effect.title}

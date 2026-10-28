@@ -10,8 +10,12 @@
  */
 
 export type ModelMode = "fixture" | "real";
-export type ObjectType = "collaborative" | "interactive" | "living_scene";
-export type PresentationTemplate = "collaborative_v1" | "interactive_v1" | "living_scene_v1";
+export type ObjectType = "collaborative" | "interactive" | "living_scene" | "open_world";
+export type PresentationTemplate =
+  | "collaborative_v1"
+  | "interactive_v1"
+  | "living_scene_v1"
+  | "open_world_v1";
 export type Permission = "read" | "contribute" | "derive" | "invite" | "manage";
 export type CapabilityId =
   | "object.read"
@@ -274,14 +278,37 @@ export interface ObjectProposeChangeInput {
     | "remove_checklist_item"
     | "add_tag"
     | "remove_tag"
-    | "cast_vote";
+    | "cast_vote"
+    | "set_premise"
+    | "add_element"
+    | "update_element"
+    | "remove_element"
+    | "move_element"
+    | "add_kind"
+    | "update_kind"
+    | "remove_kind"
+    | "add_node"
+    | "update_node"
+    | "remove_node"
+    | "move_node"
+    | "set_node_field"
+    | "set_node_status"
+    | "touch_node"
+    | "add_link"
+    | "remove_link"
+    | "add_rule"
+    | "remove_rule"
+    | "set_views";
   input: Record<string, unknown>;
   expected_version: number;
 }
 export interface ObjectDeriveCapabilityInput {
   object_id: string;
   source_version?: number;
-  inheritance_fields: Array<"summary" | "body" | "checklist" | "tags" | "prompt" | "options">;
+  inheritance_fields: Array<
+    "summary" | "body" | "checklist" | "tags" | "prompt" | "options"
+    | "premise" | "elements" | "structure" | "views"
+  >;
   title: string;
 }
 export interface ContentStructureInput {

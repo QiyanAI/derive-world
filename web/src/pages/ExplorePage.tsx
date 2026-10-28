@@ -53,11 +53,15 @@ function publicPreview(world: PublicWorld): {
     ? (snapshot.elements as Array<Record<string, unknown>>)
         .map((element) => String(element.text ?? ""))
         .filter(Boolean)
-    : Array.isArray(snapshot.checklist)
-      ? (snapshot.checklist as Array<Record<string, unknown>>)
-          .map((item) => String(item.text ?? ""))
+    : Array.isArray(snapshot.nodes)
+      ? (snapshot.nodes as Array<Record<string, unknown>>)
+          .map((node) => String(node.name ?? node.text ?? ""))
           .filter(Boolean)
-      : [];
+      : Array.isArray(snapshot.checklist)
+        ? (snapshot.checklist as Array<Record<string, unknown>>)
+            .map((item) => String(item.text ?? ""))
+            .filter(Boolean)
+        : [];
   const purpose = typeof snapshot.purpose === "string" ? snapshot.purpose : "";
   return { title, body, elements, purpose };
 }
@@ -69,10 +73,16 @@ function fieldsFor(world: PublicWorld): string[] {
   if (world.object_type === "living_scene") {
     return ["premise", "elements", "tags"];
   }
+  if (world.object_type === "open_world") {
+    return ["premise", "structure", "views", "tags"];
+  }
   return ["summary", "body", "checklist", "tags"];
 }
 
 function typeLabel(world: PublicWorld, zh: boolean): string {
+  if (world.object_type === "open_world") {
+    return zh ? "自由世界" : "Free world";
+  }
   if (world.object_type === "living_scene") {
     return zh ? "活场景" : "Living scene";
   }

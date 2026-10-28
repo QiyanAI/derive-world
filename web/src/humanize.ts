@@ -19,7 +19,22 @@ const actionKeys: Record<string, MessageKey> = {
   add_element: "action.add_element",
   update_element: "action.update_element",
   remove_element: "action.remove_element",
-  move_element: "action.move_element"
+  move_element: "action.move_element",
+  add_kind: "action.add_kind",
+  update_kind: "action.update_kind",
+  remove_kind: "action.remove_kind",
+  add_node: "action.add_node",
+  update_node: "action.update_node",
+  remove_node: "action.remove_node",
+  move_node: "action.move_node",
+  set_node_field: "action.set_node_field",
+  set_node_status: "action.set_node_status",
+  touch_node: "action.touch_node",
+  add_link: "action.add_link",
+  remove_link: "action.remove_link",
+  add_rule: "action.add_rule",
+  remove_rule: "action.remove_rule",
+  set_views: "action.set_views"
 };
 
 const eventKeys: Record<string, MessageKey> = {
@@ -113,6 +128,10 @@ const fieldKeys = {
   premise: "scene.premise",
   kind: "scene.elements",
   element: "scene.elements",
+  node_name: "openWorld.nodeName",
+  field: "openWorld.fieldKey",
+  status: "openWorld.statusField",
+  value: "openWorld.effectValue",
   position: "scene.moveDown"
 } satisfies Record<string, MessageKey>;
 
@@ -208,6 +227,76 @@ export function proposalPreview(proposal: Proposal, object: ObjectView | null): 
           field("element", String(input.element_id ?? "")),
           field("position", String(input.position ?? ""))
         ]
+      };
+    case "add_kind":
+      return {
+        action: proposal.action,
+        fields: [
+          field("node_name", String(input.name ?? "")),
+          field("field", Array.isArray(input.fields) ? `${input.fields.length}` : "0")
+        ]
+      };
+    case "update_kind":
+    case "remove_kind":
+      return { action: proposal.action, fields: [field("element", String(input.kind_id ?? ""))] };
+    case "add_node":
+      return {
+        action: proposal.action,
+        fields: [
+          field("node_name", String(input.name ?? "")),
+          field("premise", String(input.text ?? ""))
+        ]
+      };
+    case "update_node":
+    case "remove_node":
+    case "move_node":
+      return {
+        action: proposal.action,
+        fields: [
+          field("element", String(input.node_id ?? "")),
+          field("node_name", String(input.name ?? input.text ?? ""))
+        ]
+      };
+    case "set_node_field":
+      return {
+        action: proposal.action,
+        fields: [
+          field("field", String(input.field ?? "")),
+          field("value", String(input.value ?? ""))
+        ]
+      };
+    case "set_node_status":
+    case "touch_node":
+      return {
+        action: proposal.action,
+        fields: [
+          field("element", String(input.node_id ?? "")),
+          field("status", String(input.status ?? ""))
+        ]
+      };
+    case "add_link":
+      return {
+        action: proposal.action,
+        fields: [
+          field("premise", String(input.label ?? "")),
+          field("element", `${String(input.from ?? "")} → ${String(input.to ?? "")}`)
+        ]
+      };
+    case "remove_link":
+    case "remove_rule":
+      return { action: proposal.action, fields: [field("element", String(input.link_id ?? input.rule_id ?? ""))] };
+    case "add_rule":
+      return {
+        action: proposal.action,
+        fields: [
+          field("element", String(input.trigger_id ?? "")),
+          field("value", Array.isArray(input.effects) ? `${input.effects.length}` : "0")
+        ]
+      };
+    case "set_views":
+      return {
+        action: proposal.action,
+        fields: [field("value", Array.isArray(input.views) ? input.views.join(", ") : "")]
       };
     default:
       return {

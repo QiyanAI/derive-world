@@ -1,0 +1,1038 @@
+// SPDX-License-Identifier: Apache-2.0
+package objects
+
+import (
+	"encoding/json"
+	"fmt"
+	"sort"
+	"strings"
+	"unicode/utf8"
+
+	"github.com/google/uuid"
+)
+
+// OpenWorldAppliedEffect is one consequence that actually ran. It is written
+// into the object event so a world's history explains itself.
+type OpenWorldAppliedEffect struct {
+	RuleID string `json:"rule_id"`
+	NodeID string `json:"node_id"`
+	Field  string `json:"field"`
+	Op     string `json:"op"`
+	Value  any    `json:"value,omitempty"`
+}
+
+func isOpenWorldAction(action string) bool {
+	switch action {
+	case "add_kind", "update_kind", "remove_kind",
+		"add_node", "update_node", "remove_node", "move_node",
+		"set_node_field", "set_node_status", "touch_node",
+		"add_link", "remove_link", "add_rule", "remove_rule", "set_views":
+		return true
+	default:
+		return false
+	}
+}
+
+type openWorldFieldInput struct {
+	Key   string `json:"key"`
+	Label string `json:"label"`
+	Type  string `json:"type"`
+}
+
+type addOpenWorldKindInput struct {
+	Name   string                `json:"name"`
+	Hue    int                   `json:"hue"`
+	Fields []openWorldFieldInput `json:"fields"`
+}
+
+type updateOpenWorldKindInput struct {
+	KindID string                 `json:"kind_id"`
+	Name   *string                `json:"name"`
+	Hue    *int                   `json:"hue"`
+	Fields *[]openWorldFieldInput `json:"fields"`
+}
+
+type removeOpenWorldKindInput struct {
+	KindID string `json:"kind_id"`
+}
+
+type addOpenWorldNodeInput struct {
+	KindID string   `json:"kind_id"`
+	Name   string   `json:"name"`
+	Text   string   `json:"text"`
+	X      *float64 `json:"x"`
+	Y      *float64 `json:"y"`
+}
+
+type updateOpenWorldNodeInput struct {
+	NodeID string   `json:"node_id"`
+	Name   *string  `json:"name"`
+	Text   *string  `json:"text"`
+	X      *float64 `json:"x"`
+	Y      *float64 `json:"y"`
+}
+
+type removeOpenWorldNodeInput struct {
+	NodeID string `json:"node_id"`
+}
+
+type moveOpenWorldNodeInput struct {
+	NodeID string  `json:"node_id"`
+	X      float64 `json:"x"`
+	Y      float64 `json:"y"`
+}
+
+type setOpenWorldFieldInput struct {
+	NodeID string `json:"node_id"`
+	Field  string `json:"field"`
+	Value  any    `json:"value"`
+}
+
+type setOpenWorldStatusInput struct {
+	NodeID string `json:"node_id"`
+	Status string `json:"status"`
+}
+
+type touchOpenWorldNodeInput struct {
+	NodeID string `json:"node_id"`
+}
+
+type addOpenWorldLinkInput struct {
+	From  string `json:"from"`
+	To    string `json:"to"`
+	Label string `json:"label"`
+}
+
+type removeOpenWorldLinkInput struct {
+	LinkID string `json:"link_id"`
+}
+
+type openWorldEffectInput struct {
+	NodeID string `json:"node_id"`
+	Field  string `json:"field"`
+	Op     string `json:"op"`
+	Value  any    `json:"value"`
+}
+
+type addOpenWorldRuleInput struct {
+	TriggerID string                 `json:"trigger_id"`
+	Effects   []openWorldEffectInput `json:"effects"`
+}
+
+type removeOpenWorldRuleInput struct {
+	RuleID string `json:"rule_id"`
+}
+
+type setOpenWorldViewsInput struct {
+	Views []string `json:"views"`
+}
+
+func decodeOpenWorldInput(raw json.RawMessage, destination any) error {
+	if err := decodeStrict(raw, destination); err != nil {
+		return fmt.Errorf("%w: input", ErrInvalidRequest)
+	}
+	return nil
+}
+
+func validateOpenWorldKindInput(name string, hue int, fields []openWorldFieldInput) error {
+	if runeLength(strings.TrimSpace(name)) < 1 || runeLength(name) > maxOpenWorldKindNameRunes {
+		return fmt.Errorf("%w: input.name", ErrInvalidRequest)
+	}
+	if hue < 0 || hue > 359 {
+		return fmt.Errorf("%w: input.hue", ErrInvalidRequest)
+	}
+	if len(fields) > maxOpenWorldKindFields {
+		return fmt.Errorf("%w: input.fields", ErrInvalidRequest)
+	}
+	seen := make(map[string]bool, len(fields))
+	for index, field := range fields {
+		key := strings.TrimSpace(field.Key)
+		if key == "" || runeLength(key) > maxOpenWorldFieldKeyRunes || seen[key] ||
+			key == OpenWorldStatusField {
+			return fmt.Errorf("%w: input.fields/%d/key", ErrInvalidRequest, index)
+		}
+		seen[key] = true
+		if runeLength(field.Label) > maxOpenWorldFieldLabelRune {
+			return fmt.Errorf("%w: input.fields/%d/label", ErrInvalidRequest, index)
+		}
+		if !validOpenWorldFieldType(field.Type) {
+			return fmt.Errorf("%w: input.fields/%d/type", ErrInvalidRequest, index)
+		}
+	}
+	return nil
+}
+
+func validateOpenWorldNodeName(name string) error {
+	if runeLength(strings.TrimSpace(name)) < 1 || runeLength(name) > maxOpenWorldNodeNameRunes {
+		return fmt.Errorf("%w: input.name", ErrInvalidRequest)
+	}
+	return nil
+}
+
+func validateOpenWorldNodeText(text string) error {
+	if utf8.RuneCountInString(text) > maxOpenWorldNodeTextRunes {
+		return fmt.Errorf("%w: input.text", ErrInvalidRequest)
+	}
+	return nil
+}
+
+func normalizeOpenWorldFieldInputs(fields []openWorldFieldInput) []OpenWorldField {
+	out := make([]OpenWorldField, len(fields))
+	for index, field := range fields {
+		out[index] = OpenWorldField{
+			Key: strings.TrimSpace(field.Key), Label: field.Label, Type: field.Type,
+		}
+	}
+	return out
+}
+
+func fieldInputMap(fields []openWorldFieldInput) []any {
+	out := make([]any, 0, len(fields))
+	for _, field := range fields {
+		out = append(out, map[string]any{
+			"key": strings.TrimSpace(field.Key), "label": field.Label, "type": field.Type,
+		})
+	}
+	return out
+}
+
+func validateEffectInput(input openWorldEffectInput) error {
+	if input.Field == "" {
+		return fmt.Errorf("%w: input.effects.field", ErrInvalidRequest)
+	}
+	switch input.Op {
+	case OpenWorldOpSet, OpenWorldOpAdd, OpenWorldOpToggle:
+	default:
+		return fmt.Errorf("%w: input.effects.op", ErrInvalidRequest)
+	}
+	if input.Op == OpenWorldOpToggle {
+		return nil
+	}
+	if input.Value == nil {
+		return fmt.Errorf("%w: input.effects.value", ErrInvalidRequest)
+	}
+	return nil
+}
+
+// planOpenWorldAction validates the exact input shape of one open-world
+// action and records the normalized values used by the event log.
+func planOpenWorldAction(action string, raw json.RawMessage, plan *ActionPlan) error {
+	plan.Permission = PermContribute
+	switch action {
+	case "add_kind":
+		if err := validateInputKeys(raw, []string{"name"}, []string{"name", "hue", "fields"}); err != nil {
+			return err
+		}
+		var input addOpenWorldKindInput
+		if err := decodeOpenWorldInput(raw, &input); err != nil {
+			return err
+		}
+		if err := validateOpenWorldKindInput(input.Name, input.Hue, input.Fields); err != nil {
+			return err
+		}
+		plan.Input["name"] = strings.TrimSpace(input.Name)
+		plan.Input["hue"] = input.Hue
+		plan.Input["fields"] = fieldInputMap(input.Fields)
+	case "update_kind":
+		if err := validateInputKeys(raw, []string{"kind_id"},
+			[]string{"kind_id", "name", "hue", "fields"}); err != nil {
+			return err
+		}
+		var input updateOpenWorldKindInput
+		if err := decodeOpenWorldInput(raw, &input); err != nil {
+			return err
+		}
+		if _, err := uuid.Parse(input.KindID); err != nil {
+			return fmt.Errorf("%w: input.kind_id", ErrInvalidRequest)
+		}
+		if input.Name == nil && input.Hue == nil && input.Fields == nil {
+			return fmt.Errorf("%w: input", ErrInvalidRequest)
+		}
+		if input.Name != nil {
+			if runeLength(strings.TrimSpace(*input.Name)) < 1 || runeLength(*input.Name) > maxOpenWorldKindNameRunes {
+				return fmt.Errorf("%w: input.name", ErrInvalidRequest)
+			}
+			plan.Input["name"] = strings.TrimSpace(*input.Name)
+		}
+		if input.Hue != nil {
+			if *input.Hue < 0 || *input.Hue > 359 {
+				return fmt.Errorf("%w: input.hue", ErrInvalidRequest)
+			}
+			plan.Input["hue"] = *input.Hue
+		}
+		if input.Fields != nil {
+			if len(*input.Fields) > maxOpenWorldKindFields {
+				return fmt.Errorf("%w: input.fields", ErrInvalidRequest)
+			}
+			seen := make(map[string]bool, len(*input.Fields))
+			for index, field := range *input.Fields {
+				key := strings.TrimSpace(field.Key)
+				if key == "" || runeLength(key) > maxOpenWorldFieldKeyRunes || seen[key] ||
+					key == OpenWorldStatusField {
+					return fmt.Errorf("%w: input.fields/%d/key", ErrInvalidRequest, index)
+				}
+				seen[key] = true
+				if runeLength(field.Label) > maxOpenWorldFieldLabelRune {
+					return fmt.Errorf("%w: input.fields/%d/label", ErrInvalidRequest, index)
+				}
+				if !validOpenWorldFieldType(field.Type) {
+					return fmt.Errorf("%w: input.fields/%d/type", ErrInvalidRequest, index)
+				}
+			}
+			plan.Input["fields"] = fieldInputMap(*input.Fields)
+		}
+		plan.Input["kind_id"] = input.KindID
+	case "remove_kind":
+		if err := validateInputKeys(raw, []string{"kind_id"}, []string{"kind_id"}); err != nil {
+			return err
+		}
+		var input removeOpenWorldKindInput
+		if err := decodeOpenWorldInput(raw, &input); err != nil {
+			return err
+		}
+		if _, err := uuid.Parse(input.KindID); err != nil {
+			return fmt.Errorf("%w: input.kind_id", ErrInvalidRequest)
+		}
+		plan.Input["kind_id"] = input.KindID
+	case "add_node":
+		if err := validateInputKeys(raw, []string{"kind_id", "name"},
+			[]string{"kind_id", "name", "text", "x", "y"}); err != nil {
+			return err
+		}
+		var input addOpenWorldNodeInput
+		if err := decodeOpenWorldInput(raw, &input); err != nil {
+			return err
+		}
+		if _, err := uuid.Parse(input.KindID); err != nil {
+			return fmt.Errorf("%w: input.kind_id", ErrInvalidRequest)
+		}
+		if err := validateOpenWorldNodeName(input.Name); err != nil {
+			return err
+		}
+		if err := validateOpenWorldNodeText(input.Text); err != nil {
+			return err
+		}
+		if input.X != nil {
+			if err := validateOpenWorldCoordinate(*input.X, openWorldMinX, openWorldMaxX, "input.x"); err != nil {
+				return err
+			}
+		}
+		if input.Y != nil {
+			if err := validateOpenWorldCoordinate(*input.Y, openWorldMinY, openWorldMaxY, "input.y"); err != nil {
+				return err
+			}
+		}
+		plan.Input["kind_id"] = input.KindID
+		plan.Input["name"] = strings.TrimSpace(input.Name)
+		plan.Input["text"] = input.Text
+		if input.X != nil {
+			plan.Input["x"] = *input.X
+		}
+		if input.Y != nil {
+			plan.Input["y"] = *input.Y
+		}
+	case "update_node":
+		if err := validateInputKeys(raw, []string{"node_id"},
+			[]string{"node_id", "name", "text", "x", "y"}); err != nil {
+			return err
+		}
+		var input updateOpenWorldNodeInput
+		if err := decodeOpenWorldInput(raw, &input); err != nil {
+			return err
+		}
+		if _, err := uuid.Parse(input.NodeID); err != nil {
+			return fmt.Errorf("%w: input.node_id", ErrInvalidRequest)
+		}
+		if input.Name == nil && input.Text == nil && input.X == nil && input.Y == nil {
+			return fmt.Errorf("%w: input", ErrInvalidRequest)
+		}
+		if input.Name != nil {
+			if err := validateOpenWorldNodeName(*input.Name); err != nil {
+				return err
+			}
+			plan.Input["name"] = strings.TrimSpace(*input.Name)
+		}
+		if input.Text != nil {
+			if err := validateOpenWorldNodeText(*input.Text); err != nil {
+				return err
+			}
+			plan.Input["text"] = *input.Text
+		}
+		if input.X != nil {
+			if err := validateOpenWorldCoordinate(*input.X, openWorldMinX, openWorldMaxX, "input.x"); err != nil {
+				return err
+			}
+			plan.Input["x"] = *input.X
+		}
+		if input.Y != nil {
+			if err := validateOpenWorldCoordinate(*input.Y, openWorldMinY, openWorldMaxY, "input.y"); err != nil {
+				return err
+			}
+			plan.Input["y"] = *input.Y
+		}
+		plan.Input["node_id"] = input.NodeID
+	case "remove_node", "touch_node":
+		var input removeOpenWorldNodeInput
+		key := "node_id"
+		if err := validateInputKeys(raw, []string{key}, []string{key}); err != nil {
+			return err
+		}
+		if err := decodeOpenWorldInput(raw, &input); err != nil {
+			return err
+		}
+		if _, err := uuid.Parse(input.NodeID); err != nil {
+			return fmt.Errorf("%w: input.node_id", ErrInvalidRequest)
+		}
+		plan.Input["node_id"] = input.NodeID
+	case "move_node":
+		if err := validateInputKeys(raw, []string{"node_id", "x", "y"}, []string{"node_id", "x", "y"}); err != nil {
+			return err
+		}
+		var input moveOpenWorldNodeInput
+		if err := decodeOpenWorldInput(raw, &input); err != nil {
+			return err
+		}
+		if _, err := uuid.Parse(input.NodeID); err != nil {
+			return fmt.Errorf("%w: input.node_id", ErrInvalidRequest)
+		}
+		if err := validateOpenWorldCoordinate(input.X, openWorldMinX, openWorldMaxX, "input.x"); err != nil {
+			return err
+		}
+		if err := validateOpenWorldCoordinate(input.Y, openWorldMinY, openWorldMaxY, "input.y"); err != nil {
+			return err
+		}
+		plan.Input["node_id"] = input.NodeID
+		plan.Input["x"] = input.X
+		plan.Input["y"] = input.Y
+	case "set_node_field":
+		if err := validateInputKeys(raw, []string{"node_id", "field", "value"},
+			[]string{"node_id", "field", "value"}); err != nil {
+			return err
+		}
+		var input setOpenWorldFieldInput
+		if err := decodeOpenWorldInput(raw, &input); err != nil {
+			return err
+		}
+		if _, err := uuid.Parse(input.NodeID); err != nil {
+			return fmt.Errorf("%w: input.node_id", ErrInvalidRequest)
+		}
+		if strings.TrimSpace(input.Field) == "" || runeLength(input.Field) > maxOpenWorldFieldKeyRunes {
+			return fmt.Errorf("%w: input.field", ErrInvalidRequest)
+		}
+		plan.Input["node_id"] = input.NodeID
+		plan.Input["field"] = input.Field
+		plan.Input["value"] = input.Value
+	case "set_node_status":
+		if err := validateInputKeys(raw, []string{"node_id", "status"},
+			[]string{"node_id", "status"}); err != nil {
+			return err
+		}
+		var input setOpenWorldStatusInput
+		if err := decodeOpenWorldInput(raw, &input); err != nil {
+			return err
+		}
+		if _, err := uuid.Parse(input.NodeID); err != nil {
+			return fmt.Errorf("%w: input.node_id", ErrInvalidRequest)
+		}
+		if input.Status != OpenWorldStatusOpen && input.Status != OpenWorldStatusDone {
+			return fmt.Errorf("%w: input.status", ErrInvalidRequest)
+		}
+		plan.Input["node_id"] = input.NodeID
+		plan.Input["status"] = input.Status
+	case "add_link":
+		if err := validateInputKeys(raw, []string{"from", "to"}, []string{"from", "to", "label"}); err != nil {
+			return err
+		}
+		var input addOpenWorldLinkInput
+		if err := decodeOpenWorldInput(raw, &input); err != nil {
+			return err
+		}
+		if _, err := uuid.Parse(input.From); err != nil {
+			return fmt.Errorf("%w: input.from", ErrInvalidRequest)
+		}
+		if _, err := uuid.Parse(input.To); err != nil {
+			return fmt.Errorf("%w: input.to", ErrInvalidRequest)
+		}
+		if input.From == input.To {
+			return fmt.Errorf("%w: input.to", ErrInvalidRequest)
+		}
+		if runeLength(input.Label) > maxOpenWorldLinkLabelRune {
+			return fmt.Errorf("%w: input.label", ErrInvalidRequest)
+		}
+		plan.Input["from"] = input.From
+		plan.Input["to"] = input.To
+		plan.Input["label"] = input.Label
+	case "remove_link":
+		if err := validateInputKeys(raw, []string{"link_id"}, []string{"link_id"}); err != nil {
+			return err
+		}
+		var input removeOpenWorldLinkInput
+		if err := decodeOpenWorldInput(raw, &input); err != nil {
+			return err
+		}
+		if _, err := uuid.Parse(input.LinkID); err != nil {
+			return fmt.Errorf("%w: input.link_id", ErrInvalidRequest)
+		}
+		plan.Input["link_id"] = input.LinkID
+	case "add_rule":
+		if err := validateInputKeys(raw, []string{"trigger_id", "effects"},
+			[]string{"trigger_id", "effects"}); err != nil {
+			return err
+		}
+		var input addOpenWorldRuleInput
+		if err := decodeOpenWorldInput(raw, &input); err != nil {
+			return err
+		}
+		if _, err := uuid.Parse(input.TriggerID); err != nil {
+			return fmt.Errorf("%w: input.trigger_id", ErrInvalidRequest)
+		}
+		if len(input.Effects) == 0 || len(input.Effects) > maxOpenWorldRuleEffects {
+			return fmt.Errorf("%w: input.effects", ErrInvalidRequest)
+		}
+		effects := make([]any, 0, len(input.Effects))
+		for index, effect := range input.Effects {
+			if _, err := uuid.Parse(effect.NodeID); err != nil {
+				return fmt.Errorf("%w: input.effects/%d/node_id", ErrInvalidRequest, index)
+			}
+			if err := validateEffectInput(effect); err != nil {
+				return fmt.Errorf("%w: input.effects/%d", ErrInvalidRequest, index)
+			}
+			effects = append(effects, map[string]any{
+				"node_id": effect.NodeID, "field": effect.Field,
+				"op": effect.Op, "value": effect.Value,
+			})
+		}
+		plan.Input["trigger_id"] = input.TriggerID
+		plan.Input["effects"] = effects
+	case "remove_rule":
+		if err := validateInputKeys(raw, []string{"rule_id"}, []string{"rule_id"}); err != nil {
+			return err
+		}
+		var input removeOpenWorldRuleInput
+		if err := decodeOpenWorldInput(raw, &input); err != nil {
+			return err
+		}
+		if _, err := uuid.Parse(input.RuleID); err != nil {
+			return fmt.Errorf("%w: input.rule_id", ErrInvalidRequest)
+		}
+		plan.Input["rule_id"] = input.RuleID
+	case "set_views":
+		if err := validateInputKeys(raw, []string{"views"}, []string{"views"}); err != nil {
+			return err
+		}
+		var input setOpenWorldViewsInput
+		if err := decodeOpenWorldInput(raw, &input); err != nil {
+			return err
+		}
+		views, err := normalizeOpenWorldViews(input.Views)
+		if err != nil {
+			return err
+		}
+		items := make([]any, len(views))
+		for index, view := range views {
+			items[index] = view
+		}
+		plan.Input["views"] = items
+	default:
+		return fmt.Errorf("%w: action", ErrInvalidRequest)
+	}
+	return nil
+}
+
+func findOpenWorldKind(state *OpenWorldState, kindID string) *OpenWorldKind {
+	for index := range state.Kinds {
+		if state.Kinds[index].ID == kindID {
+			return &state.Kinds[index]
+		}
+	}
+	return nil
+}
+
+func findOpenWorldNode(state *OpenWorldState, nodeID string) *OpenWorldNode {
+	for index := range state.Nodes {
+		if state.Nodes[index].ID == nodeID {
+			return &state.Nodes[index]
+		}
+	}
+	return nil
+}
+
+func openWorldFieldFor(state *OpenWorldState, node *OpenWorldNode, key string) *OpenWorldField {
+	kind := findOpenWorldKind(state, node.KindID)
+	if kind == nil {
+		return nil
+	}
+	for index := range kind.Fields {
+		if kind.Fields[index].Key == key {
+			return &kind.Fields[index]
+		}
+	}
+	return nil
+}
+
+// applyOpenWorldRules runs one pass over rules triggered by nodeID. Effects
+// apply in rule and effect order and never trigger further rules.
+func applyOpenWorldRules(state *OpenWorldState, nodeID string) []OpenWorldAppliedEffect {
+	applied := make([]OpenWorldAppliedEffect, 0)
+	for _, rule := range state.Rules {
+		if rule.TriggerID != nodeID {
+			continue
+		}
+		for _, effect := range rule.Effects {
+			node := findOpenWorldNode(state, effect.NodeID)
+			if node == nil {
+				continue
+			}
+			if effect.Field == OpenWorldStatusField {
+				switch effect.Op {
+				case OpenWorldOpSet:
+					value, _ := effect.Value.(string)
+					if value != OpenWorldStatusOpen && value != OpenWorldStatusDone {
+						continue
+					}
+					node.Status = value
+					applied = append(applied, OpenWorldAppliedEffect{
+						RuleID: rule.ID, NodeID: node.ID, Field: effect.Field,
+						Op: effect.Op, Value: value,
+					})
+				case OpenWorldOpToggle:
+					next := OpenWorldStatusDone
+					if node.Status == OpenWorldStatusDone {
+						next = OpenWorldStatusOpen
+					}
+					node.Status = next
+					applied = append(applied, OpenWorldAppliedEffect{
+						RuleID: rule.ID, NodeID: node.ID, Field: effect.Field,
+						Op: effect.Op, Value: next,
+					})
+				}
+				continue
+			}
+			field := openWorldFieldFor(state, node, effect.Field)
+			if field == nil {
+				continue
+			}
+			switch field.Type {
+			case OpenWorldFieldText:
+				value, ok := effect.Value.(string)
+				if !ok || effect.Op != OpenWorldOpSet {
+					continue
+				}
+				if node.Values == nil {
+					node.Values = map[string]any{}
+				}
+				node.Values[field.Key] = value
+				applied = append(applied, OpenWorldAppliedEffect{
+					RuleID: rule.ID, NodeID: node.ID, Field: field.Key,
+					Op: effect.Op, Value: value,
+				})
+			case OpenWorldFieldNumber:
+				value, ok := effect.Value.(float64)
+				if !ok {
+					continue
+				}
+				if node.Values == nil {
+					node.Values = map[string]any{}
+				}
+				current, _ := node.Values[field.Key].(float64)
+				switch effect.Op {
+				case OpenWorldOpSet:
+					node.Values[field.Key] = value
+				case OpenWorldOpAdd:
+					node.Values[field.Key] = current + value
+				default:
+					continue
+				}
+				applied = append(applied, OpenWorldAppliedEffect{
+					RuleID: rule.ID, NodeID: node.ID, Field: field.Key,
+					Op: effect.Op, Value: node.Values[field.Key],
+				})
+			case OpenWorldFieldFlag:
+				if node.Values == nil {
+					node.Values = map[string]any{}
+				}
+				current, _ := node.Values[field.Key].(bool)
+				switch effect.Op {
+				case OpenWorldOpSet:
+					value, ok := effect.Value.(bool)
+					if !ok {
+						continue
+					}
+					node.Values[field.Key] = value
+				case OpenWorldOpToggle:
+					node.Values[field.Key] = !current
+				default:
+					continue
+				}
+				applied = append(applied, OpenWorldAppliedEffect{
+					RuleID: rule.ID, NodeID: node.ID, Field: field.Key,
+					Op: effect.Op, Value: node.Values[field.Key],
+				})
+			}
+		}
+	}
+	return applied
+}
+
+// applyOpenWorldAction mutates a copy of the state for one validated action.
+func applyOpenWorldAction(stateRaw, sharedRaw json.RawMessage, plan *ActionPlan) (json.RawMessage, json.RawMessage, string, error) {
+	var state OpenWorldState
+	if err := decodeStrict(stateRaw, &state); err != nil {
+		return nil, nil, "", fmt.Errorf("%w: state", ErrInvalidRequest)
+	}
+	switch plan.Action {
+	case "set_title":
+		state.Title = plan.Input["title"].(string)
+	case "set_premise":
+		state.Premise = plan.Input["premise"].(string)
+	case "add_tag":
+		tag := plan.Input["tag"].(string)
+		for _, existing := range state.Tags {
+			if existing == tag {
+				return nil, nil, "", fmt.Errorf("%w: tag already exists", ErrConflict)
+			}
+		}
+		if len(state.Tags) >= maxTags {
+			return nil, nil, "", fmt.Errorf("%w: tag limit reached", ErrConflict)
+		}
+		state.Tags = append(state.Tags, tag)
+		sort.Strings(state.Tags)
+	case "remove_tag":
+		tag := plan.Input["tag"].(string)
+		found := false
+		next := make([]string, 0, len(state.Tags))
+		for _, existing := range state.Tags {
+			if existing == tag {
+				found = true
+				continue
+			}
+			next = append(next, existing)
+		}
+		if !found {
+			return nil, nil, "", fmt.Errorf("%w: input.tag", ErrInvalidRequest)
+		}
+		state.Tags = next
+	case "add_kind":
+		var input addOpenWorldKindInput
+		if err := decodeOpenWorldInput(plan.RawInput, &input); err != nil {
+			return nil, nil, "", err
+		}
+		if len(state.Kinds) >= maxOpenWorldKinds {
+			return nil, nil, "", fmt.Errorf("%w: kind limit reached", ErrConflict)
+		}
+		id, err := uuid.NewV7()
+		if err != nil {
+			return nil, nil, "", err
+		}
+		state.Kinds = append(state.Kinds, OpenWorldKind{
+			ID: id.String(), Name: strings.TrimSpace(input.Name), Hue: input.Hue,
+			Fields: normalizeOpenWorldFieldInputs(input.Fields),
+		})
+	case "update_kind":
+		var input updateOpenWorldKindInput
+		if err := decodeOpenWorldInput(plan.RawInput, &input); err != nil {
+			return nil, nil, "", err
+		}
+		kind := findOpenWorldKind(&state, input.KindID)
+		if kind == nil {
+			return nil, nil, "", fmt.Errorf("%w: input.kind_id", ErrInvalidRequest)
+		}
+		if input.Name != nil {
+			kind.Name = strings.TrimSpace(*input.Name)
+		}
+		if input.Hue != nil {
+			kind.Hue = *input.Hue
+		}
+		if input.Fields != nil {
+			kind.Fields = normalizeOpenWorldFieldInputs(*input.Fields)
+			allowed := make(map[string]bool, len(kind.Fields))
+			for _, field := range kind.Fields {
+				allowed[field.Key] = true
+			}
+			for index := range state.Nodes {
+				if state.Nodes[index].KindID != kind.ID {
+					continue
+				}
+				for key := range state.Nodes[index].Values {
+					if !allowed[key] {
+						delete(state.Nodes[index].Values, key)
+					}
+				}
+			}
+		}
+	case "remove_kind":
+		var input removeOpenWorldKindInput
+		if err := decodeOpenWorldInput(plan.RawInput, &input); err != nil {
+			return nil, nil, "", err
+		}
+		kind := findOpenWorldKind(&state, input.KindID)
+		if kind == nil {
+			return nil, nil, "", fmt.Errorf("%w: input.kind_id", ErrInvalidRequest)
+		}
+		for _, node := range state.Nodes {
+			if node.KindID == kind.ID {
+				return nil, nil, "", fmt.Errorf("%w: kind is still in use", ErrConflict)
+			}
+		}
+		next := make([]OpenWorldKind, 0, len(state.Kinds)-1)
+		for _, existing := range state.Kinds {
+			if existing.ID != kind.ID {
+				next = append(next, existing)
+			}
+		}
+		state.Kinds = next
+	case "add_node":
+		var input addOpenWorldNodeInput
+		if err := decodeOpenWorldInput(plan.RawInput, &input); err != nil {
+			return nil, nil, "", err
+		}
+		if findOpenWorldKind(&state, input.KindID) == nil {
+			return nil, nil, "", fmt.Errorf("%w: input.kind_id", ErrInvalidRequest)
+		}
+		if len(state.Nodes) >= maxOpenWorldNodes {
+			return nil, nil, "", fmt.Errorf("%w: node limit reached", ErrConflict)
+		}
+		id, err := uuid.NewV7()
+		if err != nil {
+			return nil, nil, "", err
+		}
+		x, y := defaultOpenWorldPosition(len(state.Nodes), len(state.Nodes)+1)
+		if input.X != nil {
+			x = *input.X
+		}
+		if input.Y != nil {
+			y = *input.Y
+		}
+		state.Nodes = append(state.Nodes, OpenWorldNode{
+			ID: id.String(), KindID: input.KindID, Name: strings.TrimSpace(input.Name),
+			Text: input.Text, Values: map[string]any{}, Status: OpenWorldStatusOpen,
+			X: x, Y: y,
+		})
+	case "update_node":
+		var input updateOpenWorldNodeInput
+		if err := decodeOpenWorldInput(plan.RawInput, &input); err != nil {
+			return nil, nil, "", err
+		}
+		node := findOpenWorldNode(&state, input.NodeID)
+		if node == nil {
+			return nil, nil, "", fmt.Errorf("%w: input.node_id", ErrInvalidRequest)
+		}
+		if input.Name != nil {
+			node.Name = strings.TrimSpace(*input.Name)
+		}
+		if input.Text != nil {
+			node.Text = *input.Text
+		}
+		if input.X != nil {
+			node.X = *input.X
+		}
+		if input.Y != nil {
+			node.Y = *input.Y
+		}
+	case "remove_node":
+		var input removeOpenWorldNodeInput
+		if err := decodeOpenWorldInput(plan.RawInput, &input); err != nil {
+			return nil, nil, "", err
+		}
+		node := findOpenWorldNode(&state, input.NodeID)
+		if node == nil {
+			return nil, nil, "", fmt.Errorf("%w: input.node_id", ErrInvalidRequest)
+		}
+		nextNodes := make([]OpenWorldNode, 0, len(state.Nodes)-1)
+		for _, existing := range state.Nodes {
+			if existing.ID != node.ID {
+				nextNodes = append(nextNodes, existing)
+			}
+		}
+		state.Nodes = nextNodes
+		nextLinks := make([]OpenWorldLink, 0, len(state.Links))
+		for _, link := range state.Links {
+			if link.From != node.ID && link.To != node.ID {
+				nextLinks = append(nextLinks, link)
+			}
+		}
+		state.Links = nextLinks
+		nextRules := make([]OpenWorldRule, 0, len(state.Rules))
+		for _, rule := range state.Rules {
+			if rule.TriggerID == node.ID {
+				continue
+			}
+			effects := make([]OpenWorldEffect, 0, len(rule.Effects))
+			for _, effect := range rule.Effects {
+				if effect.NodeID != node.ID {
+					effects = append(effects, effect)
+				}
+			}
+			if len(effects) == 0 {
+				continue
+			}
+			rule.Effects = effects
+			nextRules = append(nextRules, rule)
+		}
+		state.Rules = nextRules
+	case "move_node":
+		var input moveOpenWorldNodeInput
+		if err := decodeOpenWorldInput(plan.RawInput, &input); err != nil {
+			return nil, nil, "", err
+		}
+		node := findOpenWorldNode(&state, input.NodeID)
+		if node == nil {
+			return nil, nil, "", fmt.Errorf("%w: input.node_id", ErrInvalidRequest)
+		}
+		node.X = input.X
+		node.Y = input.Y
+	case "set_node_field":
+		var input setOpenWorldFieldInput
+		if err := decodeOpenWorldInput(plan.RawInput, &input); err != nil {
+			return nil, nil, "", err
+		}
+		node := findOpenWorldNode(&state, input.NodeID)
+		if node == nil {
+			return nil, nil, "", fmt.Errorf("%w: input.node_id", ErrInvalidRequest)
+		}
+		field := openWorldFieldFor(&state, node, input.Field)
+		if field == nil {
+			return nil, nil, "", fmt.Errorf("%w: input.field", ErrInvalidRequest)
+		}
+		if err := validateOpenWorldValue(*field, input.Value, "input.value"); err != nil {
+			return nil, nil, "", err
+		}
+		if node.Values == nil {
+			node.Values = map[string]any{}
+		}
+		node.Values[field.Key] = input.Value
+		plan.Effects = append(plan.Effects, applyOpenWorldRules(&state, node.ID)...)
+	case "set_node_status":
+		var input setOpenWorldStatusInput
+		if err := decodeOpenWorldInput(plan.RawInput, &input); err != nil {
+			return nil, nil, "", err
+		}
+		node := findOpenWorldNode(&state, input.NodeID)
+		if node == nil {
+			return nil, nil, "", fmt.Errorf("%w: input.node_id", ErrInvalidRequest)
+		}
+		node.Status = input.Status
+		plan.Effects = append(plan.Effects, applyOpenWorldRules(&state, node.ID)...)
+	case "touch_node":
+		var input touchOpenWorldNodeInput
+		if err := decodeOpenWorldInput(plan.RawInput, &input); err != nil {
+			return nil, nil, "", err
+		}
+		node := findOpenWorldNode(&state, input.NodeID)
+		if node == nil {
+			return nil, nil, "", fmt.Errorf("%w: input.node_id", ErrInvalidRequest)
+		}
+		if node.Status == OpenWorldStatusDone {
+			node.Status = OpenWorldStatusOpen
+		} else {
+			node.Status = OpenWorldStatusDone
+		}
+		plan.Effects = append(plan.Effects, applyOpenWorldRules(&state, node.ID)...)
+	case "add_link":
+		var input addOpenWorldLinkInput
+		if err := decodeOpenWorldInput(plan.RawInput, &input); err != nil {
+			return nil, nil, "", err
+		}
+		if findOpenWorldNode(&state, input.From) == nil || findOpenWorldNode(&state, input.To) == nil {
+			return nil, nil, "", fmt.Errorf("%w: input.endpoints", ErrInvalidRequest)
+		}
+		for _, link := range state.Links {
+			if link.From == input.From && link.To == input.To {
+				return nil, nil, "", fmt.Errorf("%w: link already exists", ErrConflict)
+			}
+		}
+		if len(state.Links) >= maxOpenWorldLinks {
+			return nil, nil, "", fmt.Errorf("%w: link limit reached", ErrConflict)
+		}
+		id, err := uuid.NewV7()
+		if err != nil {
+			return nil, nil, "", err
+		}
+		state.Links = append(state.Links, OpenWorldLink{
+			ID: id.String(), From: input.From, To: input.To, Label: input.Label,
+		})
+	case "remove_link":
+		var input removeOpenWorldLinkInput
+		if err := decodeOpenWorldInput(plan.RawInput, &input); err != nil {
+			return nil, nil, "", err
+		}
+		found := false
+		next := make([]OpenWorldLink, 0, len(state.Links))
+		for _, link := range state.Links {
+			if link.ID == input.LinkID {
+				found = true
+				continue
+			}
+			next = append(next, link)
+		}
+		if !found {
+			return nil, nil, "", fmt.Errorf("%w: input.link_id", ErrInvalidRequest)
+		}
+		state.Links = next
+	case "add_rule":
+		var input addOpenWorldRuleInput
+		if err := decodeOpenWorldInput(plan.RawInput, &input); err != nil {
+			return nil, nil, "", err
+		}
+		if findOpenWorldNode(&state, input.TriggerID) == nil {
+			return nil, nil, "", fmt.Errorf("%w: input.trigger_id", ErrInvalidRequest)
+		}
+		if len(state.Rules) >= maxOpenWorldRules {
+			return nil, nil, "", fmt.Errorf("%w: rule limit reached", ErrConflict)
+		}
+		id, err := uuid.NewV7()
+		if err != nil {
+			return nil, nil, "", err
+		}
+		effects := make([]OpenWorldEffect, 0, len(input.Effects))
+		for _, effect := range input.Effects {
+			if findOpenWorldNode(&state, effect.NodeID) == nil {
+				return nil, nil, "", fmt.Errorf("%w: input.effects.node_id", ErrInvalidRequest)
+			}
+			effects = append(effects, OpenWorldEffect{
+				NodeID: effect.NodeID, Field: effect.Field, Op: effect.Op, Value: effect.Value,
+			})
+		}
+		state.Rules = append(state.Rules, OpenWorldRule{
+			ID: id.String(), TriggerID: input.TriggerID, Effects: effects,
+		})
+	case "remove_rule":
+		var input removeOpenWorldRuleInput
+		if err := decodeOpenWorldInput(plan.RawInput, &input); err != nil {
+			return nil, nil, "", err
+		}
+		found := false
+		next := make([]OpenWorldRule, 0, len(state.Rules))
+		for _, rule := range state.Rules {
+			if rule.ID == input.RuleID {
+				found = true
+				continue
+			}
+			next = append(next, rule)
+		}
+		if !found {
+			return nil, nil, "", fmt.Errorf("%w: input.rule_id", ErrInvalidRequest)
+		}
+		state.Rules = next
+	case "set_views":
+		var input setOpenWorldViewsInput
+		if err := decodeOpenWorldInput(plan.RawInput, &input); err != nil {
+			return nil, nil, "", err
+		}
+		views, err := normalizeOpenWorldViews(input.Views)
+		if err != nil {
+			return nil, nil, "", err
+		}
+		state.Views = views
+	default:
+		return nil, nil, "", fmt.Errorf("%w: action", ErrInvalidRequest)
+	}
+	if err := ValidateOpenWorldState(&state); err != nil {
+		return nil, nil, "", err
+	}
+	encoded, err := marshalState(state)
+	if err != nil {
+		return nil, nil, "", err
+	}
+	return encoded, sharedRaw, "", nil
+}

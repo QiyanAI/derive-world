@@ -14,6 +14,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - A third native object type, `living_scene_v1`: structured ideas, steps,
   scenes, choices, and outcomes with versioned add/update/remove/move actions,
   step completion, tags, and scene export.
+- A fourth native object type, `open_world_v1`: creators define their own kinds
+  of things, the things themselves, labelled relations, and bounded one-pass
+  rules. It ships stage, card, and timeline views, server-interpreted effects,
+  versioned actions, structure-aware derivation, and publication support.
+  Behaviour is data, never executable code.
+- A universal Personal AI: one user-level identity is available before the
+  first world, keeps private conversations separate per world context, and can
+  propose a complete open world through the existing confirmation system. The
+  world is created only after a human approves it, and the approval, actor,
+  confirmation, and object are recorded together.
+- A dedicated `/worlds/:id` free-world experience with real interaction,
+  persistence, structure editing, and derivation, plus an explicit AI context
+  switch between the current world and the general conversation.
+- A version-8 migration extending only the closed type/template/derive and
+  confirmation domains; no existing data, table, or history is rewritten.
 - A Derive Lens with authorized source, version history, visible branches,
   inheritance fields, and pending AI proposals.
 - Friendships, blocks, direct human messages, object discussions, and
@@ -26,6 +41,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   state. Historical migrations and the published `v0.1.0` tag are unchanged.
 - Runtime diagnostics, a non-completion model connection check, and explicit
   daily/hourly/concurrency/global limit reporting in Settings.
+
+### Fixed
+
+- Scrolling inside the World Stage inspector no longer zooms the canvas,
+  closes the panel, switches worlds, or drags nodes. The canvas now excludes
+  every real stage overlay through an explicit `data-dw-stage-ui` marker, and
+  a dedicated pan layer keeps touch gestures separate from native panel
+  scrolling on phones and trackpads. Covered by Chromium, Firefox, and mobile
+  browser regression tests.
 
 ### Security
 

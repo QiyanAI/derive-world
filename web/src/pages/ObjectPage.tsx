@@ -444,7 +444,23 @@ export default function ObjectPage() {
       <div className="object-layout">
         <div className="object-content">
           {activeTab === "work" ? (
-            object.object_type === "living_scene" ? (
+            object.object_type === "open_world" ? (
+              <section className="card object-panel" data-testid="open-world-object-panel">
+                <p className="eyebrow">{t("openWorld.kicker")}</p>
+                <h2>{String(object.state.title ?? t("common.untitled"))}</h2>
+                <p className="muted">{String(object.state.premise ?? t("openWorld.premiseEmpty"))}</p>
+                <p className="muted">
+                  {t("openWorld.summary", {
+                    kinds: Array.isArray(object.state.kinds) ? object.state.kinds.length : 0,
+                    nodes: Array.isArray(object.state.nodes) ? object.state.nodes.length : 0,
+                    rules: Array.isArray(object.state.rules) ? object.state.rules.length : 0
+                  })}
+                </p>
+                <Link className="button" to={`/worlds/${object.id}`}>
+                  {t("openWorld.enter")}
+                </Link>
+              </section>
+            ) : object.object_type === "living_scene" ? (
               <SceneWorkTab
                 object={object}
                 canContribute={canContribute}

@@ -11,12 +11,14 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"strings"
 	"time"
 
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 
 	"github.com/QiyanAI/derive-world/internal/audit"
+	"github.com/QiyanAI/derive-world/internal/objects"
 	"github.com/QiyanAI/derive-world/internal/store"
 )
 
@@ -89,13 +91,21 @@ type ConfirmationView struct {
 	PermissionSummary   string              `json:"permission_summary"`
 }
 
-// ConfirmationEffect is the bounded, non-secret effect of a derive
+// ConfirmationEffect is the bounded, non-secret effect of a pending
 // confirmation. It never includes object state, private context, or the raw
 // model input.
 type ConfirmationEffect struct {
 	Title             string   `json:"title,omitempty"`
 	InheritanceFields []string `json:"inheritance_fields,omitempty"`
 	SourceVersion     *int     `json:"source_version,omitempty"`
+	// ObjectType, Summary, and the counts describe a world.create
+	// confirmation so a human can recognize what will be created without
+	// seeing the raw payload.
+	ObjectType string `json:"object_type,omitempty"`
+	Summary    string `json:"summary,omitempty"`
+	KindCount  int    `json:"kind_count,omitempty"`
+	NodeCount  int    `json:"node_count,omitempty"`
+	RuleCount  int    `json:"rule_count,omitempty"`
 }
 
 type confirmationPayloadProjection struct {
@@ -340,6 +350,17 @@ UPDATE confirmations SET status = 'expired'
 			payload.Action != confirmation.Action {
 			return nil, ErrConflict
 		}
+	case "personal_ai":
+		if confirmation.Action != ConfirmationWorldCreate {
+			return nil, ErrUnsupportedAction
+		}
+		payload, err := DecodeWorldCreatePayload(confirmation.Payload)
+		if err != nil {
+			return nil, ErrConflict
+		}
+		if payload.AIProfileID != confirmation.ResourceID {
+			return nil, ErrConflict
+		}
 	default:
 		return nil, ErrUnsupportedAction
 	}
@@ -424,6 +445,16 @@ UPDATE confirmations SET status = 'denied', decided_at = GREATEST(now(), created
  WHERE id = $1 AND status = 'pending'`, confirmationID.String()); err != nil {
 		return nil, err
 	}
+	metadata := map[string]any{
+		"action":      confirmation.Action,
+		"resource_id": confirmation.ResourceID.String(),
+	}
+	if confirmation.ResourceType == "living_object" {
+		metadata["object_id"] = confirmation.ResourceID.String()
+	}
+	if confirmation.ResourceType == "personal_ai" {
+		metadata["ai_profile_id"] = confirmation.ResourceID.String()
+	}
 	if err := s.audit.Write(ctx, tx, audit.Event{
 		Actor:        audit.UserActor(userID),
 		Action:       audit.ActionAIConfirmationDeny,
@@ -432,10 +463,7 @@ UPDATE confirmations SET status = 'denied', decided_at = GREATEST(now(), created
 		Decision:     "allow",
 		RequestID:    requestID,
 		IPHash:       ipHash,
-		Metadata: map[string]any{
-			"action":    confirmation.Action,
-			"object_id": confirmation.ResourceID.String(),
-		},
+		Metadata:     metadata,
 	}); err != nil {
 		return nil, err
 	}
@@ -495,6 +523,12 @@ func scanConfirmationView(row rowScanner) (ConfirmationView, error) {
 		view.PayloadHashPrefix = view.PayloadHashPrefix[:12]
 	}
 	view.PermissionSummary = permissionSummary(view.Action)
+	// An unbound Personal AI world.create confirmation has no object to join.
+	// Its resource is the caller's own AI profile, so the caller may always
+	// review the bounded effect summary.
+	if view.ResourceType == "personal_ai" && view.Action == ConfirmationWorldCreate {
+		readable = true
+	}
 
 	// The confirmation belongs to the caller, but the target object may have
 	// become unreadable after creation (membership removal or soft delete).
@@ -553,6 +587,30 @@ func scanConfirmationView(row rowScanner) (ConfirmationView, error) {
 			}
 		}
 	}
+	if view.Action == ConfirmationWorldCreate {
+		var worldPayload WorldCreatePayload
+		if json.Unmarshal(payload, &worldPayload) == nil && strings.TrimSpace(worldPayload.Title) != "" {
+			var content struct {
+				Premise string            `json:"premise"`
+				Kinds   []json.RawMessage `json:"kinds"`
+				Nodes   []json.RawMessage `json:"nodes"`
+				Rules   []json.RawMessage `json:"rules"`
+			}
+			_ = json.Unmarshal(worldPayload.Content, &content)
+			summary := strings.TrimSpace(content.Premise)
+			if runes := []rune(summary); len(runes) > 300 {
+				summary = string(runes[:300])
+			}
+			view.Effect = &ConfirmationEffect{
+				Title:      strings.TrimSpace(worldPayload.Title),
+				ObjectType: objects.TypeOpenWorld,
+				Summary:    summary,
+				KindCount:  len(content.Kinds),
+				NodeCount:  len(content.Nodes),
+				RuleCount:  len(content.Rules),
+			}
+		}
+	}
 	return view, nil
 }
 
@@ -564,6 +622,8 @@ func permissionSummary(action string) string {
 		return "Invokes one capability on the target object."
 	case ConfirmationInvitationCreate:
 		return "Creates an invitation. This action is not triggered in v0.1.0."
+	case ConfirmationWorldCreate:
+		return "Creates one new private world owned by you. Nothing is written until you approve."
 	default:
 		return "No permission change."
 	}

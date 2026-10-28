@@ -38,6 +38,26 @@ const MIN_ZOOM = 0.42;
 const MAX_ZOOM = 1.45;
 const tones = ["mint", "violet", "peach", "blue"] as const;
 
+// Overlays inside the stage own their own wheel, touch, and pointer gestures.
+// The marker attribute is authoritative; the class list keeps older DOM
+// variants safe. Keep this list in sync with the elements rendered below.
+const STAGE_UI_SELECTOR = [
+  "[data-dw-stage-ui]",
+  ".dw-stage-top",
+  ".dw-stage-bottom",
+  ".dw-stage-inspector-shell",
+  ".dw-stage-inspector",
+  ".dw-inspector",
+  ".dw-stage-onboarding",
+  ".dw-canvas-tools",
+  ".dw-ai-orb",
+  ".dw-pulse-mini"
+].join(", ");
+
+function isStageUI(target: EventTarget | null): boolean {
+  return Boolean((target as HTMLElement | null)?.closest?.(STAGE_UI_SELECTOR));
+}
+
 function clamp(value: number, min: number, max: number): number {
   return Math.max(min, Math.min(max, value));
 }
@@ -333,7 +353,10 @@ export default function WorldCanvas({
       return;
     }
     function onWheel(event: WheelEvent) {
-      if ((event.target as HTMLElement | null)?.closest(".dw-stage-inspector, .dw-stage-bottom, .dw-canvas-tools")) {
+      // A wheel gesture that starts inside an overlay belongs to that overlay.
+      // Never preventDefault here: the inspector and other panels keep native
+      // scrolling (including scroll chaining inside their own bounds).
+      if (isStageUI(event.target)) {
         return;
       }
       event.preventDefault();
@@ -422,11 +445,25 @@ export default function WorldCanvas({
       }
     }
 
+    function onCancel() {
+      if (!dragRef.current) {
+        return;
+      }
+      dragRef.current = null;
+      document.body.classList.remove("dw-canvas-dragging");
+      setDraggingNode(false);
+      dragPositionRef.current = null;
+      setDragPosition(null);
+      setGhost(null);
+    }
+
     window.addEventListener("pointermove", onMove);
     window.addEventListener("pointerup", onUp);
+    window.addEventListener("pointercancel", onCancel);
     return () => {
       window.removeEventListener("pointermove", onMove);
       window.removeEventListener("pointerup", onUp);
+      window.removeEventListener("pointercancel", onCancel);
     };
   }, [view.x, view.y, view.zoom]);
 
@@ -434,11 +471,15 @@ export default function WorldCanvas({
     if (event.button !== 0) {
       return;
     }
-    if (
-      (event.target as HTMLElement).closest(
-        "button, input, textarea, select, a, .dw-stage-inspector, .dw-stage-bottom, .dw-canvas-tools, .dw-ai-orb"
-      )
-    ) {
+    // Pointer gestures that begin inside any stage overlay must never pan the
+    // canvas or turn into a background click. The previous selector referenced
+    // `.dw-stage-inspector`, which does not exist in the rendered DOM, so a
+    // pointerdown in the inspector started a pan and its pointerup closed the
+    // panel. See the regression test in tests/e2e/specs/v2-scroll.spec.ts.
+    if (isStageUI(event.target)) {
+      return;
+    }
+    if ((event.target as HTMLElement).closest("button, input, textarea, select, a")) {
       return;
     }
     dragRef.current = {
@@ -537,10 +578,14 @@ export default function WorldCanvas({
       aria-label={zh ? "可以拖动、缩放与衍生的世界舞台" : "A world stage you can drag, zoom, and derive from"}
       data-testid="world-stage"
     >
+      {/* A dedicated touch surface for panning. It sits below every overlay,
+          so overlays keep native scrolling while the empty canvas still owns
+          vertical/horizontal touch gestures. */}
+      <div className="dw-stage-pan-layer" aria-hidden="true" />
       <div className="dw-stage-grid" aria-hidden="true" />
       <div className="dw-stage-orbital" aria-hidden="true" />
 
-      <div className="dw-stage-top">
+      <div className="dw-stage-top" data-dw-stage-ui>
         <div className="dw-stage-label">
           <span className="dw-stage-live-dot" aria-hidden="true" />
           <span>{zh ? "LIVE CANVAS" : "LIVE CANVAS"}</span>
@@ -637,7 +682,9 @@ export default function WorldCanvas({
                         ? zh ? "自由创造" : "Story"
                         : object.purpose === "project"
                           ? zh ? "实用创造" : "Project"
-                          : zh ? "共创世界" : "Shared world"}
+                          : object.purpose === "open"
+                            ? zh ? "自由世界" : "Free world"
+                            : zh ? "共创世界" : "Shared world"}
                       {" · "}
                       {object.total_count > 0
                         ? zh
@@ -686,13 +733,16 @@ export default function WorldCanvas({
 
       {aiOrb}
       {inspector ? (
-        <div className={`dw-stage-inspector-shell${inspectorOnLeft ? " is-left" : ""}`}>
+        <div
+          className={`dw-stage-inspector-shell${inspectorOnLeft ? " is-left" : ""}`}
+          data-dw-stage-ui
+        >
           {inspector}
         </div>
       ) : null}
       {!hasObjects ? emptyState : null}
 
-      <div className="dw-stage-bottom">
+      <div className="dw-stage-bottom" data-dw-stage-ui>
         <div className="dw-stage-guide">
           <Icon name="move" size={14} />
           <span>

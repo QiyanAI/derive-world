@@ -138,7 +138,11 @@ export default function InvitePage() {
         <span className={`template-badge template-${preview.object_type}`}>
           {preview.object_type === "collaborative"
             ? t("invite.type.collaborative")
-            : t("invite.type.interactive")}
+            : preview.object_type === "interactive"
+              ? t("invite.type.interactive")
+              : preview.object_type === "living_scene"
+                ? t("invite.type.living_scene")
+                : t("invite.type.open_world")}
         </span>
       </p>
 

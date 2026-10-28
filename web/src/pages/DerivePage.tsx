@@ -6,11 +6,22 @@ import { ErrorNotice } from "../errors";
 import { useAuth } from "../auth";
 import { useI18n } from "../i18n";
 
-type Field = "summary" | "body" | "checklist" | "tags" | "prompt" | "options" | "premise" | "elements";
+type Field =
+  | "summary"
+  | "body"
+  | "checklist"
+  | "tags"
+  | "prompt"
+  | "options"
+  | "premise"
+  | "elements"
+  | "structure"
+  | "views";
 
 const collaborativeFields: Field[] = ["summary", "body", "checklist", "tags"];
 const interactiveFields: Field[] = ["prompt", "options"];
 const sceneFields: Field[] = ["premise", "elements", "tags"];
+const openWorldFields: Field[] = ["premise", "structure", "views", "tags"];
 
 export default function DerivePage() {
   const { id } = useParams();
@@ -45,7 +56,9 @@ export default function DerivePage() {
             ? ["prompt", "options"]
             : loaded.object_type === "living_scene"
               ? ["premise", "elements"]
-              : ["summary", "body"]
+              : loaded.object_type === "open_world"
+                ? ["premise", "structure", "views"]
+                : ["summary", "body"]
         );
       })
       .catch((failure) => {
@@ -124,7 +137,9 @@ export default function DerivePage() {
       ? interactiveFields
       : object.object_type === "living_scene"
         ? sceneFields
-        : collaborativeFields;
+        : object.object_type === "open_world"
+          ? openWorldFields
+          : collaborativeFields;
   const selectedSource = sourceVersion === "" ? object.version : Number(sourceVersion);
   const historical = selectedSource !== object.version;
 
@@ -137,6 +152,16 @@ export default function DerivePage() {
     }
     if (field === "elements") {
       return Array.isArray(object?.state.elements) ? `${object.state.elements.length}` : "0";
+    }
+    if (field === "structure") {
+      const kinds = Array.isArray(object?.state.kinds) ? object.state.kinds.length : 0;
+      const nodes = Array.isArray(object?.state.nodes) ? object.state.nodes.length : 0;
+      return `${kinds} kinds · ${nodes} things`;
+    }
+    if (field === "views") {
+      return Array.isArray(object?.state.views)
+        ? (object.state.views as string[]).join(", ") || "—"
+        : "—";
     }
     if (field === "tags") {
       return Array.isArray(object?.state.tags) ? (object.state.tags as string[]).join(", ") || "—" : "—";

@@ -21,6 +21,17 @@ test("V2 mobile: bottom navigation, canvas, inspector and discovery fit the view
   await page.getByTestId("stage-inspector").getByRole("tab", { name: "Branch", exact: true }).click();
   await expect(page.getByTestId("stage-branch-composer")).toBeVisible();
 
+  // The inspector owns vertical touch scrolling; the canvas pan layer owns
+  // the rest. This is the phone half of the scroll regression.
+  const inspectorTouch = await page
+    .getByTestId("stage-inspector")
+    .evaluate((element) => getComputedStyle(element).touchAction);
+  expect(inspectorTouch).toBe("pan-y");
+  const panTouch = await page
+    .locator(".dw-stage-pan-layer")
+    .evaluate((element) => getComputedStyle(element).touchAction);
+  expect(panTouch).toBe("none");
+
   const overflow = await page.evaluate(
     () => document.documentElement.scrollWidth - window.innerWidth
   );

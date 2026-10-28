@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: Apache-2.0
 import { useEffect, useRef, useState } from "react";
-import { Link, NavLink, Outlet, useLocation } from "react-router";
+import { Link, NavLink, Outlet, useLocation, useNavigate } from "react-router";
 import { useAuth } from "../auth";
 import { useI18n } from "../i18n";
 import { useMeta } from "../meta";
@@ -10,6 +10,7 @@ import ModeBadge from "./ModeBadge";
 import AISettingsDialog from "./v2/AISettingsDialog";
 import HelpDialog from "./v2/HelpDialog";
 import Icon from "./v2/Icon";
+import PersonalAIDialog from "./v2/PersonalAIDialog";
 
 const navClass = ({ isActive }: { isActive: boolean }) =>
   isActive ? "dw-rail-link active" : "dw-rail-link";
@@ -19,11 +20,19 @@ export default function AppShell() {
   const { mode, status: metaStatus } = useMeta();
   const { status, user, logout, logoutError, authError, refresh } = useAuth();
   const location = useLocation();
+  const navigate = useNavigate();
   const authenticated = status === "authenticated";
   const zh = lang === "zh";
   const [aiOpen, setAIOpen] = useState(false);
+  const [personalAIOpen, setPersonalAIOpen] = useState(false);
   const [helpOpen, setHelpOpen] = useState(false);
   const profileRef = useRef<HTMLDetailsElement>(null);
+
+  useEffect(() => {
+    const openGeneralAI = () => setPersonalAIOpen(true);
+    window.addEventListener("dw:open-general-ai", openGeneralAI);
+    return () => window.removeEventListener("dw:open-general-ai", openGeneralAI);
+  }, []);
 
   useEffect(() => {
     window.scrollTo({ top: 0, behavior: "auto" });
@@ -32,6 +41,7 @@ export default function AppShell() {
 
   useEffect(() => {
     const titles: Array<[RegExp, string]> = [
+      [/^\/worlds\/[^/]+/, t("openWorld.kicker")],
       [/^\/objects\/[^/]+\/derive/, t("derive.title")],
       [/^\/objects\/[^/]+\/lineage/, t("lineage.title")],
       [/^\/objects\/new/, t("object.create.title")],
@@ -130,15 +140,27 @@ export default function AppShell() {
           </div>
           <div className="dw-top-actions">
             {authenticated ? (
-              <button
-                className="dw-top-button dw-ai-entry"
-                type="button"
-                onClick={() => setAIOpen(true)}
-                aria-label={zh ? "设置 AI 模型" : "AI settings"}
-              >
-                <Icon name="gear" size={16} />
-                <span>{zh ? "设置 AI" : "AI setup"}</span>
-              </button>
+              <>
+                <button
+                  className="dw-top-button dw-personal-ai-entry"
+                  type="button"
+                  onClick={() => setPersonalAIOpen(true)}
+                  aria-label={t("ai.universal.entry")}
+                  data-testid="personal-ai-entry"
+                >
+                  <Icon name="spark" size={16} />
+                  <span>{t("ai.universal.entry")}</span>
+                </button>
+                <button
+                  className="dw-top-button dw-ai-entry"
+                  type="button"
+                  onClick={() => setAIOpen(true)}
+                  aria-label={zh ? "设置 AI 模型" : "AI settings"}
+                >
+                  <Icon name="gear" size={16} />
+                  <span>{zh ? "设置 AI" : "AI setup"}</span>
+                </button>
+              </>
             ) : null}
             <button className="dw-top-button" type="button" onClick={() => setHelpOpen(true)}>
               <Icon name="help" size={16} />
@@ -227,6 +249,14 @@ export default function AppShell() {
         </footer>
       </div>
 
+      <PersonalAIDialog
+        open={personalAIOpen}
+        onClose={() => setPersonalAIOpen(false)}
+        onWorldCreated={(object) => {
+          setPersonalAIOpen(false);
+          navigate(`/worlds/${object.id}`);
+        }}
+      />
       <AISettingsDialog open={aiOpen} onClose={() => setAIOpen(false)} />
       <HelpDialog open={helpOpen} onClose={() => setHelpOpen(false)} />
     </div>

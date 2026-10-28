@@ -4,6 +4,7 @@ import { Link } from "react-router";
 import {
   deriveObject,
   getLens,
+  openWorldState,
   type DeriveLens,
   type ObjectView
 } from "../api";
@@ -252,6 +253,58 @@ function BranchComposer({
   );
 }
 
+function OpenWorldLauncher({
+  object,
+  onBranch,
+  onAI
+}: {
+  object: ObjectView;
+  onBranch: () => void;
+  onAI: () => void;
+}) {
+  const { t } = useI18n();
+  const state = openWorldState(object);
+  const canContribute = object.permissions.includes("contribute");
+  return (
+    <div className="dw-world-work dw-open-launcher" data-testid="open-world-launcher">
+      <div className="dw-inspect-header">
+        <div>
+          <p className="dw-inspect-kicker">{t("openWorld.kicker")}</p>
+          <h2 className="dw-inspect-title">{state.title || t("common.untitled")}</h2>
+          <p className="dw-inspect-sub">
+            {t("openWorld.summary", {
+              kinds: state.kinds.length,
+              nodes: state.nodes.length,
+              rules: state.rules.length
+            })}
+          </p>
+        </div>
+      </div>
+      <div className="dw-inspect-premise">
+        <p>{state.premise || t("openWorld.premiseEmpty")}</p>
+      </div>
+      <div className="dw-open-launcher-actions">
+        <Link className="dw-button dw-button-primary dw-button-small" to={`/worlds/${object.id}`}>
+          <Icon name="arrow" size={15} />
+          {t("openWorld.enter")}
+        </Link>
+        <button className="dw-button dw-button-small dw-button-ghost" type="button" onClick={onAI}>
+          <Icon name="spark" size={15} />
+          {t("openWorld.ai")}
+        </button>
+        {object.permissions.includes("derive") ? (
+          <button className="dw-button dw-button-small dw-button-ghost" type="button" onClick={onBranch}>
+            <Icon name="branch" size={15} />
+            {t("stage.tab.branch")}
+          </button>
+        ) : null}
+      </div>
+      <p className="dw-inspect-source">{t("openWorld.unsupported")}</p>
+      {canContribute ? null : <p className="muted">{t("workspace.permission.read")}</p>}
+    </div>
+  );
+}
+
 export default function StageInspector({
   object,
   tab,
@@ -295,10 +348,12 @@ export default function StageInspector({
   ];
 
   const livingScene = object?.object_type === "living_scene";
+  const openWorld = object?.object_type === "open_world";
+  const worldPanel = livingScene || openWorld;
 
   return (
     <section
-      className={`card stage-inspector dw-inspector${livingScene ? " dw-inspector-world" : ""}`}
+      className={`card stage-inspector dw-inspector${worldPanel ? " dw-inspector-world" : ""}`}
       aria-label={t("stage.inspectorLabel")}
       data-testid="stage-inspector"
       onKeyDown={(event) => {
@@ -308,7 +363,7 @@ export default function StageInspector({
         }
       }}
     >
-      {livingScene ? (
+      {worldPanel ? (
         <>
           <button className="dw-inspector-close" type="button" onClick={onClose} aria-label={t("common.close")}>
             <Icon name="close" size={17} />
@@ -333,7 +388,15 @@ export default function StageInspector({
 
           {object ? (
             <p className="muted stage-inspector-meta">
-              {t(`object.create.${object.object_type === "living_scene" ? "scene" : object.object_type}` as never)}
+              {t(
+                `object.create.${
+                  object.object_type === "living_scene"
+                    ? "scene"
+                    : object.object_type === "open_world"
+                      ? "open_world"
+                      : object.object_type
+                }` as never
+              )}
               {" · "}
               {t("object.version")} v{object.version}
             </p>
@@ -399,7 +462,13 @@ export default function StageInspector({
             aria-labelledby={`stage-tab-${tab}`}
           >
             {tab === "work" ? (
-              object.object_type === "living_scene" ? (
+              openWorld ? (
+                <OpenWorldLauncher
+                  object={object}
+                  onBranch={() => onTab("branch")}
+                  onAI={() => onTab("ai")}
+                />
+              ) : object.object_type === "living_scene" ? (
                 <WorldWorkPanel
                   object={object}
                   canContribute={canContribute}

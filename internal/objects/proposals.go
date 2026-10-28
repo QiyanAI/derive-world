@@ -95,7 +95,7 @@ SELECT object_type, version, status, state
 	if plan.Permission != PermContribute {
 		return uuid.Nil, false, nil
 	}
-	if !referencesExist(objectType, state, plan) {
+	if !ReferencesExist(objectType, state, plan) {
 		return uuid.Nil, false, nil
 	}
 	canonical, err := store.CanonicalJSON(mustMarshal(plan.Input))
@@ -340,6 +340,9 @@ UPDATE object_proposals SET status = 'expired'
 	if plan.Action == "set_shared_context" {
 		eventPayload["shared_context_changed"] = true
 	}
+	if len(plan.Effects) > 0 {
+		eventPayload["effects"] = plan.Effects
+	}
 	stateEventID, err := appendEventReturningID(ctx, tx, audit.UserActor(actorID), objectID,
 		newVersion, "object.state_changed", eventPayload)
 	if err != nil {
@@ -500,7 +503,10 @@ func scanProposal(row scanRow) (Proposal, error) {
 	return item, nil
 }
 
-func referencesExist(objectType string, state json.RawMessage, plan *ActionPlan) bool {
+// ReferencesExist checks the identifiers inside a validated plan against the
+// current state. It is shared by proposal storage and the capability broker so
+// one authority decides whether an action can even refer to something real.
+func ReferencesExist(objectType string, state json.RawMessage, plan *ActionPlan) bool {
 	switch plan.Action {
 	case "toggle_checklist_item", "remove_checklist_item":
 		var collaborative CollaborativeState
@@ -522,6 +528,109 @@ func referencesExist(objectType string, state json.RawMessage, plan *ActionPlan)
 		optionID, _ := plan.Input["option_id"].(string)
 		for _, option := range interactive.Options {
 			if option.ID == optionID {
+				return true
+			}
+		}
+		return false
+	}
+	if objectType != TypeOpenWorld || !isOpenWorldAction(plan.Action) {
+		return true
+	}
+	var world OpenWorldState
+	if json.Unmarshal(state, &world) != nil {
+		return false
+	}
+	hasNode := func(id string) *OpenWorldNode { return findOpenWorldNode(&world, id) }
+	hasKind := func(id string) bool { return findOpenWorldKind(&world, id) != nil }
+	switch plan.Action {
+	case "add_node":
+		kindID, _ := plan.Input["kind_id"].(string)
+		return hasKind(kindID)
+	case "update_kind", "remove_kind":
+		kindID, _ := plan.Input["kind_id"].(string)
+		return hasKind(kindID)
+	case "update_node", "remove_node", "move_node", "set_node_status", "touch_node":
+		nodeID, _ := plan.Input["node_id"].(string)
+		return hasNode(nodeID) != nil
+	case "set_node_field":
+		nodeID, _ := plan.Input["node_id"].(string)
+		node := hasNode(nodeID)
+		if node == nil {
+			return false
+		}
+		fieldKey, _ := plan.Input["field"].(string)
+		field := openWorldFieldFor(&world, node, fieldKey)
+		if field == nil {
+			return false
+		}
+		value, ok := plan.Input["value"]
+		return ok && validateOpenWorldValue(*field, value, "input.value") == nil
+	case "add_link":
+		from, _ := plan.Input["from"].(string)
+		to, _ := plan.Input["to"].(string)
+		return hasNode(from) != nil && hasNode(to) != nil
+	case "remove_link":
+		linkID, _ := plan.Input["link_id"].(string)
+		for _, link := range world.Links {
+			if link.ID == linkID {
+				return true
+			}
+		}
+		return false
+	case "add_rule":
+		triggerID, _ := plan.Input["trigger_id"].(string)
+		if hasNode(triggerID) == nil {
+			return false
+		}
+		effects, _ := plan.Input["effects"].([]any)
+		for _, raw := range effects {
+			effect, _ := raw.(map[string]any)
+			nodeID, _ := effect["node_id"].(string)
+			node := hasNode(nodeID)
+			if node == nil {
+				return false
+			}
+			fieldKey, _ := effect["field"].(string)
+			op, _ := effect["op"].(string)
+			value := effect["value"]
+			if fieldKey == OpenWorldStatusField {
+				if op == OpenWorldOpSet {
+					status, _ := value.(string)
+					if status != OpenWorldStatusOpen && status != OpenWorldStatusDone {
+						return false
+					}
+				} else if op != OpenWorldOpToggle {
+					return false
+				}
+				continue
+			}
+			field := openWorldFieldFor(&world, node, fieldKey)
+			if field == nil {
+				return false
+			}
+			switch field.Type {
+			case OpenWorldFieldText:
+				if op != OpenWorldOpSet {
+					return false
+				}
+			case OpenWorldFieldNumber:
+				if op != OpenWorldOpSet && op != OpenWorldOpAdd {
+					return false
+				}
+			case OpenWorldFieldFlag:
+				if op != OpenWorldOpSet && op != OpenWorldOpToggle {
+					return false
+				}
+			}
+			if op != OpenWorldOpToggle && validateOpenWorldValue(*field, value, "input.value") != nil {
+				return false
+			}
+		}
+		return true
+	case "remove_rule":
+		ruleID, _ := plan.Input["rule_id"].(string)
+		for _, rule := range world.Rules {
+			if rule.ID == ruleID {
 				return true
 			}
 		}

@@ -2,10 +2,11 @@
 
 Derive World is an open, self-hostable world of Living Objects, Personal AI,
 and independent derivation. This guide starts the reference stack in Fixture
-mode and walks through the World Stage, the three Living Object types
-(collaborative, interactive, living scene), two independent users, direct
-friendship and messaging, opt-in publication, public derivation, error states,
-and the browser acceptance suite. It then shows how to switch to a real
+mode and walks through the World Stage, the four Living Object types
+(collaborative, interactive, living scene, free world), the universal Personal
+AI, two independent users, direct friendship and messaging, opt-in
+publication, public derivation, error states, and the browser acceptance
+suite. It then shows how to switch to a real
 OpenAI-compatible model.
 
 ## Prerequisites

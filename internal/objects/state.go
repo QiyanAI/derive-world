@@ -67,7 +67,7 @@ func runeLength(value string) int {
 // canonical state and shared context bytes written to the database.
 func ValidateCreate(input CreateInput) (state json.RawMessage, shared json.RawMessage, err error) {
 	if input.ObjectType != TypeCollaborative && input.ObjectType != TypeInteractive &&
-		input.ObjectType != TypeLivingScene {
+		input.ObjectType != TypeLivingScene && input.ObjectType != TypeOpenWorld {
 		return nil, nil, fmt.Errorf("%w: object_type", ErrInvalidRequest)
 	}
 	title := strings.TrimSpace(input.Title)
@@ -169,6 +169,19 @@ func ValidateCreate(input CreateInput) (state json.RawMessage, shared json.RawMe
 		}
 		state, err = marshalState(stateValue)
 		return state, shared, err
+	case TypeOpenWorld:
+		var content OpenWorldContent
+		if len(bytes.TrimSpace(input.Content)) == 0 {
+			content = OpenWorldContent{}
+		} else if err := decodeStrict(input.Content, &content); err != nil {
+			return nil, nil, fmt.Errorf("%w: content", ErrInvalidRequest)
+		}
+		stateValue, err := buildOpenWorldState(title, content)
+		if err != nil {
+			return nil, nil, err
+		}
+		state, err = marshalState(stateValue)
+		return state, shared, err
 	default:
 		return nil, nil, fmt.Errorf("%w: object_type", ErrInvalidRequest)
 	}
@@ -256,6 +269,12 @@ func ValidateStateBytes(objectType string, raw []byte) error {
 			return fmt.Errorf("%w: state", ErrInvalidRequest)
 		}
 		return ValidateLivingSceneState(&state)
+	case TypeOpenWorld:
+		var state OpenWorldState
+		if err := decodeStrict(raw, &state); err != nil {
+			return fmt.Errorf("%w: state", ErrInvalidRequest)
+		}
+		return ValidateOpenWorldState(&state)
 	default:
 		return fmt.Errorf("%w: object_type", ErrInvalidRequest)
 	}
@@ -411,6 +430,10 @@ type ActionPlan struct {
 	Permission string
 	Input      map[string]any
 	RawInput   json.RawMessage
+	// Effects records declarative consequences that actually ran during this
+	// action. Open worlds are currently the only producer; the event log
+	// writes them so a world explains its own history.
+	Effects []OpenWorldAppliedEffect
 }
 
 type setTitleInput struct {
@@ -491,7 +514,7 @@ type moveElementInput struct {
 func RequiredPermission(objectType, action string) (string, bool) {
 	switch action {
 	case "set_title", "add_tag", "remove_tag":
-		if objectType == TypeCollaborative || objectType == TypeLivingScene {
+		if objectType == TypeCollaborative || objectType == TypeLivingScene || objectType == TypeOpenWorld {
 			return PermContribute, true
 		}
 	case "set_summary", "set_body", "add_checklist_item",
@@ -499,13 +522,24 @@ func RequiredPermission(objectType, action string) (string, bool) {
 		if objectType == TypeCollaborative {
 			return PermContribute, true
 		}
-	case "set_premise", "add_element", "update_element", "remove_element", "move_element":
+	case "set_premise":
+		if objectType == TypeLivingScene || objectType == TypeOpenWorld {
+			return PermContribute, true
+		}
+	case "add_element", "update_element", "remove_element", "move_element":
 		if objectType == TypeLivingScene {
 			return PermContribute, true
 		}
 	case "set_purpose":
 		if objectType == TypeLivingScene {
 			return PermManage, true
+		}
+	case "add_kind", "update_kind", "remove_kind",
+		"add_node", "update_node", "remove_node", "move_node",
+		"set_node_field", "set_node_status", "touch_node",
+		"add_link", "remove_link", "add_rule", "remove_rule", "set_views":
+		if objectType == TypeOpenWorld {
+			return PermContribute, true
 		}
 	case "cast_vote":
 		if objectType == TypeInteractive {
@@ -556,9 +590,18 @@ func PlanAction(objectType, action string, raw json.RawMessage) (*ActionPlan, er
 		return nil, fmt.Errorf("%w: input", ErrInvalidRequest)
 	}
 	plan := &ActionPlan{Action: action, Input: map[string]any{}, RawInput: raw}
+	if isOpenWorldAction(action) {
+		if objectType != TypeOpenWorld {
+			return nil, fmt.Errorf("%w: action", ErrInvalidRequest)
+		}
+		if err := planOpenWorldAction(action, raw, plan); err != nil {
+			return nil, err
+		}
+		return plan, nil
+	}
 	switch action {
 	case "set_title":
-		if objectType != TypeCollaborative && objectType != TypeLivingScene {
+		if objectType != TypeCollaborative && objectType != TypeLivingScene && objectType != TypeOpenWorld {
 			return nil, fmt.Errorf("%w: action", ErrInvalidRequest)
 		}
 		if err := validateInputKeys(raw, []string{"title"}, []string{"title"}); err != nil {
@@ -655,7 +698,7 @@ func PlanAction(objectType, action string, raw json.RawMessage) (*ActionPlan, er
 		plan.Permission = PermContribute
 		plan.Input["item_id"] = input.ItemID
 	case "add_tag":
-		if objectType != TypeCollaborative && objectType != TypeLivingScene {
+		if objectType != TypeCollaborative && objectType != TypeLivingScene && objectType != TypeOpenWorld {
 			return nil, fmt.Errorf("%w: action", ErrInvalidRequest)
 		}
 		if err := validateInputKeys(raw, []string{"tag"}, []string{"tag"}); err != nil {
@@ -672,7 +715,7 @@ func PlanAction(objectType, action string, raw json.RawMessage) (*ActionPlan, er
 		plan.Permission = PermContribute
 		plan.Input["tag"] = tag
 	case "remove_tag":
-		if objectType != TypeCollaborative && objectType != TypeLivingScene {
+		if objectType != TypeCollaborative && objectType != TypeLivingScene && objectType != TypeOpenWorld {
 			return nil, fmt.Errorf("%w: action", ErrInvalidRequest)
 		}
 		if err := validateInputKeys(raw, []string{"tag"}, []string{"tag"}); err != nil {
@@ -689,7 +732,7 @@ func PlanAction(objectType, action string, raw json.RawMessage) (*ActionPlan, er
 		plan.Permission = PermContribute
 		plan.Input["tag"] = tag
 	case "set_premise":
-		if objectType != TypeLivingScene {
+		if objectType != TypeLivingScene && objectType != TypeOpenWorld {
 			return nil, fmt.Errorf("%w: action", ErrInvalidRequest)
 		}
 		if err := validateInputKeys(raw, []string{"premise"}, []string{"premise"}); err != nil {
@@ -880,6 +923,10 @@ func ApplyStateAction(objectType string, stateRaw, sharedRaw json.RawMessage, pl
 			return nil, nil, "", err
 		}
 		return stateRaw, shared, "", nil
+	}
+
+	if objectType == TypeOpenWorld {
+		return applyOpenWorldAction(stateRaw, sharedRaw, plan)
 	}
 
 	switch objectType {

@@ -5,9 +5,9 @@
 Derive World is an open-source foundation for *Living Objects*: shared,
 versioned objects that people and their personal AI can read, contribute to,
 derive from, and trace through an explicit lineage. This development branch
-adds a World Stage, a living-scene object, direct friendship and messaging,
-opt-in public worlds, and public derivation on top of the published `v0.1.0`
-foundation.
+adds a World Stage, living scenes, free-form open worlds, a universal Personal
+AI, direct friendship and messaging, opt-in public worlds, and public
+derivation on top of the published `v0.1.0` foundation.
 
 **Why it is different:** most AI tools treat chat as the product. Derive World
 treats the *object* as the product: a Living Object has versions, members,
@@ -28,8 +28,9 @@ what you build.
 > **Status: unreleased development branch on top of public OSS MVP `v0.1.0`.**
 > The published `v0.1.0` remains the 22-table, two-object foundation described
 > in its [release notes](docs/en/release-notes.md). This branch adds a
-> version-7 migration (31 tables), a third object type, social discovery,
-> publication, user-private world layout, and the V2 World Stage client. It is
+> version-8 migration (31 tables), a fourth object type, social discovery,
+> publication, user-private world layout, the V2 World Stage client, and a
+> universal Personal AI that can propose a real first world. It is
 > reviewable code, not a released
 > version. **Real AI is VERIFIED_REAL only for the approved two-call API-level
 > run (DeepSeek `deepseek-flash`, synthetic data); it was not re-run on this
@@ -44,15 +45,19 @@ what you build.
 
 - **World** — a stage of your real objects and visible derivation branches,
   with a Living Pulse of real changes and pending human approvals.
-- **Objects** — collaborative documents, interactive polls, and living scenes
-  (ideas, steps, scenes, choices, outcomes) with versioned actions, members,
-  invitations, Handoff, AI collaboration, a Derive Lens, history, and lineage.
+- **Objects** — collaborative documents, interactive polls, living scenes
+  (ideas, steps, scenes, choices, outcomes), and free worlds whose creator
+  defines the kinds of things, their relations, and one-pass rules. Every type
+  has versioned actions, members, invitations, Handoff, AI collaboration, a
+  Derive Lens, history, and lineage.
 - **Friends** — direct human friendship, messages, blocks, and object
   discussions. Friendship never grants object access by itself.
 - **Explore** — opt-in public snapshots and derivation into an independent,
   private object when the owner allows it.
-- **Personal AI** — profile, private context, conversations, and a Handoff
-  preview that never impersonates another user's AI.
+- **Personal AI** — one user-level AI that exists before the first world,
+  keeps separate private conversations per world context, and can propose a
+  real, human-approved first world. The Handoff preview never impersonates
+  another user's AI.
 - **Digital Self** — the consent ledger: delegations, revocation, and the human
   approvals that only you can give.
 - **Settings** — language, tokens, export, runtime diagnostics, model

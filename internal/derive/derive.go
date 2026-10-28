@@ -24,6 +24,7 @@ var (
 	collaborativeFields = []string{"summary", "body", "checklist", "tags"}
 	interactiveFields   = []string{"prompt", "options"}
 	livingSceneFields   = []string{"premise", "elements", "tags"}
+	openWorldFields     = []string{"premise", "structure", "views", "tags"}
 )
 
 // AvailableFields returns the derive inheritance whitelist for an object type.
@@ -318,6 +319,8 @@ func whitelistFor(objectType string) []string {
 		return interactiveFields
 	case objects.TypeLivingScene:
 		return livingSceneFields
+	case objects.TypeOpenWorld:
+		return openWorldFields
 	default:
 		return nil
 	}
@@ -464,6 +467,27 @@ func assemble(objectType, title string, source json.RawMessage, fields []string)
 			child.Tags = append(child.Tags, parent.Tags...)
 		}
 		if err := objects.ValidateLivingSceneState(&child); err != nil {
+			return nil, err
+		}
+		encoded, err := store.MarshalCompactJSON(child)
+		if err != nil {
+			return nil, err
+		}
+		size, err := store.CompactJSONSize(child)
+		if err != nil {
+			return nil, err
+		}
+		if size > 64*1024 {
+			return nil, fmt.Errorf("%w: state", objects.ErrPayloadTooLarge)
+		}
+		return encoded, nil
+	case objects.TypeOpenWorld:
+		var parent objects.OpenWorldState
+		if err := json.Unmarshal(source, &parent); err != nil {
+			return nil, fmt.Errorf("%w: state", objects.ErrInvalidRequest)
+		}
+		child, err := objects.OpenWorldDerivedState(title, &parent, selected)
+		if err != nil {
 			return nil, err
 		}
 		encoded, err := store.MarshalCompactJSON(child)

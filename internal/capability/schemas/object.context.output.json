@@ -14,7 +14,7 @@
     "expires_at": { "$ref": "#/$defs/rfc3339" },
     "object_id": { "$ref": "#/$defs/uuid_v7" },
     "object_version": { "type": "integer", "minimum": 1 },
-    "object_type": { "type": "string", "enum": ["collaborative", "interactive"] },
+    "object_type": { "type": "string", "enum": ["collaborative", "interactive", "living_scene", "open_world"] },
     "permitted_object_context": {
       "type": "object",
       "additionalProperties": false,

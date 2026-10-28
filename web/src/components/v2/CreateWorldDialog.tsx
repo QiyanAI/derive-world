@@ -16,7 +16,7 @@ export default function CreateWorldDialog({
 }) {
   const { lang } = useI18n();
   const zh = lang === "zh";
-  const [kind, setKind] = useState<"project" | "story">("project");
+  const [kind, setKind] = useState<"project" | "story" | "open">("project");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const inputRef = useRef<HTMLInputElement>(null);
@@ -38,29 +38,45 @@ export default function CreateWorldDialog({
     setBusy(true);
     setError("");
     try {
-      const object = await createObject({
-        object_type: "living_scene",
-        title: clean,
-        content: {
-          purpose: kind,
-          premise: "",
-          elements: [
-            {
-              kind: kind === "story" ? "scene" : "idea",
-              text:
-                kind === "story"
-                  ? zh
-                    ? "开场：让这个世界开始呼吸"
-                    : "Opening: let this world begin to breathe"
-                  : zh
-                    ? "第一步：让这个想法开始生长"
-                    : "First step: let this idea take shape"
-            }
-          ],
-          tags: []
-        },
-        shared_context: {}
-      });
+      const object =
+        kind === "open"
+          ? await createObject({
+              object_type: "open_world",
+              title: clean,
+              content: {
+                premise: "",
+                kinds: [],
+                nodes: [],
+                links: [],
+                rules: [],
+                views: ["stage", "cards", "timeline"],
+                tags: []
+              },
+              shared_context: {}
+            })
+          : await createObject({
+              object_type: "living_scene",
+              title: clean,
+              content: {
+                purpose: kind,
+                premise: "",
+                elements: [
+                  {
+                    kind: kind === "story" ? "scene" : "idea",
+                    text:
+                      kind === "story"
+                        ? zh
+                          ? "开场：让这个世界开始呼吸"
+                          : "Opening: let this world begin to breathe"
+                        : zh
+                          ? "第一步：让这个想法开始生长"
+                          : "First step: let this idea take shape"
+                  }
+                ],
+                tags: []
+              },
+              shared_context: {}
+            });
       onCreated(object);
       onClose();
     } catch (failure) {
@@ -132,6 +148,20 @@ export default function CreateWorldDialog({
             <Icon name="book" size={20} />
             <strong>{zh ? "创造一个故事世界" : "Create a story world"}</strong>
             <small>{zh ? "设定、剧情、选择与探索" : "Settings, scenes, choices, exploration"}</small>
+          </button>
+          <button
+            type="button"
+            className={`dw-seg-choice${kind === "open" ? " is-active" : ""}`}
+            aria-pressed={kind === "open"}
+            onClick={() => setKind("open")}
+          >
+            <Icon name="world" size={20} />
+            <strong>{zh ? "定义一个自由世界" : "Define a free world"}</strong>
+            <small>
+              {zh
+                ? "自己定义存在的种类、关系与规则"
+                : "Define your own kinds, relations, and rules"}
+            </small>
           </button>
         </div>
         <p className="dw-fineprint">

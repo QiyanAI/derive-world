@@ -13,7 +13,13 @@ export default function ObjectNewPage() {
   const [searchParams] = useSearchParams();
   const template = searchParams.get("template");
   const initialType: ObjectType =
-    template === "interactive" ? "interactive" : template === "living_scene" ? "living_scene" : "collaborative";
+    template === "interactive"
+      ? "interactive"
+      : template === "living_scene"
+        ? "living_scene"
+        : template === "open_world"
+          ? "open_world"
+          : "collaborative";
   const [objectType, setObjectType] = useState<ObjectType>(initialType);
   const [title, setTitle] = useState("");
   const [summary, setSummary] = useState("");
@@ -122,14 +128,24 @@ export default function ObjectNewPage() {
               prompt,
               options: labels.map((label) => ({ label }))
             }
-          : {
-              purpose,
-              premise,
-              elements: elements
-                .filter((element) => element.text.trim())
-                .map((element) => ({ kind: element.kind, text: element.text })),
-              tags: tagList
-            };
+          : objectType === "open_world"
+            ? {
+                premise,
+                kinds: [],
+                nodes: [],
+                links: [],
+                rules: [],
+                views: ["stage", "cards", "timeline"],
+                tags: tagList
+              }
+            : {
+                purpose,
+                premise,
+                elements: elements
+                  .filter((element) => element.text.trim())
+                  .map((element) => ({ kind: element.kind, text: element.text })),
+                tags: tagList
+              };
     setBusy(true);
     try {
       const created = await createObject({
@@ -138,7 +154,11 @@ export default function ObjectNewPage() {
         content,
         shared_context: shared
       });
-      navigate(`/objects/${created.id}?tab=work&created=1${firstUse ? "&first=1" : ""}`);
+      if (created.object_type === "open_world") {
+        navigate(`/worlds/${created.id}`);
+      } else {
+        navigate(`/objects/${created.id}?tab=work&created=1${firstUse ? "&first=1" : ""}`);
+      }
     } catch (failure) {
       setError(failure);
     } finally {
@@ -202,6 +222,17 @@ export default function ObjectNewPage() {
             />
             <strong>{t("object.create.scene")}</strong>
             <small>{t("object.create.sceneHint")}</small>
+          </label>
+          <label className={objectType === "open_world" ? "choice choice-active" : "choice"}>
+            <input
+              type="radio"
+              name="object_type"
+              value="open_world"
+              checked={objectType === "open_world"}
+              onChange={() => setObjectType("open_world")}
+            />
+            <strong>{t("object.create.open_world")}</strong>
+            <small>{t("object.create.openWorldHint")}</small>
           </label>
         </fieldset>
 

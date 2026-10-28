@@ -824,7 +824,7 @@ func buildSnapshot(objectType, template string, state json.RawMessage) (json.Raw
 		summary, _ = decoded["summary"].(string)
 	case objects.TypeInteractive:
 		summary, _ = decoded["prompt"].(string)
-	case objects.TypeLivingScene:
+	case objects.TypeLivingScene, objects.TypeOpenWorld:
 		summary, _ = decoded["premise"].(string)
 	default:
 		return nil, "", "", fmt.Errorf("%w: object_type", ErrInvalidRequest)

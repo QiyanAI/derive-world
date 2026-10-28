@@ -935,6 +935,10 @@ func validateActionReferences(objectType string, state json.RawMessage, plan *ob
 		return newFailure(httpx.CodeInvalidRequest, "invalid request",
 			fmt.Errorf("%w: input.element_id", ErrInvalidRequest))
 	default:
+		if !objects.ReferencesExist(objectType, state, plan) {
+			return newFailure(httpx.CodeInvalidRequest, "invalid request",
+				fmt.Errorf("%w: input.reference", ErrInvalidRequest))
+		}
 		return nil
 	}
 }
@@ -992,6 +996,8 @@ func deriveWhitelist(objectType string) []string {
 		return []string{"prompt", "options"}
 	case objects.TypeLivingScene:
 		return []string{"premise", "elements", "tags"}
+	case objects.TypeOpenWorld:
+		return objects.OpenWorldAvailableFields()
 	default:
 		return nil
 	}

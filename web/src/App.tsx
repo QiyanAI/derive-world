@@ -17,6 +17,7 @@ import NotFoundPage from "./pages/NotFoundPage";
 import ObjectNewPage from "./pages/ObjectNewPage";
 import ObjectPage from "./pages/ObjectPage";
 import ObjectsPage from "./pages/ObjectsPage";
+import OpenWorldPage from "./pages/OpenWorldPage";
 import RegisterPage from "./pages/RegisterPage";
 import SelfPage from "./pages/SelfPage";
 import SettingsPage from "./pages/SettingsPage";
@@ -45,6 +46,7 @@ export default function App() {
                   <Route path="objects/:id" element={<ObjectPage />} />
                   <Route path="objects/:id/derive" element={<DerivePage />} />
                   <Route path="objects/:id/lineage" element={<LineagePage />} />
+                  <Route path="worlds/:id" element={<OpenWorldPage />} />
                   <Route path="invite/:token" element={<InvitePage />} />
                   <Route path="settings" element={<SettingsPage />} />
                   <Route path="*" element={<NotFoundPage />} />

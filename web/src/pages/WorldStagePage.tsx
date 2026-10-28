@@ -486,7 +486,7 @@ export default function WorldStagePage() {
               if (selectedId) {
                 openInspector(selectedId, "ai");
               } else {
-                toast(zh ? "先选择一个世界，再让 AI 参与。" : "Select a world before bringing in AI.");
+                window.dispatchEvent(new Event("dw:open-general-ai"));
               }
             }}
           >
@@ -545,11 +545,15 @@ export default function WorldStagePage() {
         open={createOpen}
         onClose={() => setCreateOpen(false)}
         onCreated={(object) => {
+          toast(zh ? "你的新世界开始生长了。" : "Your new world has begun to grow.");
+          if (object.object_type === "open_world") {
+            navigate(`/worlds/${object.id}`);
+            return;
+          }
           setFocusId(object.id);
           setSelected(object);
           setSelectedId(object.id);
           setInspectorOpen(false);
-          toast(zh ? "你的新世界开始生长了。" : "Your new world has begun to grow.");
           void load().then(() => openInspector(object.id, "work"));
         }}
       />

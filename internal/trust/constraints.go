@@ -15,6 +15,10 @@ const (
 	ConfirmationDeriveCreate     = "derive.create"
 	ConfirmationInvitationCreate = "invitation.create"
 	ConfirmationCapabilityInvoke = "capability.invoke"
+	// ConfirmationWorldCreate is always produced by the unbound Personal AI and
+	// always requires a human approval. It is not part of a delegation's
+	// optional constraint vocabulary: no delegation can turn it off.
+	ConfirmationWorldCreate = "world.create"
 )
 
 const (

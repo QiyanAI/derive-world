@@ -11,7 +11,12 @@
       "enum": [
         "set_title", "set_summary", "set_body",
         "add_checklist_item", "toggle_checklist_item", "remove_checklist_item",
-        "add_tag", "remove_tag", "cast_vote"
+        "add_tag", "remove_tag", "cast_vote",
+        "set_premise", "add_element", "update_element", "remove_element", "move_element",
+        "add_kind", "update_kind", "remove_kind",
+        "add_node", "update_node", "remove_node", "move_node",
+        "set_node_field", "set_node_status", "touch_node",
+        "add_link", "remove_link", "add_rule", "remove_rule", "set_views"
       ]
     },
     "input": { "type": "object" },

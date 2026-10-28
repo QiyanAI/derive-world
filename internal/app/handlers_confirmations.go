@@ -133,6 +133,9 @@ func (a *App) approveConfirmation(w http.ResponseWriter, r *http.Request) {
 			}
 			return nil
 		}
+		if view.ResourceType == "personal_ai" {
+			return a.trust.WorldCreateReplayAllowed(r.Context(), principal.User.ID, confirmationID)
+		}
 		confirmation, err := a.trust.ConfirmationForReplay(r.Context(), principal.User.ID, confirmationID)
 		if err != nil {
 			return err
@@ -182,6 +185,41 @@ func (a *App) expireCapabilityConfirmation(ctx context.Context, userID, confirma
 }
 
 func (a *App) executeConfirmation(ctx context.Context, tx pgx.Tx, confirmation trust.Confirmation) ([]byte, error) {
+	if confirmation.ResourceType == "personal_ai" {
+		payload, err := trust.DecodeWorldCreatePayload(confirmation.Payload)
+		if err != nil {
+			return nil, err
+		}
+		effective, err := a.trust.ResolveGlobalAITx(ctx, tx, confirmation.UserID, payload.AIProfileID)
+		if err != nil {
+			return nil, err
+		}
+		if !effective.Can(objects.PermContribute) {
+			return nil, trust.ErrForbidden
+		}
+		active, err := a.trust.ActiveDelegationTx(ctx, tx, payload.DelegationID,
+			confirmation.UserID, payload.AIProfileID, nil)
+		if err != nil {
+			return nil, err
+		}
+		if !active {
+			return nil, trust.ErrDelegationNotActive
+		}
+		confirmedBy := confirmation.UserID
+		view, err := a.objects.CreateWithinTx(ctx, tx, confirmation.UserID, objects.CreateInput{
+			ObjectType: objects.TypeOpenWorld,
+			Title:      payload.Title,
+			Content:    payload.Content,
+		}, httpx.RequestIDFromContext(ctx), nil, objects.CreateOrigin{
+			Actor:          effective.Actor(),
+			ConfirmationID: &confirmation.ID,
+			ConfirmedBy:    &confirmedBy,
+		})
+		if err != nil {
+			return nil, err
+		}
+		return json.Marshal(view)
+	}
 	if confirmation.ResourceType == "capability_invocation" {
 		if a.capability == nil {
 			return nil, trust.ErrUnsupportedAction

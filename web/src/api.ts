@@ -29,8 +29,12 @@ export interface AuthResponse {
   scopes?: string[];
 }
 
-export type ObjectType = "collaborative" | "interactive" | "living_scene";
-export type PresentationTemplate = "collaborative_v1" | "interactive_v1" | "living_scene_v1";
+export type ObjectType = "collaborative" | "interactive" | "living_scene" | "open_world";
+export type PresentationTemplate =
+  | "collaborative_v1"
+  | "interactive_v1"
+  | "living_scene_v1"
+  | "open_world_v1";
 
 export interface ObjectView {
   id: string;
@@ -182,12 +186,17 @@ export interface ConfirmationEffect {
   title?: string;
   inheritance_fields?: string[];
   source_version?: number;
+  object_type?: ObjectType;
+  summary?: string;
+  kind_count?: number;
+  node_count?: number;
+  rule_count?: number;
 }
 
 export interface Confirmation {
   id: string;
-  action: "derive.create" | "invitation.create" | "capability.invoke";
-  resource_type: "living_object" | "capability_invocation";
+  action: "derive.create" | "invitation.create" | "capability.invoke" | "world.create";
+  resource_type: "living_object" | "capability_invocation" | "personal_ai";
   resource_id: string;
   status: "pending" | "approved" | "denied" | "expired";
   expires_at: string;
@@ -264,6 +273,7 @@ export interface SendMessageResult {
   model_mode: "fixture" | "real";
   parse_status: "structured" | "fallback";
   proposed_actions: AcceptedAIAction[];
+  rejected_actions?: number;
   context_stale?: boolean;
   usage: { input_tokens: number; output_tokens: number };
 }
@@ -780,6 +790,124 @@ export interface SceneState {
   premise: string;
   elements: SceneElement[];
   tags?: string[];
+}
+
+/**
+ * Open worlds are declarative. A creator defines the kinds of things that can
+ * exist, the things themselves, their links, and bounded rules. Nothing here
+ * is executable code; the server interprets the same data for every client.
+ */
+export type OpenWorldFieldType = "text" | "number" | "flag";
+export type OpenWorldView = "stage" | "cards" | "timeline";
+export type OpenWorldStatus = "open" | "done";
+
+export interface OpenWorldField {
+  key: string;
+  label: string;
+  type: OpenWorldFieldType;
+}
+
+export interface OpenWorldKind {
+  id: string;
+  name: string;
+  hue: number;
+  fields: OpenWorldField[];
+}
+
+export interface OpenWorldNode {
+  id: string;
+  kind_id: string;
+  name: string;
+  text: string;
+  values: Record<string, string | number | boolean>;
+  status: OpenWorldStatus;
+  x: number;
+  y: number;
+}
+
+export interface OpenWorldLink {
+  id: string;
+  from: string;
+  to: string;
+  label: string;
+}
+
+export interface OpenWorldEffect {
+  node_id: string;
+  field: string;
+  op: "set" | "add" | "toggle";
+  value?: string | number | boolean;
+}
+
+export interface OpenWorldRule {
+  id: string;
+  trigger_id: string;
+  effects: OpenWorldEffect[];
+}
+
+export interface OpenWorldState {
+  title: string;
+  premise: string;
+  kinds: OpenWorldKind[];
+  nodes: OpenWorldNode[];
+  links: OpenWorldLink[];
+  rules: OpenWorldRule[];
+  views: OpenWorldView[];
+  tags?: string[];
+}
+
+export interface OpenWorldKindInput {
+  name: string;
+  hue: number;
+  fields: Array<{ key: string; label: string; type: OpenWorldFieldType }>;
+}
+
+export interface OpenWorldNodeInput {
+  kind_index: number;
+  name: string;
+  text: string;
+  x?: number;
+  y?: number;
+}
+
+export interface OpenWorldLinkInput {
+  from_index: number;
+  to_index: number;
+  label: string;
+}
+
+export interface OpenWorldRuleInput {
+  trigger_index: number;
+  effects: Array<{
+    node_index: number;
+    field: string;
+    op: "set" | "add" | "toggle";
+    value?: string | number | boolean;
+  }>;
+}
+
+export interface OpenWorldContent {
+  premise: string;
+  kinds?: OpenWorldKindInput[];
+  nodes?: OpenWorldNodeInput[];
+  links?: OpenWorldLinkInput[];
+  rules?: OpenWorldRuleInput[];
+  views?: OpenWorldView[];
+  tags?: string[];
+}
+
+export function openWorldState(object: ObjectView): OpenWorldState {
+  const state = object.state as Partial<OpenWorldState>;
+  return {
+    title: typeof state.title === "string" ? state.title : "",
+    premise: typeof state.premise === "string" ? state.premise : "",
+    kinds: Array.isArray(state.kinds) ? state.kinds : [],
+    nodes: Array.isArray(state.nodes) ? state.nodes : [],
+    links: Array.isArray(state.links) ? state.links : [],
+    rules: Array.isArray(state.rules) ? state.rules : [],
+    views: Array.isArray(state.views) && state.views.length > 0 ? state.views : ["stage", "cards", "timeline"],
+    tags: Array.isArray(state.tags) ? state.tags : []
+  };
 }
 
 export interface StageEvent {

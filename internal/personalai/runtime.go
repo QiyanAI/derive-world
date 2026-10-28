@@ -65,8 +65,12 @@ type SendMessageResult struct {
 	ModelMode        string           `json:"model_mode"`
 	ParseStatus      string           `json:"parse_status"`
 	ProposedActions  []AcceptedAction `json:"proposed_actions"`
-	ContextStale     bool             `json:"context_stale,omitempty"`
-	Usage            model.Usage      `json:"usage"`
+	// RejectedActions counts model-proposed actions that the server refused to
+	// turn into a proposal or confirmation. It keeps "the model said nothing"
+	// distinguishable from "the model proposed something invalid".
+	RejectedActions int         `json:"rejected_actions,omitempty"`
+	ContextStale    bool        `json:"context_stale,omitempty"`
+	Usage           model.Usage `json:"usage"`
 }
 
 type aiTurn struct {
@@ -287,7 +291,8 @@ UPDATE ai_conversations SET updated_at = GREATEST(now(), updated_at) WHERE id = 
 	}
 
 	accepted := make([]AcceptedAction, 0)
-	if !contextStale && input.Object != nil && turn.parseStatus == "structured" {
+	if !contextStale && turn.parseStatus == "structured" &&
+		(input.Object != nil || len(turn.actions) > 0) {
 		if err := s.trust.LockAIActionBudgetTx(ctx, tx, input.UserID); err != nil {
 			return nil, err
 		}
@@ -300,7 +305,12 @@ UPDATE ai_conversations SET updated_at = GREATEST(now(), updated_at) WHERE id = 
 			if remaining <= 0 {
 				break
 			}
-			result, err := s.applyModelAction(ctx, tx, input, effective, action)
+			var result *AcceptedAction
+			if input.Object != nil {
+				result, err = s.applyModelAction(ctx, tx, input, effective, action)
+			} else {
+				result, err = s.applyGlobalModelAction(ctx, tx, input, effective, action)
+			}
 			if err != nil {
 				return nil, err
 			}
@@ -322,10 +332,20 @@ UPDATE ai_conversations SET updated_at = GREATEST(now(), updated_at) WHERE id = 
 	}); err != nil {
 		return nil, err
 	}
+	rejected := 0
+	if turn.parseStatus == "structured" {
+		rejected = len(turn.actions) - len(accepted)
+		if rejected < 0 {
+			rejected = 0
+		}
+		if contextStale {
+			rejected = len(turn.actions)
+		}
+	}
 	result := &SendMessageResult{
 		UserMessage: userMessage, AssistantMessage: assistantMessage,
 		ModelMode: turn.mode, ParseStatus: turn.parseStatus,
-		ProposedActions: accepted, ContextStale: contextStale,
+		ProposedActions: accepted, RejectedActions: rejected, ContextStale: contextStale,
 		Usage: turn.response.Usage,
 	}
 	encoded, err := json.Marshal(result)
@@ -406,6 +426,50 @@ func (s *Service) applyModelAction(
 	default:
 		return nil, nil
 	}
+}
+
+// applyGlobalModelAction accepts only a world.create proposal from an unbound
+// conversation. Object-bound actions remain impossible here, so one world's
+// private context can never be smuggled into a global turn.
+func (s *Service) applyGlobalModelAction(
+	ctx context.Context,
+	tx pgx.Tx,
+	input SendMessageInput,
+	effective *trust.Effective,
+	action rawAction,
+) (*AcceptedAction, error) {
+	if action.CapabilityID != "world.create" {
+		return nil, nil
+	}
+	if !effective.Can("contribute") {
+		return nil, nil
+	}
+	var create worldCreateActionInput
+	if err := decodeSingleJSON(string(action.Input), &create); err != nil {
+		return nil, nil
+	}
+	if strings.TrimSpace(create.Title) == "" || len(create.Content) == 0 {
+		return nil, nil
+	}
+	confirmation, accepted, err := s.trust.CreateWorldCreateConfirmationTx(ctx, tx,
+		trust.WorldCreateConfirmationParams{
+			UserID: input.UserID, AIProfileID: effective.AIProfileID,
+			DelegationID: effective.DelegationID, Title: create.Title,
+			Content: create.Content, RequestID: input.RequestID, IPHash: input.IPHash,
+		})
+	if err != nil {
+		if errors.Is(err, trust.ErrInvalidRequest) || errors.Is(err, trust.ErrPayloadTooLarge) {
+			return nil, nil
+		}
+		return nil, err
+	}
+	if !accepted {
+		return nil, nil
+	}
+	return &AcceptedAction{
+		Kind: "confirmation", ConfirmationID: &confirmation.ID,
+		Action: trust.ConfirmationWorldCreate,
+	}, nil
 }
 
 func (s *Service) recordProposalAction(ctx context.Context, tx pgx.Tx, input SendMessageInput,

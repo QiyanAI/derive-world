@@ -1410,6 +1410,15 @@ summary:focus-visible,
   isolation: isolate;
   cursor: grab;
   user-select: none;
+  /* The stage itself must not claim touch gestures globally: the inspector
+     and other overlays need native touch scrolling. The dedicated pan layer
+     and the world viewport below opt out of browser panning. */
+  touch-action: auto;
+}
+
+.dw-stage-pan-layer {
+  position: absolute;
+  inset: 0;
   touch-action: none;
 }
 
@@ -1523,6 +1532,7 @@ summary:focus-visible,
   top: 0;
   transform-origin: 0 0;
   will-change: transform;
+  touch-action: none;
 }
 
 .dw-world-links {
@@ -1975,6 +1985,9 @@ button.dw-activity-chip:hover {
   padding: 22px;
   scrollbar-width: thin;
   animation: dw-rise 0.22s ease-out;
+  /* Vertical swipes inside the panel scroll the panel, never the canvas. */
+  touch-action: pan-y;
+  overscroll-behavior: contain;
 }
 
 .dw-inspector-world {
