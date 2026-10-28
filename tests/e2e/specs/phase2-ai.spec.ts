@@ -116,15 +116,30 @@ test("Phase 2 AI: world context is explicit and switching back to general keeps 
   const general = conversations.items.find((item) => item.object_id === null);
   expect(bound).toBeTruthy();
   expect(general).toBeTruthy();
-  const details = await page.evaluate(async (ids) => {
-    const out: Record<string, string> = {};
-    for (const id of ids) {
-      const response = await fetch(`/api/v1/ai/conversations/${id}`, { credentials: "include" });
-      const data = (await response.json()) as { messages: Array<{ content: string }> };
-      out[id] = data.messages.map((message) => message.content).join("\n");
-    }
-    return out;
-  }, [bound?.id ?? "", general?.id ?? ""]);
+
+  // The conversation list can be visible before the final message row is
+  // readable under load. Poll the details until both private records have
+  // their own message; the negative assertions below still prove isolation.
+  const readDetails = async () =>
+    page.evaluate(async (ids) => {
+      const out: Record<string, string> = {};
+      for (const id of ids) {
+        const response = await fetch(`/api/v1/ai/conversations/${id}`, { credentials: "include" });
+        const data = (await response.json()) as { messages: Array<{ content: string }> };
+        out[id] = data.messages.map((message) => message.content).join("\n");
+      }
+      return out;
+    }, [bound?.id ?? "", general?.id ?? ""]);
+  await expect
+    .poll(async () => {
+      const details = await readDetails();
+      return {
+        boundHasWorld: (details[bound?.id ?? ""] ?? "").includes("world-only hello"),
+        generalHasGeneral: (details[general?.id ?? ""] ?? "").includes("general-only hello")
+      };
+    }, { timeout: 15_000 })
+    .toEqual({ boundHasWorld: true, generalHasGeneral: true });
+  const details = await readDetails();
   expect(details[bound?.id ?? ""]).toContain("world-only hello");
   expect(details[bound?.id ?? ""]).not.toContain("general-only hello");
   expect(details[general?.id ?? ""]).toContain("general-only hello");

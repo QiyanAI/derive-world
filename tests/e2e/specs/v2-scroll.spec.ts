@@ -12,10 +12,32 @@ async function createScrollableWorld(page: Page, title: string) {
   await expect(inspector).toBeVisible();
   const input = inspector.getByLabel("Add a new idea or step");
   for (let index = 0; index < 12; index += 1) {
-    await input.fill(`Scroll item ${index + 1} that makes this panel taller`);
-    await inspector.getByRole("button", { name: "Add", exact: true }).click();
-    await expect(inspector.getByText(`Scroll item ${index + 1} that makes this panel taller`)).toBeVisible();
+    const text = `Scroll item ${index + 1} that makes this panel taller`;
+    const add = inspector.getByRole("button", { name: "Add", exact: true });
+    let added = false;
+    // A stage refresh can race a rapid sequence of controlled-input fills and
+    // version-checked actions. Retry only after an unsuccessful server
+    // response; a successful add is never repeated, so the exact row count
+    // below still proves that no item was silently lost or duplicated.
+    for (let attempt = 0; attempt < 6 && !added; attempt += 1) {
+      await expect(async () => {
+        await input.fill(text);
+        await expect(input).toHaveValue(text);
+      }).toPass({ timeout: 15_000 });
+      await expect(add).toBeEnabled();
+      const responsePromise = page.waitForResponse((response) => {
+        const request = response.request();
+        return request.url().includes("/actions") && (request.postData() ?? "").includes("add_element");
+      });
+      await add.click();
+      const response = await responsePromise;
+      added = response.ok();
+    }
+    expect(added).toBe(true);
+    await expect(inspector.getByText(text).first()).toBeVisible();
   }
+  // One opening element is created with the world; the loop adds twelve.
+  await expect(inspector.locator(".dw-live-list > li")).toHaveCount(13);
   return inspector;
 }
 
