@@ -10,33 +10,66 @@ async function createScrollableWorld(page: Page, title: string) {
   await page.getByRole("button", { name: "Let it grow" }).click();
   const inspector = page.getByTestId("stage-inspector");
   await expect(inspector).toBeVisible();
-  const input = inspector.getByLabel("Add a new idea or step");
-  for (let index = 0; index < 12; index += 1) {
-    const text = `Scroll item ${index + 1} that makes this panel taller`;
-    const add = inspector.getByRole("button", { name: "Add", exact: true });
-    let added = false;
-    // A stage refresh can race a rapid sequence of controlled-input fills and
-    // version-checked actions. Retry only after an unsuccessful server
-    // response; a successful add is never repeated, so the exact row count
-    // below still proves that no item was silently lost or duplicated.
-    for (let attempt = 0; attempt < 6 && !added; attempt += 1) {
-      await expect(async () => {
-        await input.fill(text);
-        await expect(input).toHaveValue(text);
-      }).toPass({ timeout: 15_000 });
-      await expect(add).toBeEnabled();
-      const responsePromise = page.waitForResponse((response) => {
-        const request = response.request();
-        return request.url().includes("/actions") && (request.postData() ?? "").includes("add_element");
-      });
-      await add.click();
-      const response = await responsePromise;
-      added = response.ok();
-    }
-    expect(added).toBe(true);
-    await expect(inspector.getByText(text).first()).toBeVisible();
+
+  // This spec is about inspector scrolling, not the add form. Seed the twelve
+  // rows through the same real action API so a stage refresh cannot race a
+  // rapid sequence of controlled-input fills on a loaded CI runner. One
+  // opening element is created with the world, so the final list has 13 rows.
+  const object = await page.evaluate(async (worldTitle) => {
+    const response = await fetch("/api/v1/objects?scope=owned", {
+      credentials: "same-origin"
+    });
+    const payload = (await response.json()) as {
+      items: Array<{ id: string; title: string; version: number }>;
+    };
+    return payload.items.find((item) => item.title === worldTitle) ?? null;
+  }, title);
+  expect(object).not.toBeNull();
+  if (!object) {
+    return inspector;
   }
-  // One opening element is created with the world; the loop adds twelve.
+  const seeded = await page.evaluate(
+    async ({ id, version }) => {
+      const csrf = document.cookie
+        .split("; ")
+        .find((entry) => entry.startsWith("dw_csrf="))
+        ?.split("=")[1];
+      let current = version;
+      for (let index = 0; index < 12; index += 1) {
+        const idempotency = Array.from({ length: 40 }, () =>
+          "abcdefghijklmnopqrstuvwxyz0123456789"[Math.floor(Math.random() * 36)]
+        ).join("");
+        const response = await fetch(`/api/v1/objects/${id}/actions`, {
+          method: "POST",
+          credentials: "same-origin",
+          headers: {
+            "Content-Type": "application/json",
+            "Idempotency-Key": idempotency,
+            ...(csrf ? { "X-CSRF-Token": csrf } : {})
+          },
+          body: JSON.stringify({
+            action: "add_element",
+            input: { kind: "idea", text: `Scroll item ${index + 1} that makes this panel taller` },
+            expected_version: current
+          })
+        });
+        if (!response.ok) {
+          return { ok: false, status: response.status };
+        }
+        const updated = (await response.json()) as { version: number };
+        current = updated.version;
+      }
+      return { ok: true, status: 200 };
+    },
+    { id: object.id, version: object.version }
+  );
+  expect(seeded.ok).toBe(true);
+
+  await page.reload();
+  const stageNode = page.getByTestId("dw-stage-node").filter({ hasText: title }).first();
+  await expect(stageNode).toBeVisible();
+  await stageNode.click();
+  await expect(inspector).toBeVisible();
   await expect(inspector.locator(".dw-live-list > li")).toHaveCount(13);
   return inspector;
 }
@@ -54,9 +87,9 @@ test("V2 scroll: the inspector scrolls, stays open, and never zooms the canvas",
   const viewport = page.getByTestId("dw-stage-viewport");
   const zoomBefore = await viewport.getAttribute("data-zoom");
   const list = inspector.locator(".dw-live-list");
-  const box = await list.boundingBox();
-  expect(box).not.toBeNull();
-  await page.mouse.move((box?.x ?? 0) + (box?.width ?? 0) / 2, (box?.y ?? 0) + 30);
+  await expect(list.locator("> li")).toHaveCount(13);
+  await page.waitForTimeout(250);
+  await list.hover({ position: { x: 20, y: 20 } });
   await page.mouse.wheel(0, 420);
   await page.waitForTimeout(300);
 
