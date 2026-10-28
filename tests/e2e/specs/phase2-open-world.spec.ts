@@ -10,6 +10,7 @@ async function createFreeWorld(page: Page, title: string): Promise<string> {
   await page.getByRole("button", { name: "Let it grow" }).click();
   await expect(page.getByTestId("open-world-page")).toBeVisible();
   await expect(page).toHaveURL(/\/worlds\/[0-9a-f-]{36}/);
+  await page.getByRole("button", { name: "Structure", exact: true }).click();
   return page.url().split("/worlds/")[1].split("?")[0];
 }
 

@@ -49,8 +49,8 @@ func stateParamsSchema(requireValue bool) *ParamSchema {
 				Description: Localized{En: "An existing thing, or $event.entity for the control's thing.", Zh: "已有存在，或使用 $event.entity 表示控件当前的存在。"},
 			},
 			"field": {
-				Type: "string", Format: "field",
-				Title: Localized{En: "Field", Zh: "字段"},
+				Type: "string", Format: "state_field",
+				Title: Localized{En: "Field or status", Zh: "字段或状态"},
 			},
 			"value": {
 				Type: "string", Title: Localized{En: "Value", Zh: "值"},

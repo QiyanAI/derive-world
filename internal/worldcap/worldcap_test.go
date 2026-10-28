@@ -169,6 +169,18 @@ func TestSpaceRejectsScriptAndHTMLPaths(t *testing.T) {
 			t.Fatalf("unsafe path accepted: %q", path)
 		}
 	}
+	base.Root.Props = mustJSON(t, map[string]any{
+		"views": []map[string]any{{
+			"kind_id": testKindID, "path": "M 0 0 L 10 10 Z",
+			"bindings": []map[string]any{{
+				"field": "count", "target": "size",
+				"in_min": -1e308, "in_max": 1e308, "out_min": 0.8, "out_max": 1.6,
+			}},
+		}},
+	})
+	if err := ValidateExperience(base, testContext()); err == nil {
+		t.Fatalf("extreme binding input range accepted")
+	}
 }
 
 func TestCollectionScopesItemReferences(t *testing.T) {
@@ -309,6 +321,132 @@ func TestExecuteBehaviorAndCondition(t *testing.T) {
 	}
 }
 
+func TestExperienceBounds(t *testing.T) {
+	textProps := func() json.RawMessage {
+		return mustJSON(t, map[string]any{"text": "x", "size": 18, "weight": "regular", "tone": "default", "align": "left"})
+	}
+	// 1 root + 24 branches + 48 leaves = 73 static nodes.
+	wide := &Experience{Version: 1, Root: &ViewNode{
+		ID: "root", Capability: "core.stack", Props: mustJSON(t, map[string]any{"direction": "vertical"}),
+	}}
+	for index := 0; index < 24; index += 1 {
+		wide.Root.Children = append(wide.Root.Children, ViewNode{
+			ID: fmt.Sprintf("branch-%d", index), Capability: "core.stack",
+			Props: mustJSON(t, map[string]any{"direction": "vertical"}),
+			Children: []ViewNode{
+				{ID: fmt.Sprintf("a-%d", index), Capability: "core.text", Props: textProps()},
+				{ID: fmt.Sprintf("b-%d", index), Capability: "core.text", Props: textProps()},
+			},
+		})
+	}
+	if err := ValidateExperience(wide, testContext()); err == nil {
+		t.Fatalf("static node count above 64 was accepted")
+	}
+
+	// A stack chain deeper than 8.
+	deep := &Experience{Version: 1, Root: &ViewNode{ID: "depth-0", Capability: "core.stack", Props: mustJSON(t, map[string]any{"direction": "vertical"})}}
+	cursor := deep.Root
+	for index := 1; index <= 9; index += 1 {
+		child := ViewNode{ID: fmt.Sprintf("depth-%d", index), Capability: "core.stack", Props: mustJSON(t, map[string]any{"direction": "vertical"})}
+		cursor.Children = []ViewNode{child}
+		cursor = &cursor.Children[0]
+	}
+	if err := ValidateExperience(deep, testContext()); err == nil {
+		t.Fatalf("view depth above 8 was accepted")
+	}
+
+	// 25 behaviors and 9 actions in one behavior.
+	behavior := Behavior{ID: "act", Actions: []Action{{
+		Capability: "core.state", Action: "toggle",
+		Params: mustJSON(t, map[string]any{"entity_id": testEntityID, "field": "lit"}),
+	}}}
+	manyBehaviors := &Experience{Version: 1, Root: &ViewNode{ID: "root", Capability: "core.text", Props: textProps()}}
+	for index := 0; index < 25; index += 1 {
+		entry := behavior
+		entry.ID = fmt.Sprintf("act-%d", index)
+		manyBehaviors.Behaviors = append(manyBehaviors.Behaviors, entry)
+	}
+	if err := ValidateExperience(manyBehaviors, testContext()); err == nil {
+		t.Fatalf("more than 24 behaviors was accepted")
+	}
+	manyActions := &Experience{Version: 1, Root: &ViewNode{ID: "root", Capability: "core.text", Props: textProps()}}
+	manyActions.Behaviors = []Behavior{{ID: "act", Actions: make([]Action, 9)}}
+	for index := range manyActions.Behaviors[0].Actions {
+		manyActions.Behaviors[0].Actions[index] = behavior.Actions[0]
+	}
+	if err := ValidateExperience(manyActions, testContext()); err == nil {
+		t.Fatalf("more than 8 actions was accepted")
+	}
+
+	// Oversized props and an oversized whole document.
+	oversizedProps := &Experience{Version: 1, Root: &ViewNode{
+		ID: "root", Capability: "core.text",
+		Props: mustJSON(t, map[string]any{"text": strings.Repeat("x", 5000)}),
+	}}
+	if err := ValidateExperience(oversizedProps, testContext()); err == nil {
+		t.Fatalf("props above 4 KiB was accepted")
+	}
+	large := &Experience{Version: 1, Root: &ViewNode{
+		ID: "root", Capability: "core.stack", Props: mustJSON(t, map[string]any{"direction": "vertical"}),
+	}}
+	for index := 0; index < 40; index += 1 {
+		large.Root.Children = append(large.Root.Children, ViewNode{
+			ID: fmt.Sprintf("large-%d", index), Capability: "core.text",
+			Props: mustJSON(t, map[string]any{"text": strings.Repeat("x", 1000)}),
+		})
+	}
+	if err := ValidateExperience(large, testContext()); err == nil {
+		t.Fatalf("experience above 32 KiB was accepted")
+	}
+}
+
+func TestFieldAndMeterValidation(t *testing.T) {
+	field := &Experience{Version: 1, Root: &ViewNode{
+		ID: "field", Capability: "core.field",
+		Props: mustJSON(t, map[string]any{"entity_id": testEntityID, "field": "count", "control": "auto"}),
+	}}
+	if err := ValidateExperience(field, testContext()); err != nil {
+		t.Fatalf("valid field rejected: %v", err)
+	}
+	field.Root.Props = mustJSON(t, map[string]any{"entity_id": testEntityID, "field": "ghost", "control": "auto"})
+	if err := ValidateExperience(field, testContext()); err == nil {
+		t.Fatalf("field with unknown field accepted")
+	}
+	field.Root.Props = mustJSON(t, map[string]any{"entity_id": testEntityID, "field": "status", "control": "auto"})
+	if err := ValidateExperience(field, testContext()); err == nil {
+		t.Fatalf("field editing status was accepted without a renderer")
+	}
+	meter := &Experience{Version: 1, Root: &ViewNode{
+		ID: "meter", Capability: "core.meter",
+		Props: mustJSON(t, map[string]any{"entity_id": testEntityID, "field": "name", "min": 0, "max": 10}),
+	}}
+	if err := ValidateExperience(meter, testContext()); err == nil {
+		t.Fatalf("meter over a text field accepted")
+	}
+}
+
+func TestChoiceValidation(t *testing.T) {
+	experience := &Experience{Version: 1, Root: &ViewNode{
+		ID: "choice", Capability: "core.choice",
+		Props: mustJSON(t, map[string]any{"prompt": "", "options": []any{
+			map[string]any{"label": "One", "behavior_id": "act"},
+		}}),
+	}, Behaviors: []Behavior{{ID: "act", Actions: []Action{{
+		Capability: "core.state", Action: "toggle",
+		Params: mustJSON(t, map[string]any{"entity_id": testEntityID, "field": "lit"}),
+	}}}}}
+	if err := ValidateExperience(experience, testContext()); err == nil {
+		t.Fatalf("choice with one option accepted")
+	}
+	experience.Root.Props = mustJSON(t, map[string]any{"prompt": "", "options": []any{
+		map[string]any{"label": "One", "behavior_id": "act"},
+		map[string]any{"label": "Two", "behavior_id": "act"},
+	}})
+	if err := ValidateExperience(experience, testContext()); err != nil {
+		t.Fatalf("two-option choice rejected: %v", err)
+	}
+}
+
 func TestExpandedViewBudget(t *testing.T) {
 	context := testContext()
 	for index := 0; index < 40; index += 1 {
@@ -333,11 +471,57 @@ func TestExpandedViewBudget(t *testing.T) {
 	if err := ValidateExperience(nested, context); err == nil {
 		t.Fatalf("nested collection expansion was accepted")
 	}
+
+	// A collection of tables/spaces multiplies the table rows/space entities
+	// for every collection item; the budget must charge that inner work too.
+	repeated := &Experience{
+		Version: 1,
+		Root: &ViewNode{
+			ID: "outer", Capability: "core.collection",
+			Props: mustJSON(t, map[string]any{"kind_id": testKindID}),
+		},
+	}
+	for index := 0; index < 4; index += 1 {
+		repeated.Root.Children = append(repeated.Root.Children, ViewNode{
+			ID: fmt.Sprintf("table-%d", index), Capability: "core.table",
+			Props: mustJSON(t, map[string]any{
+				"kind_id": testKindID,
+				"columns": []any{map[string]any{"source": "name", "label": ""}},
+			}),
+		})
+	}
+	if err := ValidateExperience(repeated, context); err == nil {
+		t.Fatalf("repeated table inner work was not charged to the budget")
+	}
 }
 
 func TestDefaultRegistryIsFrozen(t *testing.T) {
 	if err := Default().RegisterPresentation(testBadge{}); err == nil {
 		t.Fatalf("default registry accepted a runtime registration")
+	}
+}
+
+type reservedBadge struct{}
+
+func (reservedBadge) Descriptor() Descriptor {
+	return Descriptor{
+		ID: "test.reserved", Kind: "presentation", Version: 1,
+		Title:       Localized{En: "Reserved", Zh: "保留"},
+		Description: Localized{En: "Bad", Zh: "坏"},
+		Params: &ParamSchema{Type: "object", Properties: map[string]*ParamProperty{
+			"version": {Type: "number", Title: Localized{En: "Version", Zh: "版本"}},
+		}},
+	}
+}
+
+func (reservedBadge) Validate(raw json.RawMessage, _ ValidateContext) (json.RawMessage, error) {
+	return raw, nil
+}
+
+func TestDescriptorRejectsActorOverridePropNames(t *testing.T) {
+	registry := NewRegistry()
+	if err := registry.RegisterPresentation(reservedBadge{}); err == nil {
+		t.Fatalf("registry accepted a prop that the HTTP actor guard would always reject")
 	}
 }
 
@@ -375,6 +559,50 @@ func TestTransferCapabilityReuse(t *testing.T) {
 	}
 	if world.entities[secondEntity].values["count"] != float64(6) {
 		t.Fatalf("target = %v", world.entities[secondEntity].values["count"])
+	}
+}
+
+func TestRemapKeepsLocalIdentifiers(t *testing.T) {
+	newEntity := "01a00000-0000-7000-8000-000000000098"
+	localBehavior := "a" + testEntityID
+	localField := "f" + testEntityID
+	experience := &Experience{
+		Version: 1,
+		Root: &ViewNode{
+			ID: "root", Capability: "core.text",
+			Props: mustJSON(t, map[string]any{
+				"text": "literal " + testEntityID + " and {{entity." + testEntityID + ".name}}",
+				"size": 18, "weight": "regular", "tone": "default", "align": "left",
+			}),
+		},
+		Behaviors: []Behavior{{
+			ID: localBehavior,
+			Actions: []Action{{
+				Capability: "core.state", Action: "set",
+				Params: mustJSON(t, map[string]any{"entity_id": testEntityID, "field": localField, "value": "x"}),
+			}},
+		}},
+	}
+	remapped, err := RemapExperience(experience, nil, map[string]string{testEntityID: newEntity})
+	if err != nil {
+		t.Fatalf("remap: %v", err)
+	}
+	if remapped.Behaviors[0].ID != localBehavior {
+		t.Fatalf("local behavior id changed: %q", remapped.Behaviors[0].ID)
+	}
+	params := string(remapped.Behaviors[0].Actions[0].Params)
+	if !strings.Contains(params, localField) {
+		t.Fatalf("local field key changed: %s", params)
+	}
+	if !strings.Contains(params, newEntity) {
+		t.Fatalf("reference id not remapped: %s", params)
+	}
+	text := string(remapped.Root.Props)
+	if !strings.Contains(text, "literal "+testEntityID) {
+		t.Fatalf("literal UUID text was rewritten: %s", text)
+	}
+	if !strings.Contains(text, "{{entity."+newEntity+".name}}") {
+		t.Fatalf("template reference was not remapped: %s", text)
 	}
 }
 

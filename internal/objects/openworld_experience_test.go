@@ -3,8 +3,11 @@ package objects
 
 import (
 	"encoding/json"
+	"errors"
 	"strings"
 	"testing"
+
+	"github.com/QiyanAI/derive-world/internal/worldcap"
 )
 
 func experienceContent(state *OpenWorldState) map[string]any {
@@ -37,6 +40,21 @@ func experienceContent(state *OpenWorldState) map[string]any {
 				},
 			},
 		},
+	}
+}
+
+func TestOpenWorldCreateWithExperience(t *testing.T) {
+	content := openWorldCreateContent(t)
+	content.Experience = &worldcap.Experience{
+		Version: 1,
+		Root: &worldcap.ViewNode{
+			ID: "root", Capability: "core.text",
+			Props: json.RawMessage(`{"text":"{{world.title}}","size":18,"weight":"regular","tone":"default","align":"left"}`),
+		},
+	}
+	state := createOpenWorldState(t, content)
+	if state.Experience == nil || state.Experience.Root == nil {
+		t.Fatalf("create path dropped the experience")
 	}
 }
 
@@ -80,6 +98,83 @@ func TestOpenWorldSetExperienceAndInvokeBehavior(t *testing.T) {
 	}
 }
 
+func TestOpenWorldBehaviorRunsOneRulePass(t *testing.T) {
+	state := createOpenWorldState(t, openWorldCreateContent(t))
+	content := map[string]any{
+		"protocol": 1,
+		"root": map[string]any{
+			"id": "root", "capability": "core.button",
+			"props": map[string]any{"label": "Calm", "behavior_id": "calm", "tone": "primary"},
+		},
+		"behaviors": []any{map[string]any{
+			"id": "calm", "name": "Calm",
+			"actions": []any{map[string]any{
+				"capability": "core.state", "action": "set",
+				"params": map[string]any{"entity_id": state.Nodes[0].ID, "field": "mood", "value": "calm"},
+			}},
+		}},
+	}
+	withExperience := applyOpenWorldPlan(t, state, "set_experience", map[string]any{"experience": content})
+	planRaw := experienceTestJSON(t, map[string]any{
+		"behavior_id": "calm", "entity_id": state.Nodes[0].ID,
+	})
+	plan, err := PlanAction(TypeOpenWorld, "invoke_behavior", planRaw)
+	if err != nil {
+		t.Fatalf("plan: %v", err)
+	}
+	stateRaw := experienceTestJSON(t, withExperience)
+	newRaw, _, _, err := ApplyStateAction(TypeOpenWorld, stateRaw, []byte(`{}`), plan, "")
+	if err != nil {
+		t.Fatalf("invoke behavior: %v", err)
+	}
+	var next OpenWorldState
+	if err := json.Unmarshal(newRaw, &next); err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	if next.Nodes[0].Values["mood"] != "calm" {
+		t.Fatalf("behavior did not set mood: %v", next.Nodes[0].Values)
+	}
+	if next.Nodes[1].Values["light"] != float64(1) {
+		t.Fatalf("legacy rule did not run after behavior: %v", next.Nodes[1].Values)
+	}
+	if len(plan.Effects) < 2 {
+		t.Fatalf("behavior + rule effects = %+v", plan.Effects)
+	}
+}
+
+func TestOpenWorldExperienceBlocksEventFieldRemoval(t *testing.T) {
+	state := createOpenWorldState(t, openWorldCreateContent(t))
+	content := map[string]any{
+		"protocol": 1,
+		"root": map[string]any{
+			"id": "root", "capability": "core.text",
+			"props": map[string]any{"text": "{{world.title}}", "size": 18, "weight": "regular", "tone": "default", "align": "left"},
+		},
+		"behaviors": []any{map[string]any{
+			"id": "set-mood", "name": "Set mood",
+			"actions": []any{map[string]any{
+				"capability": "core.state", "action": "set",
+				"params": map[string]any{
+					"entity_id": "$event.entity", "field": "mood", "value": "calm",
+				},
+			}},
+		}},
+	}
+	withExperience := applyOpenWorldPlan(t, state, "set_experience", map[string]any{"experience": content})
+	planRaw := experienceTestJSON(t, map[string]any{
+		"kind_id": state.Kinds[0].ID,
+		"fields":  []any{},
+	})
+	plan, err := PlanAction(TypeOpenWorld, "update_kind", planRaw)
+	if err != nil {
+		t.Fatalf("plan update_kind: %v", err)
+	}
+	stateRaw := experienceTestJSON(t, withExperience)
+	if _, _, _, err := ApplyStateAction(TypeOpenWorld, stateRaw, []byte(`{}`), plan, ""); !errors.Is(err, ErrConflict) {
+		t.Fatalf("remove event-scoped field error = %v, want ErrConflict", err)
+	}
+}
+
 func TestOpenWorldExperienceBlocksReferencedRemoval(t *testing.T) {
 	state := createOpenWorldState(t, openWorldCreateContent(t))
 	next := applyOpenWorldPlan(t, state, "set_experience", map[string]any{
@@ -91,8 +186,38 @@ func TestOpenWorldExperienceBlocksReferencedRemoval(t *testing.T) {
 		t.Fatalf("plan remove: %v", err)
 	}
 	stateRaw := experienceTestJSON(t, next)
-	if _, _, _, err := ApplyStateAction(TypeOpenWorld, stateRaw, []byte(`{}`), plan, ""); err == nil {
-		t.Fatalf("removed an entity referenced by the experience")
+	if _, _, _, err := ApplyStateAction(TypeOpenWorld, stateRaw, []byte(`{}`), plan, ""); !errors.Is(err, ErrConflict) {
+		t.Fatalf("remove referenced entity error = %v, want ErrConflict", err)
+	}
+}
+
+func TestOpenWorldExperienceBlocksReferencedKindRemoval(t *testing.T) {
+	state := createOpenWorldState(t, openWorldCreateContent(t))
+	content := map[string]any{
+		"protocol": 1,
+		"root": map[string]any{
+			"id": "root", "capability": "core.collection",
+			"props": map[string]any{"kind_id": state.Kinds[0].ID, "layout": "list", "columns": 1, "empty_text": ""},
+			"children": []any{
+				map[string]any{
+					"id": "row", "capability": "core.text",
+					"props": map[string]any{"text": "{{item.name}}", "size": 18, "weight": "regular", "tone": "default", "align": "left"},
+				},
+			},
+		},
+	}
+	next := applyOpenWorldPlan(t, state, "set_experience", map[string]any{"experience": content})
+	for len(next.Nodes) > 0 {
+		next = applyOpenWorldPlan(t, next, "remove_node", map[string]any{"node_id": next.Nodes[0].ID})
+	}
+	planRaw := experienceTestJSON(t, map[string]any{"kind_id": next.Kinds[0].ID})
+	plan, err := PlanAction(TypeOpenWorld, "remove_kind", planRaw)
+	if err != nil {
+		t.Fatalf("plan remove_kind: %v", err)
+	}
+	stateRaw := experienceTestJSON(t, next)
+	if _, _, _, err := ApplyStateAction(TypeOpenWorld, stateRaw, []byte(`{}`), plan, ""); !errors.Is(err, ErrConflict) {
+		t.Fatalf("remove referenced kind error = %v, want ErrConflict", err)
 	}
 }
 

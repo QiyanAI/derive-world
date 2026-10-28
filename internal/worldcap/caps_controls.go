@@ -199,6 +199,9 @@ func (fieldCapability) Validate(raw json.RawMessage, ctx ValidateContext) (json.
 	if err != nil {
 		return nil, err
 	}
+	if fieldType == "status" {
+		return nil, fmt.Errorf("%w: field.status", ErrInvalid)
+	}
 	if props.Control != "auto" && props.Control != fieldType {
 		return nil, fmt.Errorf("%w: field.control", ErrInvalid)
 	}

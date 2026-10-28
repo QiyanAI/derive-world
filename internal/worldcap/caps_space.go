@@ -270,6 +270,9 @@ func validateSpaceBinding(binding *spaceBinding, kind KindContext, seenTargets m
 		!finite(binding.OutMin) || !finite(binding.OutMax) {
 		return fmt.Errorf("%w: binding range", ErrInvalid)
 	}
+	if binding.InMin < -1e9 || binding.InMin > 1e9 || binding.InMax < -1e9 || binding.InMax > 1e9 {
+		return fmt.Errorf("%w: binding input range", ErrInvalid)
+	}
 	switch binding.Target {
 	case "size":
 		if binding.OutMin < 0.2 || binding.OutMin > 3 || binding.OutMax < 0.2 || binding.OutMax > 3 {

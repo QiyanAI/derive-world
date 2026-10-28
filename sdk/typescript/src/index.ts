@@ -153,6 +153,88 @@ export interface ActionInput {
   expected_version: number;
 }
 
+export interface LocalizedLabel {
+  en: string;
+  zh: string;
+}
+
+export interface WorldCondition {
+  entity_id?: string;
+  field?: string;
+  op?: string;
+  value?: unknown;
+  all?: WorldCondition[];
+  any?: WorldCondition[];
+  not?: WorldCondition;
+}
+
+export interface WorldAction {
+  capability: string;
+  action: string;
+  params: Record<string, unknown>;
+}
+
+export interface WorldBehavior {
+  id: string;
+  name?: string;
+  condition?: WorldCondition;
+  actions: WorldAction[];
+}
+
+export interface WorldViewNode {
+  id: string;
+  capability: string;
+  props: Record<string, unknown>;
+  children?: WorldViewNode[];
+  visible_when?: WorldCondition;
+}
+
+export interface WorldExperience {
+  protocol: 1;
+  root: WorldViewNode;
+  behaviors?: WorldBehavior[];
+}
+
+export interface WorldCapabilityProperty {
+  type: "string" | "number" | "integer" | "boolean" | "array" | "object";
+  title: LocalizedLabel;
+  description?: LocalizedLabel;
+  format?: string;
+  enum?: string[];
+  minimum?: number;
+  maximum?: number;
+  max_length?: number;
+  items?: WorldCapabilityProperty;
+  properties?: Record<string, WorldCapabilityProperty>;
+  required?: string[];
+}
+
+export interface WorldCapabilityDescriptor {
+  id: string;
+  kind: "presentation" | "behavior";
+  version: number;
+  title: LocalizedLabel;
+  description: LocalizedLabel;
+  allows_children?: boolean;
+  child_scope?: "item";
+  child_kind_prop?: string;
+  params?: {
+    type: "object";
+    properties: Record<string, WorldCapabilityProperty>;
+    required?: string[];
+  };
+  actions?: Array<{
+    id: string;
+    title: LocalizedLabel;
+    description: LocalizedLabel;
+    params?: {
+      type: "object";
+      properties: Record<string, WorldCapabilityProperty>;
+      required?: string[];
+    };
+  }>;
+}
+
 export interface DeriveInput {
   title: string;
   source_version?: number;
@@ -522,6 +604,44 @@ export class DeriveWorldClient {
       "GET",
       `/api/v1/objects/${encodeURIComponent(objectId)}/handoff`,
       { signal: options.signal }
+    );
+  }
+
+  // ---- World experience ----
+
+  async listWorldCapabilities(
+    options: ReadOptions = {}
+  ): Promise<{ items: WorldCapabilityDescriptor[] }> {
+    return this.request<{ items: WorldCapabilityDescriptor[] }>(
+      "GET",
+      "/api/v1/world-capabilities",
+      { signal: options.signal }
+    );
+  }
+
+  async setExperience(
+    objectId: string,
+    experience: WorldExperience | null,
+    expectedVersion: number,
+    options: WriteOptions = {}
+  ): Promise<ObjectView> {
+    return this.postAction(
+      objectId,
+      { action: "set_experience", input: { experience }, expected_version: expectedVersion },
+      options
+    );
+  }
+
+  async invokeBehavior(
+    objectId: string,
+    input: { behavior_id: string; entity_id?: string; value?: unknown },
+    expectedVersion: number,
+    options: WriteOptions = {}
+  ): Promise<ObjectView> {
+    return this.postAction(
+      objectId,
+      { action: "invoke_behavior", input, expected_version: expectedVersion },
+      options
     );
   }
 

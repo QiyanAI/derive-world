@@ -14,6 +14,7 @@ async function createFreeWorld(page: Page, title: string): Promise<string> {
 }
 
 async function addTaskKindAndNode(page: Page): Promise<void> {
+  await page.getByRole("button", { name: "Structure", exact: true }).click();
   const structure = page.getByTestId("open-world-structure");
   const kindDetails = structure.locator("details.dw-open-add").filter({ hasText: "Add a kind" }).first();
   await kindDetails.evaluate((element) => {
@@ -41,7 +42,7 @@ async function addTaskKindAndNode(page: Page): Promise<void> {
 }
 
 async function composeWorkspace(page: Page): Promise<void> {
-  await page.getByRole("button", { name: "Experience", exact: true }).click();
+  await page.getByRole("button", { name: "Experience editor", exact: true }).click();
   const editor = page.getByTestId("world-experience-editor");
   await expect(editor).toBeVisible();
   await page.getByTestId("world-experience-scaffold-workspace").click();

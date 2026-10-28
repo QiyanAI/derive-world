@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: Apache-2.0
 import { useCallback, useEffect, useRef, useState, type FormEvent, type PointerEvent as ReactPointerEvent } from "react";
-import { Link, useParams, useSearchParams } from "react-router";
+import { Link, useNavigate, useParams, useSearchParams } from "react-router";
 import {
   applyAction,
   errorMessage,
@@ -71,6 +71,7 @@ function valueLabel(value: unknown): string {
 export default function OpenWorldPage() {
   const { id = "" } = useParams();
   const [searchParams] = useSearchParams();
+  const navigate = useNavigate();
   const { t, lang } = useI18n();
   const zh = lang === "zh";
   const [object, setObject] = useState<ObjectView | null>(null);
@@ -82,6 +83,7 @@ export default function OpenWorldPage() {
   const [panel, setPanel] = useState<ViewMode>(
     searchParams.get("build") === "1" ? "experience" : "structure"
   );
+  const [experienceOpened, setExperienceOpened] = useState(searchParams.get("build") === "1");
   const [capabilities, setCapabilities] = useState<WorldCapabilityDescriptor[]>([]);
   const [capabilityError, setCapabilityError] = useState("");
   const [premiseEditing, setPremiseEditing] = useState(false);
@@ -109,6 +111,15 @@ export default function OpenWorldPage() {
   }, [load]);
 
   useEffect(() => {
+    // `build=1` is a one-time entry into the experience builder. Removing it
+    // from the URL keeps a reload on the classic structure panel instead of
+    // surprising the user (or an existing test) by reopening the builder.
+    if (searchParams.get("build") === "1") {
+      navigate(`/worlds/${id}`, { replace: true });
+    }
+  }, [id, navigate, searchParams]);
+
+  useEffect(() => {
     let active = true;
     getWorldCapabilities()
       .then((items) => {
@@ -128,9 +139,13 @@ export default function OpenWorldPage() {
   }, [zh]);
 
   const world = object ? openWorldState(object) : null;
-  const activeView: WorldViewMode = world
+  const preferredView: WorldViewMode = world
     ? view || (world.experience ? "experience" : world.views[0] || "scene")
     : "scene";
+  const activeView: WorldViewMode =
+    preferredView === "experience" && !world?.experience
+      ? world?.views[0] ?? "scene"
+      : preferredView;
   const canContribute = object?.permissions.includes("contribute") ?? false;
   const hasExperience = Boolean(world?.experience);
 
@@ -254,8 +269,9 @@ export default function OpenWorldPage() {
     void run("invoke_behavior", input);
   }
 
-  function saveExperience(experience: WorldExperienceDocument | null) {
-    void run("set_experience", { experience });
+  async function saveExperience(experience: WorldExperienceDocument | null): Promise<boolean> {
+    const updated = await run("set_experience", { experience });
+    return Boolean(updated);
   }
 
   async function savePremise() {
@@ -349,6 +365,7 @@ export default function OpenWorldPage() {
           <button
             className={`dw-button dw-button-small ${panel === "structure" ? "dw-button-primary" : "dw-button-ghost"}`}
             type="button"
+            aria-pressed={panel === "structure"}
             onClick={() => setPanel("structure")}
           >
             <Icon name="layers" size={15} />
@@ -357,7 +374,12 @@ export default function OpenWorldPage() {
           <button
             className={`dw-button dw-button-small ${panel === "experience" ? "dw-button-primary" : "dw-button-ghost"}`}
             type="button"
-            onClick={() => setPanel("experience")}
+            aria-pressed={panel === "experience"}
+            aria-label={t("openWorld.experiencePanel")}
+            onClick={() => {
+              setExperienceOpened(true);
+              setPanel("experience");
+            }}
           >
             <Icon name="layers" size={15} />
             {t("openWorld.experience")}
@@ -365,6 +387,7 @@ export default function OpenWorldPage() {
           <button
             className={`dw-button dw-button-small ${panel === "ai" ? "dw-button-primary" : "dw-button-ghost"}`}
             type="button"
+            aria-pressed={panel === "ai"}
             onClick={() => setPanel("ai")}
           >
             <Icon name="spark" size={15} />
@@ -611,25 +634,7 @@ export default function OpenWorldPage() {
         <aside className="dw-open-panel">
           {panel === "ai" ? (
             <AIPanel object={object} canContribute={canContribute} onChanged={() => void load()} />
-          ) : panel === "experience" ? (
-            capabilityError ? (
-              <p className="dw-form-error" role="alert">
-                {capabilityError}
-              </p>
-            ) : capabilities.length === 0 ? (
-              <p className="dw-page-loading" role="status">
-                {t("common.loading")}
-              </p>
-            ) : (
-              <WorldExperienceEditor
-                world={world}
-                catalog={capabilities}
-                busy={busy !== ""}
-                canContribute={canContribute}
-                onSave={saveExperience}
-              />
-            )
-          ) : (
+          ) : panel === "structure" ? (
             <StructurePanel
               key={object.id}
               world={world}
@@ -647,7 +652,29 @@ export default function OpenWorldPage() {
               onRemoveRule={(ruleID) => void run("remove_rule", { rule_id: ruleID })}
               onSetPresentation={(presentation) => void run("set_presentation", { presentation })}
             />
-          )}
+          ) : null}
+          {experienceOpened ? (
+            <div hidden={panel !== "experience"} data-testid="world-experience-panel">
+              {capabilityError ? (
+                <p className="dw-form-error" role="alert">
+                  {capabilityError}
+                </p>
+              ) : capabilities.length === 0 ? (
+                <p className="dw-page-loading" role="status">
+                  {t("common.loading")}
+                </p>
+              ) : (
+                <WorldExperienceEditor
+                  key={object.id}
+                  world={world}
+                  catalog={capabilities}
+                  busy={busy !== ""}
+                  canContribute={canContribute}
+                  onSave={saveExperience}
+                />
+              )}
+            </div>
+          ) : null}
         </aside>
       </div>
     </div>

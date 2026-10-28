@@ -606,6 +606,16 @@
   padding-top: 12px;
 }
 
+.dw-exp-table-action {
+  width: 1%;
+  white-space: nowrap;
+}
+
+.dw-exp-row-button {
+  font-size: 18px;
+  line-height: 1;
+}
+
 @media (max-width: 640px) {
   .dw-experience {
     padding: 10px;

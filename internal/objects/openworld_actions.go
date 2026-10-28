@@ -16,6 +16,9 @@ import (
 // OpenWorldAppliedEffect is one consequence that actually ran. It is written
 // into the object event so a world's history explains itself.
 type OpenWorldAppliedEffect struct {
+	// Source is "behavior" for an experience action; legacy rule effects leave
+	// it empty. It keeps the two effect dialects separable in one event array.
+	Source string `json:"source,omitempty"`
 	RuleID string `json:"rule_id"`
 	NodeID string `json:"node_id"`
 	Field  string `json:"field"`
@@ -665,6 +668,10 @@ func planOpenWorldAction(action string, raw json.RawMessage, plan *ActionPlan) e
 			plan.Input["entity_id"] = input.EntityID
 		}
 		if input.Value != nil {
+			encoded, err := json.Marshal(input.Value)
+			if err != nil || len(encoded) > 4096 {
+				return fmt.Errorf("%w: input.value", ErrPayloadTooLarge)
+			}
 			plan.Input["value"] = input.Value
 		}
 	default:
@@ -975,6 +982,17 @@ func applyOpenWorldAction(stateRaw, sharedRaw json.RawMessage, plan *ActionPlan)
 			kind.Hue = *input.Hue
 		}
 		if input.Fields != nil {
+			nextFields := make(map[string]bool, len(*input.Fields))
+			for _, field := range *input.Fields {
+				nextFields[strings.TrimSpace(field.Key)] = true
+			}
+			for _, existing := range kind.Fields {
+				if !nextFields[existing.Key] &&
+					worldcap.ExperienceReferencesEventField(state.Experience, existing.Key) {
+					return nil, nil, "", fmt.Errorf(
+						"%w: field %q is used by an event-scoped experience action", ErrConflict, existing.Key)
+				}
+			}
 			kind.Fields = normalizeOpenWorldFieldInputs(*input.Fields)
 			allowed := make(map[string]bool, len(kind.Fields))
 			for _, field := range kind.Fields {
@@ -1342,15 +1360,39 @@ func applyOpenWorldAction(stateRaw, sharedRaw json.RawMessage, plan *ActionPlan)
 		}
 		for _, effect := range applied {
 			plan.Effects = append(plan.Effects, OpenWorldAppliedEffect{
+				Source: "behavior",
 				RuleID: behavior.ID, NodeID: effect.EntityID, Field: effect.Field,
 				Op: effect.Action, Value: effect.Value,
 			})
+		}
+		// A behavior is another way to make the same persisted changes as
+		// set_node_field / set_node_status / touch_node. Run one legacy rule
+		// pass for each changed thing so both interaction surfaces have the
+		// same change semantics. Rules still never chain.
+		affected := make([]string, 0, len(applied))
+		seen := make(map[string]bool, len(applied))
+		for _, effect := range applied {
+			if effect.EntityID == "" || seen[effect.EntityID] {
+				continue
+			}
+			seen[effect.EntityID] = true
+			affected = append(affected, effect.EntityID)
+		}
+		sort.Strings(affected)
+		for _, entityID := range affected {
+			plan.Effects = append(plan.Effects, applyOpenWorldRules(&state, entityID)...)
 		}
 	default:
 		return nil, nil, "", fmt.Errorf("%w: action", ErrInvalidRequest)
 	}
 	if err := ValidateOpenWorldState(&state); err != nil {
 		return nil, nil, "", err
+	}
+	// Event input must record the normalized experience, not the raw request.
+	// A document can pass the per-props checks while its raw JSON is much larger
+	// than the persisted/normalized form.
+	if plan.Action == "set_experience" {
+		plan.Input["experience"] = state.Experience
 	}
 	encoded, err := marshalState(state)
 	if err != nil {

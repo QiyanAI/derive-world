@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: Apache-2.0
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import type {
   LocalizedLabel,
   OpenWorldKind,
@@ -23,7 +23,7 @@ type EditorProps = {
   catalog: WorldCapabilityDescriptor[];
   busy: boolean;
   canContribute: boolean;
-  onSave: (experience: WorldExperience | null) => void;
+  onSave: (experience: WorldExperience | null) => Promise<boolean>;
 };
 
 export default function WorldExperienceEditor({
@@ -36,6 +36,7 @@ export default function WorldExperienceEditor({
   const { t, lang } = useI18n();
   const zh = lang === "zh";
   const [draft, setDraft] = useState<WorldExperience | undefined>(world.experience);
+  const [baseExperience, setBaseExperience] = useState(() => experienceKey(world.experience));
   const [selectedID, setSelectedID] = useState(world.experience?.root.id ?? "root");
   const [localError, setLocalError] = useState("");
 
@@ -74,7 +75,8 @@ export default function WorldExperienceEditor({
     if (!draft || !addTarget) {
       return;
     }
-    const child = makeNode(capability, world, behaviors);
+    const scopeKindID = collectionKindFor(draft.root, addTarget.id);
+    const child = makeNode(capability, world, behaviors, scopeKindID);
     updateDraft({
       ...draft,
       root: updateNode(draft.root, addTarget.id, (target) => ({
@@ -112,17 +114,33 @@ export default function WorldExperienceEditor({
     setLocalError("");
   }
 
-  function save() {
-    if (!draft) {
-      onSave(null);
+  async function save() {
+    const currentKey = experienceKey(world.experience);
+    const draftKey = experienceKey(draft);
+    if (currentKey !== baseExperience && currentKey !== draftKey) {
+      setLocalError(t("openWorld.staleDraft"));
       return;
     }
-
+    if (!draft) {
+      const saved = await onSave(null);
+      if (saved) {
+        setBaseExperience("null");
+      }
+      return;
+    }
     if (!draft.root || !NODE_ID_PATTERN.test(draft.root.id)) {
       setLocalError(zh ? "体验需要一个有效的根节点。" : "The experience needs a valid root node.");
       return;
     }
-    onSave(draft);
+    const issue = draftIssue(draft, zh);
+    if (issue) {
+      setLocalError(issue);
+      return;
+    }
+    const saved = await onSave(draft);
+    if (saved) {
+      setBaseExperience(draftKey);
+    }
   }
 
   if (!canContribute) {
@@ -176,10 +194,14 @@ export default function WorldExperienceEditor({
         />
       </div>
 
-      {selectedNode && selectedCapability ? (
+      {selectedNode ? (
         <div className="dw-exp-inspector" data-testid="world-experience-inspector">
           <div className="dw-exp-inspector-head">
-            <strong>{localized(selectedCapability.title, lang)}</strong>
+            <strong>
+              {selectedCapability
+                ? localized(selectedCapability.title, lang)
+                : t("openWorld.unknownCapability")}
+            </strong>
             <code>{selectedNode.capability}</code>
           </div>
           <div className="dw-exp-node-actions">
@@ -209,7 +231,9 @@ export default function WorldExperienceEditor({
             </button>
           </div>
 
-          {selectedCapability.params ? (
+          {!selectedCapability ? (
+            <p className="dw-open-hint">{t("openWorld.unknownCapabilityHint")}</p>
+          ) : selectedCapability.params ? (
             <SchemaFields
               schema={selectedCapability.params}
               value={selectedNode.props}
@@ -222,20 +246,23 @@ export default function WorldExperienceEditor({
             <p className="dw-open-hint">{t("openWorld.noProps")}</p>
           )}
 
-          <details className="dw-exp-add" open={Boolean(addTarget)}>
-            <summary>{t("openWorld.addCapability")}</summary>
-            {addTarget ? (
-              <CapabilityPalette
-                capabilities={presentations}
-                world={world}
-                behaviors={behaviors}
-                lang={lang}
-                onAdd={addCapability}
-              />
-            ) : (
-              <p className="dw-open-hint">{t("openWorld.selectContainer")}</p>
-            )}
-          </details>
+          {selectedCapability ? (
+            <details className="dw-exp-add" open={Boolean(addTarget)}>
+              <summary>{t("openWorld.addCapability")}</summary>
+              {addTarget ? (
+                <CapabilityPalette
+                  capabilities={presentations}
+                  world={world}
+                  behaviors={behaviors}
+                  scopeKindID={collectionKindFor(draft.root, addTarget.id)}
+                  lang={lang}
+                  onAdd={addCapability}
+                />
+              ) : (
+                <p className="dw-open-hint">{t("openWorld.selectContainer")}</p>
+              )}
+            </details>
+          ) : null}
         </div>
       ) : null}
 
@@ -268,10 +295,32 @@ export default function WorldExperienceEditor({
           className="dw-button dw-button-small dw-button-ghost"
           disabled={busy}
           onClick={() => {
-            if (window.confirm(t("openWorld.clearExperienceConfirm"))) {
-              setDraft(undefined);
-              setSelectedID("root");
-              onSave(null);
+            setDraft(world.experience);
+            setBaseExperience(experienceKey(world.experience));
+            setSelectedID(world.experience?.root.id ?? "root");
+            setLocalError("");
+          }}
+        >
+          {t("openWorld.reloadExperience")}
+        </button>
+        <button
+          type="button"
+          className="dw-button dw-button-small dw-button-ghost"
+          disabled={busy}
+          onClick={async () => {
+            if (!window.confirm(t("openWorld.clearExperienceConfirm"))) {
+              return;
+            }
+            const currentKey = experienceKey(world.experience);
+            if (currentKey !== baseExperience && currentKey !== "null") {
+              setLocalError(t("openWorld.staleDraft"));
+              return;
+            }
+            setDraft(undefined);
+            setSelectedID("root");
+            const saved = await onSave(null);
+            if (saved) {
+              setBaseExperience("null");
             }
           }}
         >
@@ -333,26 +382,28 @@ function CapabilityPalette({
   capabilities,
   world,
   behaviors,
+  scopeKindID,
   lang,
   onAdd
 }: {
   capabilities: WorldCapabilityDescriptor[];
   world: OpenWorldState;
   behaviors: WorldBehavior[];
+  scopeKindID?: string;
   lang: "en" | "zh";
   onAdd: (capability: WorldCapabilityDescriptor) => void;
 }) {
   return (
     <div className="dw-exp-palette">
       {capabilities.map((capability) => {
-        const disabled = !canUseCapability(capability.id, world, behaviors);
+        const disabled = !canUseCapability(capability.id, world, behaviors, scopeKindID);
         return (
           <button
             key={capability.id}
             type="button"
             className="dw-exp-palette-item"
             disabled={disabled}
-            title={disabled ? unavailableReason(capability.id, world, behaviors, lang) : localized(capability.description, lang)}
+            title={disabled ? unavailableReason(capability.id, world, behaviors, scopeKindID, lang) : localized(capability.description, lang)}
             onClick={() => onAdd(capability)}
             data-testid={`world-experience-add-${capability.id}`}
           >
@@ -542,7 +593,7 @@ function ActionEditor({
               onChange({
                 capability: nextCapability!.id,
                 action: nextAction.id,
-                params: defaultParamsForAction(nextAction, world)
+                params: defaultParamsForAction(nextAction, nextCapability!.id, world)
               });
             }
           }}
@@ -563,7 +614,7 @@ function ActionEditor({
               onChange({
                 capability: action.capability,
                 action: nextAction.id,
-                params: defaultParamsForAction(nextAction, world)
+                params: defaultParamsForAction(nextAction, action.capability, world)
               });
             }
           }}
@@ -585,7 +636,7 @@ function ActionEditor({
             value={params}
             onChange={(next) => {
               const cleaned = { ...next };
-              if (toggle || action.capability === "core.state") {
+              if (toggle) {
                 delete cleaned.value;
               }
               onChange({ ...action, params: cleaned });
@@ -622,23 +673,22 @@ function StateValueEditor({
   const type = fieldType ?? "text";
   return (
     <div className="dw-exp-state-value">
-      <label className="dw-exp-check">
-        <input
-          type="checkbox"
-          checked={eventValue}
-          onChange={(event) => onChange(event.target.checked ? "$event.value" : type === "number" ? 0 : type === "flag" ? true : "")}
-        />
-        {t("openWorld.useEventValue")}
-      </label>
       {eventValue ? (
-        <code>$event.value</code>
+        <div className="dw-exp-state-value-event">
+          <code>$event.value · {t("openWorld.eventValueApi")}</code>
+          <button
+            type="button"
+            className="dw-button dw-button-small dw-button-ghost"
+            onClick={() => onChange(type === "number" ? 0 : type === "flag" ? true : "")}
+          >
+            {t("openWorld.useLiteral")}
+          </button>
+        </div>
       ) : type === "number" ? (
-        <input
-          className="dw-input"
-          type="number"
-          value={typeof value === "number" ? value : ""}
-          onChange={(event) => onChange(Number(event.target.value))}
-          aria-label={t("openWorld.value")}
+        <NumberInput
+          value={typeof value === "number" && Number.isFinite(value) ? value : undefined}
+          onChange={onChange}
+          label={t("openWorld.value")}
         />
       ) : type === "flag" ? (
         <select
@@ -682,6 +732,20 @@ function ConditionEditor({
   onChange: (condition: WorldCondition) => void;
 }) {
   const { t } = useI18n();
+  if (condition.all?.length || condition.any?.length || condition.not) {
+    return (
+      <div className="dw-exp-condition">
+        <p className="dw-open-hint">{t("openWorld.compoundCondition")}</p>
+        <button
+          type="button"
+          className="dw-button dw-button-small dw-button-ghost"
+          onClick={() => onChange(defaultCondition(world))}
+        >
+          {t("openWorld.replaceCondition")}
+        </button>
+      </div>
+    );
+  }
   const fieldType = fieldTypeFor(world, condition.entity_id, condition.field);
   const needsValue = condition.op !== "truthy" && condition.op !== "falsy";
   const ops = condition.field === "status"
@@ -754,18 +818,18 @@ function ConditionEditor({
             <option value="true">{t("openWorld.on")}</option>
             <option value="false">{t("openWorld.off")}</option>
           </select>
+        ) : fieldType === "number" ? (
+          <NumberInput
+            value={typeof condition.value === "number" && Number.isFinite(condition.value) ? condition.value : undefined}
+            onChange={(value) => onChange({ ...condition, value })}
+            label={t("openWorld.value")}
+          />
         ) : (
           <input
             className="dw-input"
-            type={fieldType === "number" ? "number" : "text"}
-            value={typeof condition.value === "string" || typeof condition.value === "number" ? String(condition.value) : ""}
+            value={typeof condition.value === "string" ? condition.value : ""}
             aria-label={t("openWorld.value")}
-            onChange={(event) =>
-              onChange({
-                ...condition,
-                value: fieldType === "number" ? Number(event.target.value) : event.target.value
-              })
-            }
+            onChange={(event) => onChange({ ...condition, value: event.target.value })}
           />
         )
       ) : null}
@@ -810,6 +874,69 @@ function SchemaFields({
         );
       })}
     </div>
+  );
+}
+
+function NumberInput({
+  value,
+  onChange,
+  label,
+  minimum,
+  maximum,
+  integer = false
+}: {
+  value: number | undefined;
+  onChange: (value: number) => void;
+  label: string;
+  minimum?: number;
+  maximum?: number;
+  integer?: boolean;
+}) {
+  const [draft, setDraft] = useState(value === undefined ? "" : String(value));
+  const focused = useRef(false);
+  useEffect(() => {
+    if (!focused.current) {
+      setDraft(value === undefined ? "" : String(value));
+    }
+  }, [value]);
+
+  function commit(raw: string) {
+    if (raw === "" || raw === "-" || raw === "." || raw.endsWith(".")) {
+      return;
+    }
+    const parsed = Number(raw);
+    if (!Number.isFinite(parsed) || (integer && !Number.isInteger(parsed))) {
+      return;
+    }
+    onChange(parsed);
+  }
+
+  return (
+    <input
+      className="dw-input"
+      type="number"
+      inputMode={integer ? "numeric" : "decimal"}
+      value={draft}
+      min={minimum}
+      max={maximum}
+      step={integer ? 1 : "any"}
+      aria-label={label}
+      onFocus={() => {
+        focused.current = true;
+      }}
+      onBlur={() => {
+        focused.current = false;
+        commit(draft);
+        if (draft === "" || draft === "-" || draft === "." || draft.endsWith(".")) {
+          setDraft(value === undefined ? "" : String(value));
+        }
+      }}
+      onChange={(event) => {
+        focused.current = true;
+        setDraft(event.target.value);
+        commit(event.target.value);
+      }}
+    />
   );
 }
 
@@ -885,12 +1012,13 @@ function SchemaField({
         <button
           type="button"
           className="dw-button dw-button-small dw-button-ghost"
-          onClick={() =>
-            onChange([
-              ...rows,
-              defaultValueForProperty(property.items!, world, behaviors, contextProps)
-            ])
-          }
+          disabled={nextArrayItem(name, property.items!, rows, world, behaviors, contextProps) === null}
+          onClick={() => {
+            const next = nextArrayItem(name, property.items!, rows, world, behaviors, contextProps);
+            if (next !== null) {
+              onChange([...rows, next]);
+            }
+          }}
         >
           {t("openWorld.addListItem")}
         </button>
@@ -917,15 +1045,13 @@ function SchemaField({
           {label}
           {numeric !== undefined ? ` · ${numeric}` : ""}
         </span>
-        <input
-          className="dw-input"
-          type="number"
-          value={numeric ?? ""}
-          min={property.minimum}
-          max={property.maximum}
-          step={property.type === "integer" ? 1 : "any"}
-          onChange={(event) => onChange(Number(event.target.value))}
-          aria-label={label}
+        <NumberInput
+          value={numeric}
+          onChange={onChange}
+          label={label}
+          minimum={property.minimum}
+          maximum={property.maximum}
+          integer={property.type === "integer"}
         />
         {maximum > minimum && maximum - minimum <= 400 ? (
           <input
@@ -1024,6 +1150,14 @@ function stringOptions(
         value: entry.value,
         label: entry.label
       }));
+    case "state_field":
+      return [
+        { value: "status", label: lang === "zh" ? "状态" : "Status" },
+        ...fieldOptions(world, contextProps.entity_id, contextProps.kind_id).map((entry) => ({
+          value: entry.value,
+          label: entry.label
+        }))
+      ];
     case "table_source": {
       const kind = world.kinds.find((entry) => entry.id === contextProps.kind_id);
       return [
@@ -1088,7 +1222,11 @@ function fieldTypeFor(world: OpenWorldState, entityID: unknown, field: unknown):
   return types.size === 1 ? Array.from(types)[0] : undefined;
 }
 
-function defaultParamsForAction(action: WorldCapabilityAction, world: OpenWorldState): Record<string, unknown> {
+function defaultParamsForAction(
+  action: WorldCapabilityAction,
+  capabilityID: string,
+  world: OpenWorldState
+): Record<string, unknown> {
   const params: Record<string, unknown> = {};
   const properties = action.params?.properties ?? {};
   for (const [key, property] of Object.entries(properties)) {
@@ -1096,6 +1234,28 @@ function defaultParamsForAction(action: WorldCapabilityAction, world: OpenWorldS
       continue;
     }
     params[key] = defaultValueForProperty(property, world, [], {});
+  }
+  if (capabilityID === "core.state" && (action.id === "set" || action.id === "add")) {
+    const fieldType = fieldTypeFor(world, params.entity_id, params.field);
+    params.value =
+      action.id === "add"
+        ? 0
+        : fieldType === "number"
+          ? 0
+          : fieldType === "flag"
+            ? true
+            : fieldType === "status"
+              ? "open"
+              : "";
+  }
+  if (capabilityID === "core.transfer") {
+    const first = world.nodes[0]?.id;
+    const second = world.nodes[1]?.id;
+    if (first && second) {
+      params.from_entity = first;
+      params.to_entity = second;
+    }
+    params.amount = 1;
   }
   return params;
 }
@@ -1128,6 +1288,63 @@ function defaultCondition(world: OpenWorldState): WorldCondition {
   };
 }
 
+function nextArrayItem(
+  name: string,
+  itemSchema: WorldCapabilityProperty,
+  rows: unknown[],
+  world: OpenWorldState,
+  behaviors: WorldBehavior[],
+  contextProps: Record<string, unknown>
+): unknown | null {
+  const next = defaultValueForProperty(itemSchema, world, behaviors, contextProps);
+  if (!isRecord(next)) {
+    return next;
+  }
+  const records = rows.filter(isRecord);
+  if (name === "views") {
+    const used = new Set(records.map((row) => row.kind_id));
+    const kind = world.kinds.find((entry) => !used.has(entry.id));
+    if (!kind) {
+      return null;
+    }
+    next.kind_id = kind.id;
+    next.path = DEFAULT_PATH;
+    next.fill_hue = kind.hue;
+  }
+  if (name === "columns") {
+    const kind = world.kinds.find((entry) => entry.id === contextProps.kind_id);
+    const sources = ["name", "text", "status", ...(kind?.fields.map((field) => field.key) ?? [])];
+    const used = new Set(records.map((row) => row.source));
+    const source = sources.find((entry) => !used.has(entry));
+    if (!source) {
+      return null;
+    }
+    next.source = source;
+    next.label = kind?.fields.find((field) => field.key === source)?.label ?? "";
+  }
+  if (name === "bindings") {
+    const used = new Set(records.map((row) => row.target));
+    const target = ["size", "opacity", "hue"].find((entry) => !used.has(entry));
+    if (!target || !next.field) {
+      return null;
+    }
+    next.target = target;
+    next.in_min = 0;
+    next.in_max = 10;
+    next.out_min = target === "opacity" ? 0.3 : target === "hue" ? -30 : 0.8;
+    next.out_max = target === "opacity" ? 1 : target === "hue" ? 30 : 1.6;
+  }
+  if (name === "options") {
+    next.label = `Option ${rows.length + 1}`;
+    const behaviorID = behaviors[0]?.id;
+    if (!behaviorID) {
+      return null;
+    }
+    next.behavior_id = behaviorID;
+  }
+  return next;
+}
+
 function defaultValueForProperty(
   property: WorldCapabilityProperty,
   world: OpenWorldState,
@@ -1139,6 +1356,24 @@ function defaultValueForProperty(
       const object: Record<string, unknown> = {};
       for (const [key, child] of Object.entries(property.properties ?? {})) {
         object[key] = defaultValueForProperty(child, world, behaviors, contextProps);
+      }
+      if ("in_min" in object && "in_max" in object && "out_min" in object && "out_max" in object) {
+        object.in_min = 0;
+        object.in_max = 10;
+        const target = typeof object.target === "string" ? object.target : "size";
+        if (target === "opacity") {
+          object.out_min = 0.3;
+          object.out_max = 1;
+        } else if (target === "hue") {
+          object.out_min = -30;
+          object.out_max = 30;
+        } else {
+          object.out_min = 0.8;
+          object.out_max = 1.6;
+        }
+      }
+      if ("amount" in object && object.amount === 0) {
+        object.amount = 1;
       }
       return object;
     }
@@ -1168,6 +1403,9 @@ function defaultValueForProperty(
       if (property.format === "behavior") {
         return behaviors[0]?.id ?? "";
       }
+      if (property.format === "state_field") {
+        return fieldOptions(world, contextProps.entity_id, contextProps.kind_id)[0]?.value ?? "status";
+      }
       if (property.format === "field") {
         return fieldOptions(world, contextProps.entity_id, contextProps.kind_id)[0]?.value ?? "";
       }
@@ -1183,7 +1421,8 @@ function defaultValueForProperty(
 function makeNode(
   capability: WorldCapabilityDescriptor,
   world: OpenWorldState,
-  behaviors: WorldBehavior[]
+  behaviors: WorldBehavior[],
+  scopeKindID?: string
 ): WorldViewNode {
   const props: Record<string, unknown> = {};
   for (const [key, property] of Object.entries(capability.params?.properties ?? {})) {
@@ -1218,12 +1457,23 @@ function makeNode(
     props.kind_id = world.kinds[0].id;
   }
   if (capability.id === "core.field" || capability.id === "core.meter") {
-    const node = world.nodes[0];
-    const kind = node ? world.kinds.find((entry) => entry.id === node.kind_id) : undefined;
+    const scopedKind = scopeKindID ? world.kinds.find((entry) => entry.id === scopeKindID) : undefined;
+    const candidate = scopedKind
+      ? undefined
+      : world.nodes.find((node) => {
+          const kind = world.kinds.find((entry) => entry.id === node.kind_id);
+          if (!kind) {
+            return false;
+          }
+          return capability.id === "core.meter"
+            ? kind.fields.some((field) => field.type === "number")
+            : kind.fields.length > 0;
+        });
+    const kind = scopedKind ?? (candidate ? world.kinds.find((entry) => entry.id === candidate.kind_id) : undefined);
     const field = capability.id === "core.meter"
       ? kind?.fields.find((entry) => entry.type === "number")
       : kind?.fields.find((entry) => entry.type !== "text") ?? kind?.fields[0];
-    props.entity_id = node?.id ?? "";
+    props.entity_id = scopedKind ? "$item" : candidate?.id ?? "";
     props.field = field?.key ?? "";
     if (capability.id === "core.meter") {
       props.min = 0;
@@ -1304,14 +1554,29 @@ function localized(label: LocalizedLabel, lang: "en" | "zh"): string {
   return lang === "zh" ? label.zh : label.en;
 }
 
-function canUseCapability(id: string, world: OpenWorldState, behaviors: WorldBehavior[]): boolean {
+function canUseCapability(
+  id: string,
+  world: OpenWorldState,
+  behaviors: WorldBehavior[],
+  scopeKindID?: string
+): boolean {
+  const scopedKind = scopeKindID ? world.kinds.find((entry) => entry.id === scopeKindID) : undefined;
   if (id === "core.collection" || id === "core.table" || id === "core.space") {
     return world.kinds.length > 0;
   }
   if (id === "core.field") {
-    return world.nodes.length > 0;
+    if (scopedKind) {
+      return scopedKind.fields.length > 0;
+    }
+    return world.nodes.some((node) => {
+      const kind = world.kinds.find((entry) => entry.id === node.kind_id);
+      return Boolean(kind?.fields.length);
+    });
   }
   if (id === "core.meter") {
+    if (scopedKind) {
+      return scopedKind.fields.some((field) => field.type === "number");
+    }
     return world.nodes.some((node) => {
       const kind = world.kinds.find((entry) => entry.id === node.kind_id);
       return Boolean(kind?.fields.some((field) => field.type === "number"));
@@ -1323,17 +1588,94 @@ function canUseCapability(id: string, world: OpenWorldState, behaviors: WorldBeh
   return true;
 }
 
-function unavailableReason(id: string, world: OpenWorldState, behaviors: WorldBehavior[], lang: "en" | "zh"): string {
-  if (id === "core.field" && world.nodes.length === 0) {
+function unavailableReason(
+  id: string,
+  world: OpenWorldState,
+  behaviors: WorldBehavior[],
+  scopeKindID: string | undefined,
+  lang: "en" | "zh"
+): string {
+  const scopedKind = scopeKindID ? world.kinds.find((entry) => entry.id === scopeKindID) : undefined;
+  if (id === "core.field" && !scopedKind && world.nodes.length === 0) {
     return lang === "zh" ? "先添加一个存在。" : "Add a thing first.";
   }
-  if (id === "core.meter" && world.nodes.length === 0) {
+  if (id === "core.field") {
+    return lang === "zh" ? "先给这种存在添加一个字段。" : "Add a field to that kind first.";
+  }
+  if (id === "core.meter" && !scopedKind && world.nodes.length === 0) {
     return lang === "zh" ? "先添加一个带数字字段的存在。" : "Add a thing with a number field first.";
+  }
+  if (id === "core.meter") {
+    return lang === "zh" ? "这种存在没有数字字段。" : "That kind has no number field.";
   }
   if ((id === "core.button" || id === "core.choice") && behaviors.length === 0) {
     return lang === "zh" ? "先在下方添加一个行为。" : "Add a behavior below first.";
   }
   return lang === "zh" ? "先添加一种存在。" : "Add a kind first.";
+}
+
+function experienceKey(experience: WorldExperience | undefined): string {
+  return JSON.stringify(experience ?? null);
+}
+
+function draftIssue(experience: WorldExperience, zh: boolean): string | null {
+  for (const behavior of experience.behaviors ?? []) {
+    if (behavior.actions.length === 0) {
+      return zh ? `行为 ${behavior.id} 至少需要一个动作。` : `Behavior ${behavior.id} needs at least one action.`;
+    }
+  }
+  const visit = (node: WorldViewNode): string | null => {
+    if (node.capability === "core.button") {
+      const behaviorID = node.props.behavior_id;
+      if (typeof behaviorID !== "string" || behaviorID === "") {
+        return zh ? `按钮 ${node.id} 还没有选择行为。` : `Button ${node.id} has no behavior.`;
+      }
+    }
+    if (node.capability === "core.choice") {
+      const options = Array.isArray(node.props.options) ? node.props.options : [];
+      if (options.length < 2) {
+        return zh ? `选择 ${node.id} 至少需要两个选项。` : `Choice ${node.id} needs at least two options.`;
+      }
+    }
+    for (const child of node.children ?? []) {
+      const issue = visit(child);
+      if (issue) {
+        return issue;
+      }
+    }
+    return null;
+  };
+  return visit(experience.root);
+}
+
+function collectionKindFor(root: WorldViewNode, id: string): string | undefined {
+  const path = findPath(root, id);
+  if (!path) {
+    return undefined;
+  }
+  for (let index = path.length - 1; index >= 0; index -= 1) {
+    const node = path[index];
+    if (!node) {
+      continue;
+    }
+    if (node.capability === "core.collection" && typeof node.props.kind_id === "string") {
+      return node.props.kind_id;
+    }
+  }
+  return undefined;
+}
+
+function findPath(root: WorldViewNode, id: string): WorldViewNode[] | undefined {
+  if (root.id === id) {
+    return [root];
+  }
+  for (const child of root.children ?? []) {
+    const path = findPath(child, id);
+    if (path) {
+      return [root, ...path];
+    }
+  }
+  return undefined;
 }
 
 function findNode(root: WorldViewNode, id: string): WorldViewNode | undefined {

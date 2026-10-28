@@ -133,6 +133,53 @@ func (r *Registry) RegisterBehavior(capability BehaviorCapability) error {
 	return nil
 }
 
+// reservedNestedKeys mirrors the HTTP actor-override body guard. A capability
+// property with one of these names could never be submitted through the
+// product or API, so the registry rejects it at startup instead of shipping an
+// unusable module.
+var reservedNestedKeys = map[string]bool{
+	"version": true, "permissions": true, "user_id": true, "actor_id": true,
+	"actor_user_id": true, "actor_type": true, "delegation_id": true,
+	"owner_id": true, "creator_id": true,
+}
+
+func validateParamSchema(schema *ParamSchema) error {
+	if schema == nil {
+		return nil
+	}
+	for name, property := range schema.Properties {
+		if reservedNestedKeys[strings.ToLower(name)] {
+			return fmt.Errorf("%w: reserved capability property %q", ErrInvalid, name)
+		}
+		if property == nil {
+			return fmt.Errorf("%w: nil capability property %q", ErrInvalid, name)
+		}
+		if property.Items != nil {
+			if err := validateParamProperty(property.Items); err != nil {
+				return err
+			}
+		}
+		if len(property.Properties) > 0 {
+			if err := validateParamSchema(&ParamSchema{Properties: property.Properties}); err != nil {
+				return err
+			}
+		}
+	}
+	return nil
+}
+
+func validateParamProperty(property *ParamProperty) error {
+	if property == nil {
+		return fmt.Errorf("%w: nil capability property", ErrInvalid)
+	}
+	if property.Items != nil {
+		if err := validateParamProperty(property.Items); err != nil {
+			return err
+		}
+	}
+	return validateParamSchema(&ParamSchema{Properties: property.Properties})
+}
+
 func validateDescriptor(descriptor Descriptor) error {
 	if !validSlug(descriptor.ID) {
 		return fmt.Errorf("%w: capability id %q", ErrInvalid, descriptor.ID)
@@ -156,7 +203,13 @@ func validateDescriptor(descriptor Descriptor) error {
 			if strings.TrimSpace(action.Title.En) == "" || strings.TrimSpace(action.Title.Zh) == "" {
 				return fmt.Errorf("%w: %s action title", ErrInvalid, descriptor.ID)
 			}
+			if err := validateParamSchema(action.Params); err != nil {
+				return fmt.Errorf("%w: %s action params", ErrInvalid, descriptor.ID)
+			}
 		}
+	}
+	if err := validateParamSchema(descriptor.Params); err != nil {
+		return err
 	}
 	if descriptor.ChildScope != "" && descriptor.ChildScope != "item" {
 		return fmt.Errorf("%w: %s child scope", ErrInvalid, descriptor.ID)

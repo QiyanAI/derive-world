@@ -185,9 +185,8 @@ func validateNode(node *ViewNode, ctx ValidateContext, state *nodeValidationStat
 	switch node.Capability {
 	case "core.space":
 		// A space renders every entity that has a matching kind view. Charge
-		// that inner work to the same expanded-instance budget so a repeated
-		// space cannot multiply the whole world.
-		state.expanded += len(state.context.Entities)
+		// that inner work for every instance of this node to the same budget.
+		state.expanded += instances * len(state.context.Entities)
 	case "core.table":
 		if kindID, err := propString(normalized, "kind_id"); err == nil {
 			count := 0
@@ -196,7 +195,7 @@ func validateNode(node *ViewNode, ctx ValidateContext, state *nodeValidationStat
 					count++
 				}
 			}
-			state.expanded += count
+			state.expanded += instances * count
 		}
 	}
 	if state.expanded > maxExpandedViews {

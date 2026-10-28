@@ -32,6 +32,8 @@ implemented. This is a self-hostable OSS MVP, not a production platform.
   external URLs, images, fonts or scripts, opens network access, renders 3D,
   or runs a physics/audio engine. Strings are rendered as text, vector paths
   use a restricted drawing-command grammar, and all values are bounded.
+  Entity field primitives are still text, number and flag; structured content
+  can be stored as text, but there is no new rich value type yet.
 - Bounds: 64 static view nodes, depth 8, 24 children per node, 24 behaviors,
   8 actions per behavior, 4 KiB of props per node, 32 KiB per experience, 400
   expanded render instances, and the existing 64 KiB object-state cap. Actions
@@ -40,15 +42,31 @@ implemented. This is a self-hostable OSS MVP, not a production platform.
   without read permission still receives 404. Every change uses the existing
   row lock, `expected_version`, idempotency, event and audit path.
 - Deriving with `structure` copies the experience, remaps kind/entity UUIDs in
-  capability props, conditions and action params, and keeps local view and
-  behavior ids stable. The child is independent and revalidated; the parent is
-  unchanged.
+  declared reference fields and `{{entity.<id>...}}` template tokens, and keeps
+  local view/behavior ids, field keys and ordinary text stable. The child is
+  independent and revalidated; the parent is unchanged. Derivation is at the
+  whole object level: there is no per-entity, per-field or per-capability
+  derivation granularity yet.
+- A behavior that changes a thing runs one legacy rule pass for that thing,
+  matching `set_node_field` / `set_node_status` / `touch_node`. Rules still do
+  not chain and legacy rules cannot invoke behaviors.
 - The frozen `object.propose_change` capability keeps its published action
   set. Experience editing is a human product path. An object-bound AI can
   still propose the existing structural actions, and an unbound AI can propose
   a complete world through `world.create`; both remain human-approved. Rich
   AI-authored experience documents are **not yet** available through that
   frozen schema, and the 8 KiB model-output limit is binding for such work.
+- Remaining capability boundaries, stated plainly: the initial module set has
+  no generic motion/ambient/horizon module (the classic scene still owns those
+  effects); `core.space` owns a bounded gradient/solid/none background rather
+  than a separate background capability; composite conditions and
+  `visible_when` are API-authorable but the visual editor only authors one
+  simple condition; `$event.value` is usable by API integrations but no
+  current product control supplies an event value; capability descriptors
+  carry a version but stored view nodes reference capability ids without an
+  embedded version; and the anonymous Explore preview shows a metadata
+  summary, not a live composed experience. Adding any of these is a new module
+  or a deliberate protocol extension, not a new fixed world category.
 - An unbound Personal AI can propose a complete world. The proposal is validated
   before storage and creates nothing until a human approves the five-minute
   confirmation.

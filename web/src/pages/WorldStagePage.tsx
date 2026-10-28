@@ -547,7 +547,7 @@ export default function WorldStagePage() {
         onCreated={(object) => {
           toast(zh ? "你的新世界开始生长了。" : "Your new world has begun to grow.");
           if (object.object_type === "open_world") {
-            navigate(`/worlds/${object.id}`);
+            navigate(`/worlds/${object.id}?build=1`);
             return;
           }
           setFocusId(object.id);

@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: Apache-2.0
 import { useEffect, useId, useState, type CSSProperties, type ReactNode } from "react";
+import { useI18n, type MessageKey } from "../../i18n";
 import type {
   OpenWorldField,
   OpenWorldKind,
@@ -62,8 +63,9 @@ function NodeView({
     return null;
   }
   const props = asRecord(node.props);
+  const children = Array.isArray(node.children) ? node.children : [];
   const renderChildren = (childScope: Scope = scope) =>
-    (node.children ?? []).map((child) => (
+    children.map((child) => (
       <NodeView
         key={`${itemKey ?? "root"}:${child.id}`}
         node={child}
@@ -280,6 +282,7 @@ function FieldControl({
   disabled: boolean;
   onCommit: (value: string | number | boolean) => void;
 }) {
+  const { t } = useI18n();
   const [draft, setDraft] = useState(displayValue(value));
   useEffect(() => {
     setDraft(displayValue(value));
@@ -293,7 +296,7 @@ function FieldControl({
         disabled={disabled}
         onClick={() => onCommit(value !== true)}
       >
-        {value === true ? "on" : "off"}
+        {value === true ? t("openWorld.on") : t("openWorld.off")}
       </button>
     );
   }
@@ -315,13 +318,14 @@ function FieldControl({
       <input
         className="dw-input"
         type={field.type === "number" ? "number" : "text"}
+        step={field.type === "number" ? "any" : undefined}
         value={draft}
         disabled={disabled}
         onChange={(event) => setDraft(event.target.value)}
         aria-label={field.label || field.key}
       />
       <button className="dw-button dw-button-small dw-button-ghost" type="submit" disabled={disabled}>
-        Save
+        {t("common.save")}
       </button>
     </form>
   );
@@ -381,6 +385,7 @@ function TableNode({
   context: ExperienceContext;
   node: WorldViewNode;
 }) {
+  const { t } = useI18n();
   const kindID = stringValue(props.kind_id, "");
   const kind = context.world.kinds.find((candidate) => candidate.id === kindID);
   const columns = asArray(props.columns).map(asRecord);
@@ -396,9 +401,14 @@ function TableNode({
           <tr>
             {columns.map((column, index) => (
               <th key={`${stringValue(column.source, "")}:${index}`}>
-                {stringValue(column.label, "") || labelForSource(kind, stringValue(column.source, ""))}
+                {stringValue(column.label, "") || labelForSource(kind, stringValue(column.source, ""), t)}
               </th>
             ))}
+            {rowBehaviorID ? (
+              <th scope="col">
+                <span className="dw-visually-hidden">Action</span>
+              </th>
+            ) : null}
           </tr>
         </thead>
         <tbody>
@@ -406,16 +416,8 @@ function TableNode({
             <tr
               key={row.id}
               className={interactive ? "is-interactive" : ""}
-              role={interactive ? "button" : undefined}
-              tabIndex={interactive ? 0 : undefined}
               onClick={() => {
                 if (interactive) {
-                  context.onInvoke(rowBehaviorID, row.id);
-                }
-              }}
-              onKeyDown={(event) => {
-                if (interactive && (event.key === "Enter" || event.key === " ")) {
-                  event.preventDefault();
                   context.onInvoke(rowBehaviorID, row.id);
                 }
               }}
@@ -427,6 +429,24 @@ function TableNode({
                   {formatCell(row, stringValue(column.source, ""), kind)}
                 </td>
               ))}
+              {rowBehaviorID ? (
+                <td className="dw-exp-table-action">
+                  <button
+                    type="button"
+                    className="dw-icon-button dw-exp-row-button"
+                    disabled={!interactive}
+                    aria-label={stringValue(props.row_behavior_label, "") || t("openWorld.run")}
+                    onClick={(event) => {
+                      event.stopPropagation();
+                      if (interactive) {
+                        context.onInvoke(rowBehaviorID, row.id);
+                      }
+                    }}
+                  >
+                    ›
+                  </button>
+                </td>
+              ) : null}
             </tr>
           ))}
         </tbody>
@@ -479,6 +499,7 @@ function SpaceNode({
   context: ExperienceContext;
   node: WorldViewNode;
 }) {
+  const { t } = useI18n();
   const uid = useId().replace(/[^a-zA-Z0-9_-]/g, "");
   const background = asRecord(props.background);
   const views = asArray(props.views).map(asRecord);
@@ -503,7 +524,12 @@ function SpaceNode({
   const linkColor = `hsl(${accentHue} 70% 62%)`;
   return (
     <div className="dw-exp-space" data-testid="world-experience-space" data-capability-node={node.id}>
-      <svg viewBox={`0 0 ${WORLD_WIDTH} ${WORLD_HEIGHT}`} role="img" aria-label={context.world.title} preserveAspectRatio="xMidYMid meet">
+      <svg
+        viewBox={`0 0 ${WORLD_WIDTH} ${WORLD_HEIGHT}`}
+        role={activateBehaviorID && context.canContribute ? "group" : "img"}
+        aria-label={context.world.title}
+        preserveAspectRatio="xMidYMid meet"
+      >
         <defs>
           <linearGradient id={`${uid}-sky`} x1="0" y1="0" x2="0" y2="1">
             <stop offset="0%" stopColor={`hsl(${skyHue} 52% ${Math.max(4, lightness)}%)`} />
@@ -596,7 +622,7 @@ function SpaceNode({
       </svg>
       {context.canContribute && activateBehaviorID ? (
         <p className="dw-exp-space-hint">
-          {context.world.title}
+          {t("openWorld.spaceHint")}
         </p>
       ) : null}
     </div>
@@ -780,15 +806,19 @@ function resolveEntityID(value: unknown, scope: Scope): string {
   return typeof value === "string" ? value : "";
 }
 
-function labelForSource(kind: OpenWorldKind | undefined, source: string): string {
+function labelForSource(
+  kind: OpenWorldKind | undefined,
+  source: string,
+  t: (key: MessageKey) => string
+): string {
   if (source === "name") {
-    return "Name";
+    return t("openWorld.nodeName");
   }
   if (source === "text") {
-    return "Text";
+    return t("openWorld.nodeText");
   }
   if (source === "status") {
-    return "Status";
+    return t("openWorld.statusField");
   }
   return kind?.fields.find((field) => field.key === source)?.label || source;
 }
@@ -831,6 +861,9 @@ function formatUnknown(value: unknown): string {
 }
 
 function displayValue(value: unknown): string {
+  if (typeof value === "number" && Number.isFinite(value)) {
+    return String(value);
+  }
   return formatUnknown(value);
 }
 

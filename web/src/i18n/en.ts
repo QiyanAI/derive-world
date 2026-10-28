@@ -1148,6 +1148,7 @@ export const en = {
   "openWorld.summary": "{kinds} kinds · {nodes} things · {rules} rules",
   "openWorld.premiseEmpty": "Write the premise this world begins from.",
   "openWorld.experience": "Experience",
+  "openWorld.experiencePanel": "Experience editor",
   "openWorld.classicLookHidden":
     "This world uses a composed experience. The classic scene look editor is hidden; edit the experience instead.",
   "openWorld.experienceHint":
@@ -1165,6 +1166,9 @@ export const en = {
   "openWorld.moveUp": "Move up",
   "openWorld.moveDown": "Move down",
   "openWorld.noProps": "This capability has no parameters.",
+  "openWorld.unknownCapability": "Unknown capability",
+  "openWorld.unknownCapabilityHint":
+    "This node uses a module this build does not render. Remove it, or deploy the module before saving.",
   "openWorld.addCapability": "Add a capability",
   "openWorld.selectContainer": "Select a layout or collection that can contain other capabilities.",
   "openWorld.behaviors": "Behaviors",
@@ -1176,6 +1180,14 @@ export const en = {
   "openWorld.actionCapability": "Action capability",
   "openWorld.actionName": "Action",
   "openWorld.useEventValue": "Use the event value",
+  "openWorld.useLiteral": "Use a literal value",
+  "openWorld.eventValueApi": "event value from an API integration",
+  "openWorld.compoundCondition":
+    "This is a compound condition authored through the API. The visual editor does not rewrite it.",
+  "openWorld.replaceCondition": "Replace with a simple condition",
+  "openWorld.reloadExperience": "Reload from world",
+  "openWorld.staleDraft":
+    "This world changed elsewhere. Reload the experience before saving.",
   "openWorld.value": "Value",
   "openWorld.entity": "Thing",
   "openWorld.field": "Field",
@@ -1186,6 +1198,8 @@ export const en = {
   "openWorld.clearExperienceConfirm":
     "Remove the composed experience from this world? The classic views remain.",
   "openWorld.addListItem": "Add item",
+  "openWorld.run": "Run",
+  "openWorld.spaceHint": "Click a thing to let its behavior happen.",
   "openWorld.view.scene": "Scene",
   "openWorld.view.stage": "Stage",
   "openWorld.view.cards": "Cards",

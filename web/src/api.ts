@@ -1174,7 +1174,7 @@ function normalizeExperience(value: unknown): WorldExperience | undefined {
     return undefined;
   }
   const experience = value as Partial<WorldExperience>;
-  if (experience.protocol !== 1 || !experience.root || typeof experience.root !== "object") {
+  if (!experience.root || typeof experience.root !== "object") {
     return undefined;
   }
   // Preserve the document as received. Rebuilding only known keys would make
