@@ -10,11 +10,14 @@ import {
   type OpenWorldField,
   type OpenWorldKind,
   type OpenWorldNode,
+  type OpenWorldPresentation,
   type OpenWorldState,
   type OpenWorldView
 } from "../api";
 import AIPanel from "../components/AIPanel";
 import Icon from "../components/v2/Icon";
+import WorldLookEditor from "../components/v2/WorldLookEditor";
+import WorldScene from "../components/v2/WorldScene";
 import { useI18n } from "../i18n";
 
 const WORLD_WIDTH = 1600;
@@ -68,7 +71,7 @@ export default function OpenWorldPage() {
   const [error, setError] = useState<unknown>(null);
   const [notice, setNotice] = useState("");
   const [busy, setBusy] = useState("");
-  const [view, setView] = useState<OpenWorldView>("stage");
+  const [view, setView] = useState<OpenWorldView | "">("");
   const [panel, setPanel] = useState<ViewMode>("structure");
   const [premiseEditing, setPremiseEditing] = useState(false);
   const [premiseDraft, setPremiseDraft] = useState("");
@@ -95,10 +98,11 @@ export default function OpenWorldPage() {
   }, [load]);
 
   const world = object ? openWorldState(object) : null;
+  const activeView: OpenWorldView = world ? view || world.views[0] || "scene" : "scene";
   const canContribute = object?.permissions.includes("contribute") ?? false;
 
   useEffect(() => {
-    if (world && !world.views.includes(view) && world.views[0]) {
+    if (world && (!view || !world.views.includes(view)) && world.views[0]) {
       setView(world.views[0]);
     }
   }, [world, view]);
@@ -167,10 +171,20 @@ export default function OpenWorldPage() {
     setBusy(action);
     setError(null);
     setNotice("");
+    const before = openWorldState(object);
     try {
       const updated = await applyAction(object.id, action, input, object.version);
       setObject(updated);
-      setNotice(action === "touch_node" ? t("openWorld.touched") : t("openWorld.saved"));
+      const changes = describeWorldDiff(before, openWorldState(updated), zh);
+      setNotice(
+        changes.length > 0
+          ? zh
+            ? `世界回应：${changes.join("；")}`
+            : `The world answered: ${changes.join("; ")}`
+          : action === "touch_node"
+            ? t("openWorld.touched")
+            : t("openWorld.saved")
+      );
       return updated;
     } catch (failure) {
       setError(failure);
@@ -345,8 +359,8 @@ export default function OpenWorldPage() {
               <button
                 key={mode}
                 type="button"
-                className={`dw-open-view${view === mode ? " is-active" : ""}`}
-                aria-pressed={view === mode}
+                className={`dw-open-view${activeView === mode ? " is-active" : ""}`}
+                aria-pressed={activeView === mode}
                 onClick={() => setView(mode)}
               >
                 {t(`openWorld.view.${mode}` as never)}
@@ -372,7 +386,15 @@ export default function OpenWorldPage() {
                 </button>
               ) : null}
             </div>
-          ) : view === "stage" ? (
+          ) : activeView === "scene" ? (
+            <WorldScene
+              world={world}
+              worldID={object.id}
+              canContribute={canContribute}
+              busy={busy !== ""}
+              onTouch={(nodeID) => void run("touch_node", { node_id: nodeID })}
+            />
+          ) : activeView === "stage" ? (
             <div className={`dw-open-stage${dragging ? " is-dragging" : ""}`} data-testid="open-world-stage">
               <svg
                 ref={canvasRef}
@@ -433,7 +455,7 @@ export default function OpenWorldPage() {
                   : t("workspace.permission.read")}
               </p>
             </div>
-          ) : view === "cards" ? (
+          ) : activeView === "cards" ? (
             <div className="dw-open-cards" data-testid="open-world-cards">
               {world.kinds.map((kind) => {
                 const nodes = world.nodes.filter((node) => node.kind_id === kind.id);
@@ -499,6 +521,7 @@ export default function OpenWorldPage() {
             <AIPanel object={object} canContribute={canContribute} onChanged={() => void load()} />
           ) : (
             <StructurePanel
+              key={object.id}
               world={world}
               busy={busy !== ""}
               canContribute={canContribute}
@@ -511,12 +534,39 @@ export default function OpenWorldPage() {
               onRemoveLink={(linkID) => void run("remove_link", { link_id: linkID })}
               onAddRule={(input) => void run("add_rule", input)}
               onRemoveRule={(ruleID) => void run("remove_rule", { rule_id: ruleID })}
+              onSetPresentation={(presentation) => void run("set_presentation", { presentation })}
             />
           )}
         </aside>
       </div>
     </div>
   );
+}
+
+function describeWorldDiff(before: OpenWorldState, after: OpenWorldState, zh: boolean): string[] {
+  const previous = new Map(before.nodes.map((node) => [node.id, node]));
+  const kinds = new Map(after.kinds.map((kind) => [kind.id, kind]));
+  const changes: string[] = [];
+  for (const node of after.nodes) {
+    const old = previous.get(node.id);
+    const kind = kinds.get(node.kind_id);
+    if (!old) {
+      changes.push(zh ? `${node.name} 出现` : `${node.name} appeared`);
+      continue;
+    }
+    if (old.status !== node.status && node.status === "done") {
+      changes.push(zh ? `${node.name} 被唤醒` : `${node.name} woke`);
+    }
+    for (const [key, value] of Object.entries(node.values)) {
+      if (old.values[key] !== value) {
+        const field = kind?.fields.find((entry) => entry.key === key);
+        changes.push(
+          `${node.name} · ${field?.label || key}: ${valueLabel(old.values[key])} → ${valueLabel(value)}`
+        );
+      }
+    }
+  }
+  return changes.slice(0, 5);
 }
 
 function Values({ world, node }: { world: OpenWorldState; node: OpenWorldNode }) {
@@ -676,7 +726,8 @@ function StructurePanel({
   onAddLink,
   onRemoveLink,
   onAddRule,
-  onRemoveRule
+  onRemoveRule,
+  onSetPresentation
 }: {
   world: OpenWorldState;
   busy: boolean;
@@ -690,6 +741,7 @@ function StructurePanel({
   onRemoveLink: (linkID: string) => void;
   onAddRule: (input: Record<string, unknown>) => void;
   onRemoveRule: (ruleID: string) => void;
+  onSetPresentation: (presentation: OpenWorldPresentation) => void;
 }) {
   const { t } = useI18n();
   const [kindName, setKindName] = useState("");
@@ -701,10 +753,18 @@ function StructurePanel({
   const [nodeKind, setNodeKind] = useState("");
   const [nodeName, setNodeName] = useState("");
   const [nodeText, setNodeText] = useState("");
+  const [nodeX, setNodeX] = useState("");
+  const [nodeY, setNodeY] = useState("");
+  const [kindShape, setKindShape] = useState("orb");
+  const [kindMotion, setKindMotion] = useState("float");
   const [linkFrom, setLinkFrom] = useState("");
   const [linkTo, setLinkTo] = useState("");
   const [linkLabel, setLinkLabel] = useState("");
   const [ruleTrigger, setRuleTrigger] = useState("");
+  const [conditionNode, setConditionNode] = useState("");
+  const [conditionField, setConditionField] = useState("status");
+  const [conditionOp, setConditionOp] = useState("eq");
+  const [conditionValue, setConditionValue] = useState("");
   const [effectTarget, setEffectTarget] = useState("");
   const [effectField, setEffectField] = useState("status");
   const [effectOp, setEffectOp] = useState<"set" | "add" | "toggle">("set");
@@ -767,7 +827,20 @@ function StructurePanel({
     if (!kindName.trim()) {
       return;
     }
-    onAddKind({ name: kindName.trim(), hue: kindHue, fields });
+    onAddKind({
+      name: kindName.trim(),
+      hue: kindHue,
+      fields,
+      appearance: {
+        shape: kindShape,
+        size: 48,
+        motion: kindMotion,
+        intensity: 50,
+        glow: 40,
+        label: "always",
+        layer: "mid"
+      }
+    });
     setKindName("");
     setKindHue(168);
     setFields([]);
@@ -778,9 +851,28 @@ function StructurePanel({
     if (!nodeKind || !nodeName.trim()) {
       return;
     }
-    onAddNode({ kind_id: nodeKind, name: nodeName.trim(), text: nodeText });
+    const input: Record<string, unknown> = {
+      kind_id: nodeKind,
+      name: nodeName.trim(),
+      text: nodeText
+    };
+    if (nodeX.trim() !== "") {
+      const x = Number(nodeX);
+      if (Number.isFinite(x)) {
+        input.x = x;
+      }
+    }
+    if (nodeY.trim() !== "") {
+      const y = Number(nodeY);
+      if (Number.isFinite(y)) {
+        input.y = y;
+      }
+    }
+    onAddNode(input);
     setNodeName("");
     setNodeText("");
+    setNodeX("");
+    setNodeY("");
   }
 
   function submitLink(event: FormEvent) {
@@ -826,13 +918,59 @@ function StructurePanel({
     if (value !== undefined) {
       effect.value = value;
     }
-    onAddRule({ trigger_id: ruleTrigger, effects: [effect] });
+    const payload: Record<string, unknown> = { trigger_id: ruleTrigger, effects: [effect] };
+    if (conditionNode) {
+      const condition: Record<string, unknown> = {
+        node_id: conditionNode,
+        field: conditionField,
+        op: conditionOp
+      };
+      if (conditionOp !== "truthy" && conditionOp !== "falsy") {
+        if (conditionField === "status") {
+          condition.value = conditionValue === "done" ? "done" : "open";
+        } else if (conditionFieldDef?.type === "number") {
+          const parsed = Number(conditionValue);
+          if (!Number.isFinite(parsed)) {
+            return;
+          }
+          condition.value = parsed;
+        } else if (conditionFieldDef?.type === "flag") {
+          condition.value = conditionValue === "true";
+        } else {
+          condition.value = conditionValue;
+        }
+      }
+      payload.condition = condition;
+    }
+    onAddRule(payload);
   }
 
   const effectFields = targetKind?.fields ?? [];
+  const conditionTarget = world.nodes.find((node) => node.id === conditionNode);
+  const conditionKind = conditionTarget ? kindFor(world, conditionTarget.kind_id) : undefined;
+  const conditionFieldDef = conditionField === "status"
+    ? undefined
+    : conditionKind?.fields.find((field) => field.key === conditionField);
+  const conditionOps = conditionField === "status"
+    ? ["eq", "ne"]
+    : conditionFieldDef?.type === "number"
+      ? ["eq", "ne", "gt", "gte", "lt", "lte"]
+      : conditionFieldDef?.type === "flag"
+        ? ["eq", "ne", "truthy", "falsy"]
+        : ["eq", "ne"];
+  const conditionNeedsValue = conditionOp !== "truthy" && conditionOp !== "falsy";
 
   return (
     <div className="dw-open-structure" data-testid="open-world-structure">
+      <WorldLookEditor
+        world={world}
+        busy={busy}
+        canContribute={canContribute}
+        onSetPresentation={onSetPresentation}
+        onUpdateKind={(kindID, appearance, bindings) =>
+          onUpdateKind({ kind_id: kindID, appearance, bindings })
+        }
+      />
       <section>
         <h2>{t("openWorld.kinds")}</h2>
         <p className="dw-open-hint">{t("openWorld.kindsHint")}</p>
@@ -862,6 +1000,34 @@ function StructurePanel({
                 {t("openWorld.hue")} · {kindHue}
               </label>
               <input id="ow-kind-hue" type="range" min={0} max={359} value={kindHue} onChange={(event) => setKindHue(Number(event.target.value))} />
+              <div className="dw-open-inline-form">
+                <select
+                  id="ow-kind-shape"
+                  className="dw-input"
+                  aria-label={t("openWorld.shape")}
+                  value={kindShape}
+                  onChange={(event) => setKindShape(event.target.value)}
+                >
+                  {(["orb", "beacon", "wave", "shard", "ring", "glyph", "bloom", "thread"] as const).map((shape) => (
+                    <option key={shape} value={shape}>
+                      {t(`openWorld.shape.${shape}` as never)}
+                    </option>
+                  ))}
+                </select>
+                <select
+                  id="ow-kind-motion"
+                  className="dw-input"
+                  aria-label={t("openWorld.motion")}
+                  value={kindMotion}
+                  onChange={(event) => setKindMotion(event.target.value)}
+                >
+                  {(["none", "pulse", "float", "sway", "flicker", "breathe", "orbit"] as const).map((motion) => (
+                    <option key={motion} value={motion}>
+                      {t(`openWorld.motion.${motion}` as never)}
+                    </option>
+                  ))}
+                </select>
+              </div>
               <div className="dw-open-field-editor">
                 {fields.map((field) => (
                   <span key={field.key} className="dw-open-field-chip">
@@ -973,6 +1139,26 @@ function StructurePanel({
               <input id="ow-node-name" className="dw-input" value={nodeName} maxLength={120} onChange={(event) => setNodeName(event.target.value)} />
               <label className="dw-field-label" htmlFor="ow-node-text">{t("openWorld.nodeText")}</label>
               <textarea id="ow-node-text" className="dw-input dw-textarea" rows={2} value={nodeText} maxLength={1200} onChange={(event) => setNodeText(event.target.value)} />
+              <div className="dw-open-inline-form">
+                <input
+                  id="ow-node-x"
+                  className="dw-input"
+                  type="number"
+                  placeholder={t("openWorld.positionX")}
+                  aria-label={t("openWorld.positionX")}
+                  value={nodeX}
+                  onChange={(event) => setNodeX(event.target.value)}
+                />
+                <input
+                  id="ow-node-y"
+                  className="dw-input"
+                  type="number"
+                  placeholder={t("openWorld.positionY")}
+                  aria-label={t("openWorld.positionY")}
+                  value={nodeY}
+                  onChange={(event) => setNodeY(event.target.value)}
+                />
+              </div>
               <button className="dw-button dw-button-small dw-button-primary" type="submit" disabled={busy || !nodeName.trim()}>
                 {t("openWorld.addNode")}
               </button>
@@ -1062,6 +1248,87 @@ function StructurePanel({
                   <option key={node.id} value={node.id}>{node.name}</option>
                 ))}
               </select>
+              <label className="dw-field-label" htmlFor="ow-rule-condition">{t("openWorld.condition")}</label>
+              <select
+                id="ow-rule-condition"
+                className="dw-input"
+                value={conditionNode}
+                onChange={(event) => {
+                  setConditionNode(event.target.value);
+                  setConditionField("status");
+                  setConditionOp("eq");
+                  setConditionValue("done");
+                }}
+              >
+                <option value="">{t("openWorld.conditionAlways")}</option>
+                {world.nodes.map((node) => (
+                  <option key={node.id} value={node.id}>{node.name}</option>
+                ))}
+              </select>
+              {conditionNode ? (
+                <>
+                  <label className="dw-field-label" htmlFor="ow-condition-field">{t("openWorld.conditionField")}</label>
+                  <select
+                    id="ow-condition-field"
+                    className="dw-input"
+                    value={conditionField}
+                    onChange={(event) => {
+                      const next = event.target.value;
+                      setConditionField(next);
+                      setConditionOp("eq");
+                      const field = conditionKind?.fields.find((entry) => entry.key === next);
+                      setConditionValue(next === "status" ? "done" : field?.type === "flag" ? "false" : "");
+                    }}
+                  >
+                    <option value="status">{t("openWorld.statusField")}</option>
+                    {conditionKind?.fields.map((field) => (
+                      <option key={field.key} value={field.key}>{field.label || field.key}</option>
+                    ))}
+                  </select>
+                  <label className="dw-field-label" htmlFor="ow-condition-op">{t("openWorld.conditionOp")}</label>
+                  <select
+                    id="ow-condition-op"
+                    className="dw-input"
+                    value={conditionOp}
+                    onChange={(event) => setConditionOp(event.target.value)}
+                  >
+                    {conditionOps.map((op) => (
+                      <option key={op} value={op}>{t(`openWorld.cond.${op}` as never)}</option>
+                    ))}
+                  </select>
+                  {conditionNeedsValue ? (
+                    conditionField === "status" ? (
+                      <select
+                        id="ow-condition-value"
+                        className="dw-input"
+                        value={conditionValue === "done" ? "done" : "open"}
+                        onChange={(event) => setConditionValue(event.target.value)}
+                      >
+                        <option value="done">{t("openWorld.status.done")}</option>
+                        <option value="open">{t("openWorld.status.open")}</option>
+                      </select>
+                    ) : conditionFieldDef?.type === "flag" ? (
+                      <select
+                        id="ow-condition-value"
+                        className="dw-input"
+                        value={conditionValue === "true" ? "true" : "false"}
+                        onChange={(event) => setConditionValue(event.target.value)}
+                      >
+                        <option value="true">{t("openWorld.on")}</option>
+                        <option value="false">{t("openWorld.off")}</option>
+                      </select>
+                    ) : (
+                      <input
+                        id="ow-condition-value"
+                        className="dw-input"
+                        type={conditionFieldDef?.type === "number" ? "number" : "text"}
+                        value={conditionValue}
+                        onChange={(event) => setConditionValue(event.target.value)}
+                      />
+                    )
+                  ) : null}
+                </>
+              ) : null}
               <label className="dw-field-label" htmlFor="ow-effect-target">{t("openWorld.effectTarget")}</label>
               <select
                 id="ow-effect-target"

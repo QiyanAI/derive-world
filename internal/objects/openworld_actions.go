@@ -26,7 +26,8 @@ func isOpenWorldAction(action string) bool {
 	case "add_kind", "update_kind", "remove_kind",
 		"add_node", "update_node", "remove_node", "move_node",
 		"set_node_field", "set_node_status", "touch_node",
-		"add_link", "remove_link", "add_rule", "remove_rule", "set_views":
+		"add_link", "remove_link", "add_rule", "remove_rule", "set_views",
+		"set_presentation":
 		return true
 	default:
 		return false
@@ -40,16 +41,20 @@ type openWorldFieldInput struct {
 }
 
 type addOpenWorldKindInput struct {
-	Name   string                `json:"name"`
-	Hue    int                   `json:"hue"`
-	Fields []openWorldFieldInput `json:"fields"`
+	Name       string                `json:"name"`
+	Hue        int                   `json:"hue"`
+	Fields     []openWorldFieldInput `json:"fields"`
+	Appearance *OpenWorldAppearance  `json:"appearance"`
+	Bindings   []OpenWorldBinding    `json:"bindings"`
 }
 
 type updateOpenWorldKindInput struct {
-	KindID string                 `json:"kind_id"`
-	Name   *string                `json:"name"`
-	Hue    *int                   `json:"hue"`
-	Fields *[]openWorldFieldInput `json:"fields"`
+	KindID     string                 `json:"kind_id"`
+	Name       *string                `json:"name"`
+	Hue        *int                   `json:"hue"`
+	Fields     *[]openWorldFieldInput `json:"fields"`
+	Appearance *OpenWorldAppearance   `json:"appearance"`
+	Bindings   *[]OpenWorldBinding    `json:"bindings"`
 }
 
 type removeOpenWorldKindInput struct {
@@ -114,9 +119,17 @@ type openWorldEffectInput struct {
 	Value  any    `json:"value"`
 }
 
+type openWorldConditionInput struct {
+	NodeID string `json:"node_id"`
+	Field  string `json:"field"`
+	Op     string `json:"op"`
+	Value  any    `json:"value"`
+}
+
 type addOpenWorldRuleInput struct {
-	TriggerID string                 `json:"trigger_id"`
-	Effects   []openWorldEffectInput `json:"effects"`
+	TriggerID string                   `json:"trigger_id"`
+	Condition *openWorldConditionInput `json:"condition"`
+	Effects   []openWorldEffectInput   `json:"effects"`
 }
 
 type removeOpenWorldRuleInput struct {
@@ -125,6 +138,10 @@ type removeOpenWorldRuleInput struct {
 
 type setOpenWorldViewsInput struct {
 	Views []string `json:"views"`
+}
+
+type setOpenWorldPresentationInput struct {
+	Presentation OpenWorldPresentation `json:"presentation"`
 }
 
 func decodeOpenWorldInput(raw json.RawMessage, destination any) error {
@@ -220,7 +237,8 @@ func planOpenWorldAction(action string, raw json.RawMessage, plan *ActionPlan) e
 	plan.Permission = PermContribute
 	switch action {
 	case "add_kind":
-		if err := validateInputKeys(raw, []string{"name"}, []string{"name", "hue", "fields"}); err != nil {
+		if err := validateInputKeys(raw, []string{"name"},
+			[]string{"name", "hue", "fields", "appearance", "bindings"}); err != nil {
 			return err
 		}
 		var input addOpenWorldKindInput
@@ -230,12 +248,30 @@ func planOpenWorldAction(action string, raw json.RawMessage, plan *ActionPlan) e
 		if err := validateOpenWorldKindInput(input.Name, input.Hue, input.Fields); err != nil {
 			return err
 		}
+		appearance := DefaultOpenWorldAppearance()
+		if input.Appearance != nil {
+			normalized, err := normalizeOpenWorldAppearance(*input.Appearance)
+			if err != nil {
+				return err
+			}
+			appearance = normalized
+		}
+		fieldMap := make(map[string]OpenWorldField, len(input.Fields))
+		for _, field := range normalizeOpenWorldFieldInputs(input.Fields) {
+			fieldMap[field.Key] = field
+		}
+		bindings, err := normalizeOpenWorldBindings(input.Bindings, fieldMap)
+		if err != nil {
+			return fmt.Errorf("%w: input.bindings", ErrInvalidRequest)
+		}
 		plan.Input["name"] = strings.TrimSpace(input.Name)
 		plan.Input["hue"] = input.Hue
 		plan.Input["fields"] = fieldInputMap(input.Fields)
+		plan.Input["appearance"] = appearance
+		plan.Input["bindings"] = bindings
 	case "update_kind":
 		if err := validateInputKeys(raw, []string{"kind_id"},
-			[]string{"kind_id", "name", "hue", "fields"}); err != nil {
+			[]string{"kind_id", "name", "hue", "fields", "appearance", "bindings"}); err != nil {
 			return err
 		}
 		var input updateOpenWorldKindInput
@@ -245,8 +281,24 @@ func planOpenWorldAction(action string, raw json.RawMessage, plan *ActionPlan) e
 		if _, err := uuid.Parse(input.KindID); err != nil {
 			return fmt.Errorf("%w: input.kind_id", ErrInvalidRequest)
 		}
-		if input.Name == nil && input.Hue == nil && input.Fields == nil {
+		if input.Name == nil && input.Hue == nil && input.Fields == nil &&
+			input.Appearance == nil && input.Bindings == nil {
 			return fmt.Errorf("%w: input", ErrInvalidRequest)
+		}
+		if input.Appearance != nil {
+			appearance, err := normalizeOpenWorldAppearance(*input.Appearance)
+			if err != nil {
+				return err
+			}
+			plan.Input["appearance"] = appearance
+		}
+		if input.Bindings != nil {
+			for _, binding := range *input.Bindings {
+				if err := validateOpenWorldBindingShape(binding); err != nil {
+					return fmt.Errorf("%w: input.bindings", ErrInvalidRequest)
+				}
+			}
+			plan.Input["bindings"] = *input.Bindings
 		}
 		if input.Name != nil {
 			if runeLength(strings.TrimSpace(*input.Name)) < 1 || runeLength(*input.Name) > maxOpenWorldKindNameRunes {
@@ -476,7 +528,7 @@ func planOpenWorldAction(action string, raw json.RawMessage, plan *ActionPlan) e
 		plan.Input["link_id"] = input.LinkID
 	case "add_rule":
 		if err := validateInputKeys(raw, []string{"trigger_id", "effects"},
-			[]string{"trigger_id", "effects"}); err != nil {
+			[]string{"trigger_id", "effects", "condition"}); err != nil {
 			return err
 		}
 		var input addOpenWorldRuleInput
@@ -485,6 +537,19 @@ func planOpenWorldAction(action string, raw json.RawMessage, plan *ActionPlan) e
 		}
 		if _, err := uuid.Parse(input.TriggerID); err != nil {
 			return fmt.Errorf("%w: input.trigger_id", ErrInvalidRequest)
+		}
+		if input.Condition != nil {
+			if _, err := uuid.Parse(input.Condition.NodeID); err != nil {
+				return fmt.Errorf("%w: input.condition.node_id", ErrInvalidRequest)
+			}
+			if strings.TrimSpace(input.Condition.Field) == "" ||
+				!validOpenWorldConditionOp(input.Condition.Op) {
+				return fmt.Errorf("%w: input.condition", ErrInvalidRequest)
+			}
+			plan.Input["condition"] = map[string]any{
+				"node_id": input.Condition.NodeID, "field": input.Condition.Field,
+				"op": input.Condition.Op, "value": input.Condition.Value,
+			}
 		}
 		if len(input.Effects) == 0 || len(input.Effects) > maxOpenWorldRuleEffects {
 			return fmt.Errorf("%w: input.effects", ErrInvalidRequest)
@@ -533,6 +598,19 @@ func planOpenWorldAction(action string, raw json.RawMessage, plan *ActionPlan) e
 			items[index] = view
 		}
 		plan.Input["views"] = items
+	case "set_presentation":
+		if err := validateInputKeys(raw, []string{"presentation"}, []string{"presentation"}); err != nil {
+			return err
+		}
+		var input setOpenWorldPresentationInput
+		if err := decodeOpenWorldInput(raw, &input); err != nil {
+			return err
+		}
+		presentation, err := normalizeOpenWorldPresentation(input.Presentation)
+		if err != nil {
+			return err
+		}
+		plan.Input["presentation"] = presentation
 	default:
 		return fmt.Errorf("%w: action", ErrInvalidRequest)
 	}
@@ -576,6 +654,9 @@ func applyOpenWorldRules(state *OpenWorldState, nodeID string) []OpenWorldApplie
 	applied := make([]OpenWorldAppliedEffect, 0)
 	for _, rule := range state.Rules {
 		if rule.TriggerID != nodeID {
+			continue
+		}
+		if rule.Condition != nil && !openWorldConditionHolds(state, rule.Condition) {
 			continue
 		}
 		for _, effect := range rule.Effects {
@@ -674,6 +755,83 @@ func applyOpenWorldRules(state *OpenWorldState, nodeID string) []OpenWorldApplie
 	return applied
 }
 
+// openWorldConditionHolds evaluates one bounded comparison against current
+// values. Missing values read as zero/false/empty, never as an error, so a
+// condition is total over the declared field space.
+func openWorldConditionHolds(state *OpenWorldState, condition *OpenWorldCondition) bool {
+	node := findOpenWorldNode(state, condition.NodeID)
+	if node == nil {
+		return false
+	}
+	if condition.Field == OpenWorldStatusField {
+		return compareOpenWorldString(node.Status, condition.Op, condition.Value)
+	}
+	field := openWorldFieldFor(state, node, condition.Field)
+	if field == nil {
+		return false
+	}
+	switch field.Type {
+	case OpenWorldFieldText:
+		current, _ := node.Values[field.Key].(string)
+		return compareOpenWorldString(current, condition.Op, condition.Value)
+	case OpenWorldFieldNumber:
+		current, _ := node.Values[field.Key].(float64)
+		target, ok := condition.Value.(float64)
+		if !ok {
+			return false
+		}
+		switch condition.Op {
+		case OpenWorldCondEq:
+			return current == target
+		case OpenWorldCondNe:
+			return current != target
+		case OpenWorldCondGt:
+			return current > target
+		case OpenWorldCondGte:
+			return current >= target
+		case OpenWorldCondLt:
+			return current < target
+		case OpenWorldCondLte:
+			return current <= target
+		}
+		return false
+	case OpenWorldFieldFlag:
+		current, _ := node.Values[field.Key].(bool)
+		switch condition.Op {
+		case OpenWorldCondTruthy:
+			return current
+		case OpenWorldCondFalsy:
+			return !current
+		case OpenWorldCondEq, OpenWorldCondNe:
+			target, ok := condition.Value.(bool)
+			if !ok {
+				return false
+			}
+			if condition.Op == OpenWorldCondEq {
+				return current == target
+			}
+			return current != target
+		}
+		return false
+	}
+	return false
+}
+
+func compareOpenWorldString(current, op string, value any) bool {
+	target, ok := value.(string)
+	if !ok {
+		return false
+	}
+	switch op {
+	case OpenWorldCondEq:
+		return current == target
+	case OpenWorldCondNe:
+		return current != target
+	default:
+		return false
+	}
+}
+
 // applyOpenWorldAction mutates a copy of the state for one validated action.
 func applyOpenWorldAction(stateRaw, sharedRaw json.RawMessage, plan *ActionPlan) (json.RawMessage, json.RawMessage, string, error) {
 	var state OpenWorldState
@@ -724,9 +882,26 @@ func applyOpenWorldAction(stateRaw, sharedRaw json.RawMessage, plan *ActionPlan)
 		if err != nil {
 			return nil, nil, "", err
 		}
+		appearance := DefaultOpenWorldAppearance()
+		if input.Appearance != nil {
+			normalized, err := normalizeOpenWorldAppearance(*input.Appearance)
+			if err != nil {
+				return nil, nil, "", err
+			}
+			appearance = normalized
+		}
+		fields := normalizeOpenWorldFieldInputs(input.Fields)
+		fieldMap := make(map[string]OpenWorldField, len(fields))
+		for _, field := range fields {
+			fieldMap[field.Key] = field
+		}
+		bindings, err := normalizeOpenWorldBindings(input.Bindings, fieldMap)
+		if err != nil {
+			return nil, nil, "", err
+		}
 		state.Kinds = append(state.Kinds, OpenWorldKind{
 			ID: id.String(), Name: strings.TrimSpace(input.Name), Hue: input.Hue,
-			Fields: normalizeOpenWorldFieldInputs(input.Fields),
+			Fields: fields, Appearance: appearance, Bindings: bindings,
 		})
 	case "update_kind":
 		var input updateOpenWorldKindInput
@@ -759,6 +934,33 @@ func applyOpenWorldAction(stateRaw, sharedRaw json.RawMessage, plan *ActionPlan)
 					}
 				}
 			}
+			// A binding to a field that no longer exists would make the world
+			// invalid. Drop only those bindings; everything else is preserved.
+			kept := make([]OpenWorldBinding, 0, len(kind.Bindings))
+			for _, binding := range kind.Bindings {
+				if allowed[binding.Field] {
+					kept = append(kept, binding)
+				}
+			}
+			kind.Bindings = kept
+		}
+		if input.Appearance != nil {
+			appearance, err := normalizeOpenWorldAppearance(*input.Appearance)
+			if err != nil {
+				return nil, nil, "", err
+			}
+			kind.Appearance = appearance
+		}
+		if input.Bindings != nil {
+			fieldMap := make(map[string]OpenWorldField, len(kind.Fields))
+			for _, field := range kind.Fields {
+				fieldMap[field.Key] = field
+			}
+			bindings, err := normalizeOpenWorldBindings(*input.Bindings, fieldMap)
+			if err != nil {
+				return nil, nil, "", err
+			}
+			kind.Bindings = bindings
 		}
 	case "remove_kind":
 		var input removeOpenWorldKindInput
@@ -855,6 +1057,11 @@ func applyOpenWorldAction(stateRaw, sharedRaw json.RawMessage, plan *ActionPlan)
 		nextRules := make([]OpenWorldRule, 0, len(state.Rules))
 		for _, rule := range state.Rules {
 			if rule.TriggerID == node.ID {
+				continue
+			}
+			// A guard that reads a removed thing cannot be evaluated. The whole
+			// rule is removed with it, just as a rule whose trigger is removed.
+			if rule.Condition != nil && rule.Condition.NodeID == node.ID {
 				continue
 			}
 			effects := make([]OpenWorldEffect, 0, len(rule.Effects))
@@ -984,6 +1191,16 @@ func applyOpenWorldAction(stateRaw, sharedRaw json.RawMessage, plan *ActionPlan)
 		if err != nil {
 			return nil, nil, "", err
 		}
+		var condition *OpenWorldCondition
+		if input.Condition != nil {
+			condition = &OpenWorldCondition{
+				NodeID: input.Condition.NodeID, Field: input.Condition.Field,
+				Op: input.Condition.Op, Value: input.Condition.Value,
+			}
+			if err := validateOpenWorldCondition(&state, condition, "input.condition"); err != nil {
+				return nil, nil, "", err
+			}
+		}
 		effects := make([]OpenWorldEffect, 0, len(input.Effects))
 		for _, effect := range input.Effects {
 			if findOpenWorldNode(&state, effect.NodeID) == nil {
@@ -994,7 +1211,8 @@ func applyOpenWorldAction(stateRaw, sharedRaw json.RawMessage, plan *ActionPlan)
 			})
 		}
 		state.Rules = append(state.Rules, OpenWorldRule{
-			ID: id.String(), TriggerID: input.TriggerID, Effects: effects,
+			ID: id.String(), TriggerID: input.TriggerID,
+			Condition: condition, Effects: effects,
 		})
 	case "remove_rule":
 		var input removeOpenWorldRuleInput
@@ -1024,6 +1242,16 @@ func applyOpenWorldAction(stateRaw, sharedRaw json.RawMessage, plan *ActionPlan)
 			return nil, nil, "", err
 		}
 		state.Views = views
+	case "set_presentation":
+		var input setOpenWorldPresentationInput
+		if err := decodeOpenWorldInput(plan.RawInput, &input); err != nil {
+			return nil, nil, "", err
+		}
+		presentation, err := normalizeOpenWorldPresentation(input.Presentation)
+		if err != nil {
+			return nil, nil, "", err
+		}
+		state.Presentation = presentation
 	default:
 		return nil, nil, "", fmt.Errorf("%w: action", ErrInvalidRequest)
 	}

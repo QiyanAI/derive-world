@@ -49,7 +49,7 @@ export default function CreateWorldDialog({
                 nodes: [],
                 links: [],
                 rules: [],
-                views: ["stage", "cards", "timeline"],
+                views: ["scene", "stage", "cards", "timeline"],
                 tags: []
               },
               shared_context: {}

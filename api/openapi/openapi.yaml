@@ -3076,6 +3076,7 @@ components:
             - add_rule
             - remove_rule
             - set_views
+            - set_presentation
         input:
           type: object
           additionalProperties: true

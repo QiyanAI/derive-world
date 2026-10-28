@@ -26,20 +26,24 @@ func buildOpenWorldState(title string, content OpenWorldContent) (*OpenWorldStat
 		return nil, fmt.Errorf("%w: content.rules", ErrInvalidRequest)
 	}
 	state := &OpenWorldState{
-		Title:   title,
-		Premise: content.Premise,
-		Kinds:   make([]OpenWorldKind, 0, len(content.Kinds)),
-		Nodes:   make([]OpenWorldNode, 0, len(content.Nodes)),
-		Links:   make([]OpenWorldLink, 0, len(content.Links)),
-		Rules:   make([]OpenWorldRule, 0, len(content.Rules)),
-		Views:   nil,
-		Tags:    normalizeTags(content.Tags),
+		Title:        title,
+		Premise:      content.Premise,
+		Kinds:        make([]OpenWorldKind, 0, len(content.Kinds)),
+		Nodes:        make([]OpenWorldNode, 0, len(content.Nodes)),
+		Links:        make([]OpenWorldLink, 0, len(content.Links)),
+		Rules:        make([]OpenWorldRule, 0, len(content.Rules)),
+		Views:        nil,
+		Tags:         normalizeTags(content.Tags),
+		Presentation: DefaultOpenWorldPresentation(),
 	}
 	views, err := normalizeOpenWorldViews(content.Views)
 	if err != nil {
 		return nil, err
 	}
 	state.Views = views
+	if content.Presentation != nil {
+		state.Presentation = *content.Presentation
+	}
 
 	kindIDs := make([]string, len(content.Kinds))
 	for index, kind := range content.Kinds {
@@ -50,8 +54,15 @@ func buildOpenWorldState(title string, content OpenWorldContent) (*OpenWorldStat
 		kindIDs[index] = id.String()
 		fields := make([]OpenWorldField, len(kind.Fields))
 		copy(fields, kind.Fields)
+		appearance := DefaultOpenWorldAppearance()
+		if kind.Appearance != nil {
+			appearance = *kind.Appearance
+		}
+		bindings := make([]OpenWorldBinding, len(kind.Bindings))
+		copy(bindings, kind.Bindings)
 		state.Kinds = append(state.Kinds, OpenWorldKind{
 			ID: id.String(), Name: kind.Name, Hue: kind.Hue, Fields: fields,
+			Appearance: appearance, Bindings: bindings,
 		})
 	}
 
@@ -72,9 +83,13 @@ func buildOpenWorldState(title string, content OpenWorldContent) (*OpenWorldStat
 		if node.Y != nil {
 			y = *node.Y
 		}
+		values := make(map[string]any, len(node.Values))
+		for key, value := range node.Values {
+			values[key] = value
+		}
 		state.Nodes = append(state.Nodes, OpenWorldNode{
 			ID: id.String(), KindID: kindIDs[node.KindIndex], Name: node.Name,
-			Text: node.Text, Values: map[string]any{},
+			Text: node.Text, Values: values,
 			Status: OpenWorldStatusOpen, X: x, Y: y,
 		})
 	}
@@ -102,6 +117,17 @@ func buildOpenWorldState(title string, content OpenWorldContent) (*OpenWorldStat
 		if err != nil {
 			return nil, err
 		}
+		var condition *OpenWorldCondition
+		if rule.Condition != nil {
+			if rule.Condition.NodeIndex < 0 || rule.Condition.NodeIndex >= len(nodeIDs) {
+				return nil, fmt.Errorf("%w: content.rules/%d/condition/node_index",
+					ErrInvalidRequest, index)
+			}
+			condition = &OpenWorldCondition{
+				NodeID: nodeIDs[rule.Condition.NodeIndex], Field: rule.Condition.Field,
+				Op: rule.Condition.Op, Value: rule.Condition.Value,
+			}
+		}
 		effects := make([]OpenWorldEffect, 0, len(rule.Effects))
 		for effectIndex, effect := range rule.Effects {
 			if effect.NodeIndex < 0 || effect.NodeIndex >= len(nodeIDs) {
@@ -114,7 +140,8 @@ func buildOpenWorldState(title string, content OpenWorldContent) (*OpenWorldStat
 			})
 		}
 		state.Rules = append(state.Rules, OpenWorldRule{
-			ID: id.String(), TriggerID: nodeIDs[rule.TriggerIndex], Effects: effects,
+			ID: id.String(), TriggerID: nodeIDs[rule.TriggerIndex],
+			Condition: condition, Effects: effects,
 		})
 	}
 

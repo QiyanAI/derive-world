@@ -582,6 +582,20 @@ func ReferencesExist(objectType string, state json.RawMessage, plan *ActionPlan)
 		if hasNode(triggerID) == nil {
 			return false
 		}
+		if rawCondition, ok := plan.Input["condition"]; ok && rawCondition != nil {
+			conditionMap, _ := rawCondition.(map[string]any)
+			raw, err := json.Marshal(conditionMap)
+			if err != nil {
+				return false
+			}
+			var condition OpenWorldCondition
+			if err := json.Unmarshal(raw, &condition); err != nil {
+				return false
+			}
+			if validateOpenWorldCondition(&world, &condition, "input.condition") != nil {
+				return false
+			}
+		}
 		effects, _ := plan.Input["effects"].([]any)
 		for _, raw := range effects {
 			effect, _ := raw.(map[string]any)

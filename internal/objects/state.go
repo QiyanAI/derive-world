@@ -537,7 +537,8 @@ func RequiredPermission(objectType, action string) (string, bool) {
 	case "add_kind", "update_kind", "remove_kind",
 		"add_node", "update_node", "remove_node", "move_node",
 		"set_node_field", "set_node_status", "touch_node",
-		"add_link", "remove_link", "add_rule", "remove_rule", "set_views":
+		"add_link", "remove_link", "add_rule", "remove_rule", "set_views",
+		"set_presentation":
 		if objectType == TypeOpenWorld {
 			return PermContribute, true
 		}

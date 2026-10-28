@@ -31,11 +31,70 @@ const (
 	OpenWorldOpAdd    = "add"
 	OpenWorldOpToggle = "toggle"
 
+	OpenWorldViewScene    = "scene"
 	OpenWorldViewStage    = "stage"
 	OpenWorldViewCards    = "cards"
 	OpenWorldViewTimeline = "timeline"
 
 	OpenWorldStatusField = "status"
+
+	// The presentation vocabulary is a closed, interpreted set of visual
+	// primitives. It is shared by every open world: a world chooses values,
+	// never code, and the client renders the same primitives for all worlds.
+	OpenWorldShapeOrb    = "orb"
+	OpenWorldShapeBeacon = "beacon"
+	OpenWorldShapeWave   = "wave"
+	OpenWorldShapeShard  = "shard"
+	OpenWorldShapeRing   = "ring"
+	OpenWorldShapeGlyph  = "glyph"
+	OpenWorldShapeBloom  = "bloom"
+	OpenWorldShapeThread = "thread"
+
+	OpenWorldMotionNone    = "none"
+	OpenWorldMotionPulse   = "pulse"
+	OpenWorldMotionFloat   = "float"
+	OpenWorldMotionSway    = "sway"
+	OpenWorldMotionFlicker = "flicker"
+	OpenWorldMotionBreathe = "breathe"
+	OpenWorldMotionOrbit   = "orbit"
+
+	OpenWorldLabelAlways = "always"
+	OpenWorldLabelHover  = "hover"
+	OpenWorldLabelHidden = "hidden"
+
+	OpenWorldLayerBack  = "back"
+	OpenWorldLayerMid   = "mid"
+	OpenWorldLayerFront = "front"
+
+	OpenWorldBindingScale   = "scale"
+	OpenWorldBindingGlow    = "glow"
+	OpenWorldBindingOpacity = "opacity"
+	OpenWorldBindingHue     = "hue_shift"
+	OpenWorldBindingSpeed   = "speed"
+
+	OpenWorldBackdropHorizon = "horizon"
+	OpenWorldBackdropVoid    = "void"
+	OpenWorldBackdropLoom    = "loom"
+
+	OpenWorldAmbientNone   = "none"
+	OpenWorldAmbientStars  = "stars"
+	OpenWorldAmbientMotes  = "motes"
+	OpenWorldAmbientRain   = "rain"
+	OpenWorldAmbientEmbers = "embers"
+
+	OpenWorldLinkThread = "thread"
+	OpenWorldLinkArc    = "arc"
+	OpenWorldLinkOrbit  = "orbit"
+	OpenWorldLinkHidden = "hidden"
+
+	OpenWorldCondEq     = "eq"
+	OpenWorldCondNe     = "ne"
+	OpenWorldCondGt     = "gt"
+	OpenWorldCondGte    = "gte"
+	OpenWorldCondLt     = "lt"
+	OpenWorldCondLte    = "lte"
+	OpenWorldCondTruthy = "truthy"
+	OpenWorldCondFalsy  = "falsy"
 )
 
 const (
@@ -45,13 +104,18 @@ const (
 	maxOpenWorldRules          = 24
 	maxOpenWorldKindFields     = 8
 	maxOpenWorldRuleEffects    = 8
+	maxOpenWorldBindings       = 4
 	maxOpenWorldKindNameRunes  = 60
 	maxOpenWorldNodeNameRunes  = 120
 	maxOpenWorldNodeTextRunes  = 1200
 	maxOpenWorldFieldKeyRunes  = 40
 	maxOpenWorldFieldLabelRune = 80
 	maxOpenWorldLinkLabelRune  = 80
-	maxOpenWorldViews          = 3
+	maxOpenWorldViews          = 4
+	openWorldMinSize           = 12.0
+	openWorldMaxSize           = 200.0
+	openWorldMinHorizon        = 0
+	openWorldMaxHorizon        = 100
 	openWorldWidth             = 1600.0
 	openWorldHeight            = 1000.0
 	openWorldMinX              = 40.0
@@ -59,6 +123,87 @@ const (
 	openWorldMinY              = 40.0
 	openWorldMaxY              = openWorldHeight - 60
 )
+
+// DefaultOpenWorldAppearance is the neutral look of a kind that has not chosen
+// one. It is data, not a branch on any particular world.
+func DefaultOpenWorldAppearance() OpenWorldAppearance {
+	return OpenWorldAppearance{
+		Shape:     OpenWorldShapeOrb,
+		Size:      48,
+		Motion:    OpenWorldMotionFloat,
+		Intensity: 50,
+		Glow:      30,
+		Label:     OpenWorldLabelAlways,
+		Layer:     OpenWorldLayerMid,
+	}
+}
+
+// DefaultOpenWorldPresentation is the neutral scene of a world that has not
+// chosen one. Every value remains user-editable through the product.
+func DefaultOpenWorldPresentation() OpenWorldPresentation {
+	return OpenWorldPresentation{
+		Scene: OpenWorldScene{
+			Backdrop:       OpenWorldBackdropHorizon,
+			SkyHue:         222,
+			GroundHue:      205,
+			Horizon:        62,
+			AccentHue:      42,
+			Ambient:        OpenWorldAmbientStars,
+			AmbientDensity: 35,
+		},
+		LinkStyle: OpenWorldLinkThread,
+	}
+}
+
+// OpenWorldAppearance is one kind's declarative visual identity. The client
+// interprets these values; it never loads an image, font, or script from a
+// world. Both the coastal and the abstract demo worlds use this same shape.
+type OpenWorldAppearance struct {
+	Shape     string  `json:"shape"`
+	Size      float64 `json:"size"`
+	Motion    string  `json:"motion"`
+	Intensity int     `json:"intensity"`
+	Glow      int     `json:"glow"`
+	Label     string  `json:"label"`
+	Layer     string  `json:"layer"`
+}
+
+// OpenWorldBinding maps one declared field value onto one visual property.
+// It is a bounded linear map, not an expression language.
+type OpenWorldBinding struct {
+	Field  string  `json:"field"`
+	Target string  `json:"target"`
+	InMin  float64 `json:"in_min"`
+	InMax  float64 `json:"in_max"`
+	OutMin float64 `json:"out_min"`
+	OutMax float64 `json:"out_max"`
+}
+
+// OpenWorldScene is the world's own environment definition.
+type OpenWorldScene struct {
+	Backdrop       string `json:"backdrop"`
+	SkyHue         int    `json:"sky_hue"`
+	GroundHue      int    `json:"ground_hue"`
+	Horizon        int    `json:"horizon"`
+	AccentHue      int    `json:"accent_hue"`
+	Ambient        string `json:"ambient"`
+	AmbientDensity int    `json:"ambient_density"`
+}
+
+// OpenWorldPresentation is the whole visual layer of one world.
+type OpenWorldPresentation struct {
+	Scene     OpenWorldScene `json:"scene"`
+	LinkStyle string         `json:"link_style"`
+}
+
+// OpenWorldCondition is an optional guard on a rule. It reads current values
+// only; it cannot call anything, loop, or run user code.
+type OpenWorldCondition struct {
+	NodeID string `json:"node_id"`
+	Field  string `json:"field"`
+	Op     string `json:"op"`
+	Value  any    `json:"value,omitempty"`
+}
 
 // OpenWorldField is one user-defined value slot on a kind of thing.
 type OpenWorldField struct {
@@ -71,10 +216,12 @@ type OpenWorldField struct {
 // server-side fixed taxonomy: "city", "rumour", "tide", "character" and
 // anything else are equally valid.
 type OpenWorldKind struct {
-	ID     string           `json:"id"`
-	Name   string           `json:"name"`
-	Hue    int              `json:"hue"`
-	Fields []OpenWorldField `json:"fields"`
+	ID         string              `json:"id"`
+	Name       string              `json:"name"`
+	Hue        int                 `json:"hue"`
+	Fields     []OpenWorldField    `json:"fields"`
+	Appearance OpenWorldAppearance `json:"appearance"`
+	Bindings   []OpenWorldBinding  `json:"bindings,omitempty"`
 }
 
 // OpenWorldNode is one concrete thing. Values are keyed by the fields declared
@@ -109,28 +256,30 @@ type OpenWorldEffect struct {
 // OpenWorldRule applies its effects in order when its trigger node changes.
 // Rules never chain: one interaction runs one pass so a world cannot loop.
 type OpenWorldRule struct {
-	ID        string            `json:"id"`
-	TriggerID string            `json:"trigger_id"`
-	Effects   []OpenWorldEffect `json:"effects"`
+	ID        string              `json:"id"`
+	TriggerID string              `json:"trigger_id"`
+	Condition *OpenWorldCondition `json:"condition,omitempty"`
+	Effects   []OpenWorldEffect   `json:"effects"`
 }
 
 // OpenWorldState is the open_world_v1 template. Ordering is array order.
 type OpenWorldState struct {
-	Title   string          `json:"title"`
-	Premise string          `json:"premise"`
-	Kinds   []OpenWorldKind `json:"kinds"`
-	Nodes   []OpenWorldNode `json:"nodes"`
-	Links   []OpenWorldLink `json:"links"`
-	Rules   []OpenWorldRule `json:"rules"`
-	Views   []string        `json:"views"`
-	Tags    []string        `json:"tags"`
+	Title        string                `json:"title"`
+	Premise      string                `json:"premise"`
+	Kinds        []OpenWorldKind       `json:"kinds"`
+	Nodes        []OpenWorldNode       `json:"nodes"`
+	Links        []OpenWorldLink       `json:"links"`
+	Rules        []OpenWorldRule       `json:"rules"`
+	Views        []string              `json:"views"`
+	Tags         []string              `json:"tags"`
+	Presentation OpenWorldPresentation `json:"presentation"`
 }
 
 // OpenWorldAvailableViews is the frozen presentation vocabulary. A world
 // chooses which compatible views it exposes; the state model is independent
 // of any one rendering.
 func OpenWorldAvailableViews() []string {
-	return []string{OpenWorldViewStage, OpenWorldViewCards, OpenWorldViewTimeline}
+	return []string{OpenWorldViewScene, OpenWorldViewStage, OpenWorldViewCards, OpenWorldViewTimeline}
 }
 
 // OpenWorldAvailableFields is the derive inheritance whitelist. Structure is a
@@ -141,18 +290,21 @@ func OpenWorldAvailableFields() []string {
 
 // OpenWorldKindInput is the create-time kind shape; ids are generated.
 type OpenWorldKindInput struct {
-	Name   string           `json:"name"`
-	Hue    int              `json:"hue"`
-	Fields []OpenWorldField `json:"fields"`
+	Name       string               `json:"name"`
+	Hue        int                  `json:"hue"`
+	Fields     []OpenWorldField     `json:"fields"`
+	Appearance *OpenWorldAppearance `json:"appearance"`
+	Bindings   []OpenWorldBinding   `json:"bindings"`
 }
 
 // OpenWorldNodeInput references a kind by its index in the content arrays.
 type OpenWorldNodeInput struct {
-	KindIndex int      `json:"kind_index"`
-	Name      string   `json:"name"`
-	Text      string   `json:"text"`
-	X         *float64 `json:"x"`
-	Y         *float64 `json:"y"`
+	KindIndex int            `json:"kind_index"`
+	Name      string         `json:"name"`
+	Text      string         `json:"text"`
+	X         *float64       `json:"x"`
+	Y         *float64       `json:"y"`
+	Values    map[string]any `json:"values"`
 }
 
 // OpenWorldLinkInput references nodes by their content indexes.
@@ -170,21 +322,32 @@ type OpenWorldEffectInput struct {
 	Value     any    `json:"value"`
 }
 
-// OpenWorldRuleInput references its trigger and effect nodes by index.
+// OpenWorldConditionInput references its node by content index.
+type OpenWorldConditionInput struct {
+	NodeIndex int    `json:"node_index"`
+	Field     string `json:"field"`
+	Op        string `json:"op"`
+	Value     any    `json:"value"`
+}
+
+// OpenWorldRuleInput references its trigger, condition, and effect nodes by
+// index.
 type OpenWorldRuleInput struct {
-	TriggerIndex int                    `json:"trigger_index"`
-	Effects      []OpenWorldEffectInput `json:"effects"`
+	TriggerIndex int                      `json:"trigger_index"`
+	Condition    *OpenWorldConditionInput `json:"condition"`
+	Effects      []OpenWorldEffectInput   `json:"effects"`
 }
 
 // OpenWorldContent is the strict create body for open_world.
 type OpenWorldContent struct {
-	Premise string               `json:"premise"`
-	Kinds   []OpenWorldKindInput `json:"kinds"`
-	Nodes   []OpenWorldNodeInput `json:"nodes"`
-	Links   []OpenWorldLinkInput `json:"links"`
-	Rules   []OpenWorldRuleInput `json:"rules"`
-	Views   []string             `json:"views"`
-	Tags    []string             `json:"tags"`
+	Premise      string                 `json:"premise"`
+	Kinds        []OpenWorldKindInput   `json:"kinds"`
+	Nodes        []OpenWorldNodeInput   `json:"nodes"`
+	Links        []OpenWorldLinkInput   `json:"links"`
+	Rules        []OpenWorldRuleInput   `json:"rules"`
+	Views        []string               `json:"views"`
+	Tags         []string               `json:"tags"`
+	Presentation *OpenWorldPresentation `json:"presentation"`
 }
 
 func validOpenWorldFieldType(value string) bool {
@@ -198,11 +361,275 @@ func validOpenWorldFieldType(value string) bool {
 
 func validOpenWorldView(value string) bool {
 	switch value {
-	case OpenWorldViewStage, OpenWorldViewCards, OpenWorldViewTimeline:
+	case OpenWorldViewScene, OpenWorldViewStage, OpenWorldViewCards, OpenWorldViewTimeline:
 		return true
 	default:
 		return false
 	}
+}
+
+func validOpenWorldShape(value string) bool {
+	switch value {
+	case OpenWorldShapeOrb, OpenWorldShapeBeacon, OpenWorldShapeWave, OpenWorldShapeShard,
+		OpenWorldShapeRing, OpenWorldShapeGlyph, OpenWorldShapeBloom, OpenWorldShapeThread:
+		return true
+	default:
+		return false
+	}
+}
+
+func validOpenWorldMotion(value string) bool {
+	switch value {
+	case OpenWorldMotionNone, OpenWorldMotionPulse, OpenWorldMotionFloat, OpenWorldMotionSway,
+		OpenWorldMotionFlicker, OpenWorldMotionBreathe, OpenWorldMotionOrbit:
+		return true
+	default:
+		return false
+	}
+}
+
+func validOpenWorldLabel(value string) bool {
+	switch value {
+	case OpenWorldLabelAlways, OpenWorldLabelHover, OpenWorldLabelHidden:
+		return true
+	default:
+		return false
+	}
+}
+
+func validOpenWorldLayer(value string) bool {
+	switch value {
+	case OpenWorldLayerBack, OpenWorldLayerMid, OpenWorldLayerFront:
+		return true
+	default:
+		return false
+	}
+}
+
+func validOpenWorldBindingTarget(value string) bool {
+	switch value {
+	case OpenWorldBindingScale, OpenWorldBindingGlow, OpenWorldBindingOpacity,
+		OpenWorldBindingHue, OpenWorldBindingSpeed:
+		return true
+	default:
+		return false
+	}
+}
+
+func validOpenWorldBackdrop(value string) bool {
+	switch value {
+	case OpenWorldBackdropHorizon, OpenWorldBackdropVoid, OpenWorldBackdropLoom:
+		return true
+	default:
+		return false
+	}
+}
+
+func validOpenWorldAmbient(value string) bool {
+	switch value {
+	case OpenWorldAmbientNone, OpenWorldAmbientStars, OpenWorldAmbientMotes,
+		OpenWorldAmbientRain, OpenWorldAmbientEmbers:
+		return true
+	default:
+		return false
+	}
+}
+
+func validOpenWorldLinkStyle(value string) bool {
+	switch value {
+	case OpenWorldLinkThread, OpenWorldLinkArc, OpenWorldLinkOrbit, OpenWorldLinkHidden:
+		return true
+	default:
+		return false
+	}
+}
+
+func validOpenWorldConditionOp(value string) bool {
+	switch value {
+	case OpenWorldCondEq, OpenWorldCondNe, OpenWorldCondGt, OpenWorldCondGte,
+		OpenWorldCondLt, OpenWorldCondLte, OpenWorldCondTruthy, OpenWorldCondFalsy:
+		return true
+	default:
+		return false
+	}
+}
+
+// normalizeOpenWorldAppearance validates a look and fills the neutral default
+// only when no shape was chosen at all. A partially filled look is rejected;
+// zero is never silently reinterpreted as a user choice.
+func normalizeOpenWorldAppearance(input OpenWorldAppearance) (OpenWorldAppearance, error) {
+	if input.Shape == "" {
+		return DefaultOpenWorldAppearance(), nil
+	}
+	if !validOpenWorldShape(input.Shape) ||
+		!validOpenWorldMotion(input.Motion) ||
+		!validOpenWorldLabel(input.Label) ||
+		!validOpenWorldLayer(input.Layer) {
+		return OpenWorldAppearance{}, fmt.Errorf("%w: appearance", ErrInvalidRequest)
+	}
+	if !finiteOpenWorldNumber(input.Size) || input.Size < openWorldMinSize || input.Size > openWorldMaxSize {
+		return OpenWorldAppearance{}, fmt.Errorf("%w: appearance.size", ErrInvalidRequest)
+	}
+	if input.Intensity < 0 || input.Intensity > 100 || input.Glow < 0 || input.Glow > 100 {
+		return OpenWorldAppearance{}, fmt.Errorf("%w: appearance.glow", ErrInvalidRequest)
+	}
+	return input, nil
+}
+
+func validateOpenWorldBindingShape(binding OpenWorldBinding) error {
+	if binding.Field == "" || !validOpenWorldBindingTarget(binding.Target) {
+		return fmt.Errorf("%w: binding", ErrInvalidRequest)
+	}
+	if !finiteOpenWorldNumber(binding.InMin) || !finiteOpenWorldNumber(binding.InMax) ||
+		!finiteOpenWorldNumber(binding.OutMin) || !finiteOpenWorldNumber(binding.OutMax) {
+		return fmt.Errorf("%w: binding.range", ErrInvalidRequest)
+	}
+	if binding.InMax <= binding.InMin {
+		return fmt.Errorf("%w: binding.in_range", ErrInvalidRequest)
+	}
+	switch binding.Target {
+	case OpenWorldBindingScale, OpenWorldBindingSpeed:
+		if binding.OutMin < 0.2 || binding.OutMin > 3 || binding.OutMax < 0.2 || binding.OutMax > 3 {
+			return fmt.Errorf("%w: binding.out_range", ErrInvalidRequest)
+		}
+	case OpenWorldBindingGlow:
+		if binding.OutMin < 0 || binding.OutMin > 100 || binding.OutMax < 0 || binding.OutMax > 100 {
+			return fmt.Errorf("%w: binding.out_range", ErrInvalidRequest)
+		}
+	case OpenWorldBindingOpacity:
+		if binding.OutMin < 0 || binding.OutMin > 1 || binding.OutMax < 0 || binding.OutMax > 1 {
+			return fmt.Errorf("%w: binding.out_range", ErrInvalidRequest)
+		}
+	case OpenWorldBindingHue:
+		if binding.OutMin < -180 || binding.OutMin > 180 || binding.OutMax < -180 || binding.OutMax > 180 {
+			return fmt.Errorf("%w: binding.out_range", ErrInvalidRequest)
+		}
+	}
+	return nil
+}
+
+// normalizeOpenWorldBindings validates the binding list against the kind's
+// declared fields. Only numeric and flag fields can drive visuals; text is
+// never interpreted as a style or expression.
+func normalizeOpenWorldBindings(bindings []OpenWorldBinding, fields map[string]OpenWorldField) ([]OpenWorldBinding, error) {
+	if len(bindings) == 0 {
+		return nil, nil
+	}
+	if len(bindings) > maxOpenWorldBindings {
+		return nil, fmt.Errorf("%w: bindings", ErrInvalidRequest)
+	}
+	out := make([]OpenWorldBinding, 0, len(bindings))
+	targets := make(map[string]bool, len(bindings))
+	for _, binding := range bindings {
+		if err := validateOpenWorldBindingShape(binding); err != nil {
+			return nil, err
+		}
+		field, ok := fields[binding.Field]
+		if !ok || field.Type == OpenWorldFieldText {
+			return nil, fmt.Errorf("%w: binding.field", ErrInvalidRequest)
+		}
+		if targets[binding.Target] {
+			return nil, fmt.Errorf("%w: binding.target", ErrInvalidRequest)
+		}
+		targets[binding.Target] = true
+		out = append(out, binding)
+	}
+	return out, nil
+}
+
+// normalizeOpenWorldPresentation validates the scene and fills defaults only
+// when the entire scene is absent.
+func normalizeOpenWorldPresentation(input OpenWorldPresentation) (OpenWorldPresentation, error) {
+	if input.Scene.Backdrop == "" {
+		out := DefaultOpenWorldPresentation()
+		if input.LinkStyle != "" {
+			if !validOpenWorldLinkStyle(input.LinkStyle) {
+				return OpenWorldPresentation{}, fmt.Errorf("%w: presentation.link_style", ErrInvalidRequest)
+			}
+			out.LinkStyle = input.LinkStyle
+		}
+		return out, nil
+	}
+	scene := input.Scene
+	if !validOpenWorldBackdrop(scene.Backdrop) || !validOpenWorldAmbient(scene.Ambient) {
+		return OpenWorldPresentation{}, fmt.Errorf("%w: presentation.scene", ErrInvalidRequest)
+	}
+	if scene.SkyHue < 0 || scene.SkyHue > 359 || scene.GroundHue < 0 || scene.GroundHue > 359 ||
+		scene.AccentHue < 0 || scene.AccentHue > 359 {
+		return OpenWorldPresentation{}, fmt.Errorf("%w: presentation.hue", ErrInvalidRequest)
+	}
+	if scene.Horizon < openWorldMinHorizon || scene.Horizon > openWorldMaxHorizon {
+		return OpenWorldPresentation{}, fmt.Errorf("%w: presentation.horizon", ErrInvalidRequest)
+	}
+	if scene.AmbientDensity < 0 || scene.AmbientDensity > 100 {
+		return OpenWorldPresentation{}, fmt.Errorf("%w: presentation.ambient_density", ErrInvalidRequest)
+	}
+	linkStyle := input.LinkStyle
+	if linkStyle == "" {
+		linkStyle = OpenWorldLinkThread
+	}
+	if !validOpenWorldLinkStyle(linkStyle) {
+		return OpenWorldPresentation{}, fmt.Errorf("%w: presentation.link_style", ErrInvalidRequest)
+	}
+	return OpenWorldPresentation{Scene: scene, LinkStyle: linkStyle}, nil
+}
+
+// validateOpenWorldCondition checks a rule guard against the world's own
+// declared fields. It is deliberately small: comparisons only.
+func validateOpenWorldCondition(state *OpenWorldState, condition *OpenWorldCondition, path string) error {
+	node := findOpenWorldNode(state, condition.NodeID)
+	if node == nil {
+		return fmt.Errorf("%w: %s.node_id", ErrInvalidRequest, path)
+	}
+	if !validOpenWorldConditionOp(condition.Op) {
+		return fmt.Errorf("%w: %s.op", ErrInvalidRequest, path)
+	}
+	if condition.Field == OpenWorldStatusField {
+		if condition.Op != OpenWorldCondEq && condition.Op != OpenWorldCondNe {
+			return fmt.Errorf("%w: %s.op", ErrInvalidRequest, path)
+		}
+		value, ok := condition.Value.(string)
+		if !ok || (value != OpenWorldStatusOpen && value != OpenWorldStatusDone) {
+			return fmt.Errorf("%w: %s.value", ErrInvalidRequest, path)
+		}
+		return nil
+	}
+	field := openWorldFieldFor(state, node, condition.Field)
+	if field == nil {
+		return fmt.Errorf("%w: %s.field", ErrInvalidRequest, path)
+	}
+	switch field.Type {
+	case OpenWorldFieldText:
+		if condition.Op != OpenWorldCondEq && condition.Op != OpenWorldCondNe {
+			return fmt.Errorf("%w: %s.op", ErrInvalidRequest, path)
+		}
+		value, ok := condition.Value.(string)
+		if !ok || utf8.RuneCountInString(value) > maxOpenWorldNodeTextRunes {
+			return fmt.Errorf("%w: %s.value", ErrInvalidRequest, path)
+		}
+	case OpenWorldFieldNumber:
+		switch condition.Op {
+		case OpenWorldCondEq, OpenWorldCondNe, OpenWorldCondGt, OpenWorldCondGte,
+			OpenWorldCondLt, OpenWorldCondLte:
+		default:
+			return fmt.Errorf("%w: %s.op", ErrInvalidRequest, path)
+		}
+		value, ok := condition.Value.(float64)
+		if !ok || !finiteOpenWorldNumber(value) {
+			return fmt.Errorf("%w: %s.value", ErrInvalidRequest, path)
+		}
+	case OpenWorldFieldFlag:
+		switch condition.Op {
+		case OpenWorldCondEq, OpenWorldCondNe:
+			if _, ok := condition.Value.(bool); !ok {
+				return fmt.Errorf("%w: %s.value", ErrInvalidRequest, path)
+			}
+		case OpenWorldCondTruthy, OpenWorldCondFalsy:
+		default:
+			return fmt.Errorf("%w: %s.op", ErrInvalidRequest, path)
+		}
+	}
+	return nil
 }
 
 func runeCountAtMost(value string, limit int) bool {
@@ -274,6 +701,11 @@ func ValidateOpenWorldState(state *OpenWorldState) error {
 	if runeLength(state.Premise) > maxScenePremiseRunes {
 		return fmt.Errorf("%w: /premise", ErrInvalidRequest)
 	}
+	presentation, err := normalizeOpenWorldPresentation(state.Presentation)
+	if err != nil {
+		return err
+	}
+	state.Presentation = presentation
 	if len(state.Kinds) > maxOpenWorldKinds {
 		return fmt.Errorf("%w: /kinds", ErrInvalidRequest)
 	}
@@ -313,6 +745,16 @@ func ValidateOpenWorldState(state *OpenWorldState) error {
 			}
 			fields[key] = field
 		}
+		appearance, err := normalizeOpenWorldAppearance(kind.Appearance)
+		if err != nil {
+			return fmt.Errorf("%w: /kinds/%d/appearance", ErrInvalidRequest, index)
+		}
+		bindings, err := normalizeOpenWorldBindings(kind.Bindings, fields)
+		if err != nil {
+			return fmt.Errorf("%w: /kinds/%d/bindings", ErrInvalidRequest, index)
+		}
+		kind.Appearance = appearance
+		kind.Bindings = bindings
 		kindByID[kind.ID] = kind
 		fieldByKind[kind.ID] = fields
 	}
@@ -405,6 +847,12 @@ func ValidateOpenWorldState(state *OpenWorldState) error {
 		if nodeByID[rule.TriggerID] == nil {
 			return fmt.Errorf("%w: /rules/%d/trigger_id", ErrInvalidRequest, index)
 		}
+		if rule.Condition != nil {
+			if err := validateOpenWorldCondition(state, rule.Condition,
+				fmt.Sprintf("/rules/%d/condition", index)); err != nil {
+				return err
+			}
+		}
 		if len(rule.Effects) == 0 || len(rule.Effects) > maxOpenWorldRuleEffects {
 			return fmt.Errorf("%w: /rules/%d/effects", ErrInvalidRequest, index)
 		}
@@ -463,6 +911,13 @@ func ValidateOpenWorldState(state *OpenWorldState) error {
 		return err
 	}
 	state.Views = views
+	if err := normalizeOpenWorldTags(state); err != nil {
+		return err
+	}
+	return nil
+}
+
+func normalizeOpenWorldTags(state *OpenWorldState) error {
 	if len(state.Tags) > maxTags {
 		return fmt.Errorf("%w: /tags", ErrInvalidRequest)
 	}
@@ -481,14 +936,15 @@ func ValidateOpenWorldState(state *OpenWorldState) error {
 // with its parent.
 func OpenWorldDerivedState(title string, parent *OpenWorldState, selected map[string]bool) (*OpenWorldState, error) {
 	child := &OpenWorldState{
-		Title:   title,
-		Premise: "",
-		Kinds:   make([]OpenWorldKind, 0),
-		Nodes:   make([]OpenWorldNode, 0),
-		Links:   make([]OpenWorldLink, 0),
-		Rules:   make([]OpenWorldRule, 0),
-		Views:   OpenWorldAvailableViews(),
-		Tags:    make([]string, 0),
+		Title:        title,
+		Premise:      "",
+		Kinds:        make([]OpenWorldKind, 0),
+		Nodes:        make([]OpenWorldNode, 0),
+		Links:        make([]OpenWorldLink, 0),
+		Rules:        make([]OpenWorldRule, 0),
+		Views:        OpenWorldAvailableViews(),
+		Tags:         make([]string, 0),
+		Presentation: DefaultOpenWorldPresentation(),
 	}
 	if selected["premise"] {
 		child.Premise = parent.Premise
@@ -500,6 +956,10 @@ func OpenWorldDerivedState(title string, parent *OpenWorldState, selected map[st
 		child.Tags = append(child.Tags, parent.Tags...)
 	}
 	if selected["structure"] {
+		// Presentation is part of the structure unit: visual bindings refer to
+		// the same field and node identity as the rules, so the look travels
+		// with the structure that it explains.
+		child.Presentation = parent.Presentation
 		kindIDs := make(map[string]string, len(parent.Kinds))
 		for _, kind := range parent.Kinds {
 			id, err := uuid.NewV7()
@@ -509,8 +969,11 @@ func OpenWorldDerivedState(title string, parent *OpenWorldState, selected map[st
 			kindIDs[kind.ID] = id.String()
 			fields := make([]OpenWorldField, len(kind.Fields))
 			copy(fields, kind.Fields)
+			bindings := make([]OpenWorldBinding, len(kind.Bindings))
+			copy(bindings, kind.Bindings)
 			child.Kinds = append(child.Kinds, OpenWorldKind{
 				ID: id.String(), Name: kind.Name, Hue: kind.Hue, Fields: fields,
+				Appearance: kind.Appearance, Bindings: bindings,
 			})
 		}
 		nodeIDs := make(map[string]string, len(parent.Nodes))
@@ -552,8 +1015,16 @@ func OpenWorldDerivedState(title string, parent *OpenWorldState, selected map[st
 					Op: effect.Op, Value: effect.Value,
 				}
 			}
+			var condition *OpenWorldCondition
+			if rule.Condition != nil {
+				condition = &OpenWorldCondition{
+					NodeID: nodeIDs[rule.Condition.NodeID], Field: rule.Condition.Field,
+					Op: rule.Condition.Op, Value: rule.Condition.Value,
+				}
+			}
 			child.Rules = append(child.Rules, OpenWorldRule{
-				ID: id.String(), TriggerID: nodeIDs[rule.TriggerID], Effects: effects,
+				ID: id.String(), TriggerID: nodeIDs[rule.TriggerID],
+				Condition: condition, Effects: effects,
 			})
 		}
 	}

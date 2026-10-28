@@ -9,6 +9,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- A data-defined world experience runtime for `open_world_v1`: a declarative
+  scene (backdrop, hues, horizon, ambient particles, relation style), per-kind
+  appearance (shape, size, motion, glow, label, layer), bounded field-to-visual
+  bindings, and optional comparison guards on rules. One shared SVG scene
+  renders every world; there are no per-world pages, components, or content
+  branches. Creators edit the scene, forms, bindings, rule guards, and explicit
+  positions through the product, and every change is versioned, persisted, and
+  inherited with `structure` on derivation.
 - A World Stage with visible objects, real derivation branches, pending human
   approvals, and a Living Pulse built only from real events.
 - A third native object type, `living_scene_v1`: structured ideas, steps,

@@ -798,8 +798,25 @@ export interface SceneState {
  * is executable code; the server interprets the same data for every client.
  */
 export type OpenWorldFieldType = "text" | "number" | "flag";
-export type OpenWorldView = "stage" | "cards" | "timeline";
+export type OpenWorldView = "scene" | "stage" | "cards" | "timeline";
 export type OpenWorldStatus = "open" | "done";
+export type OpenWorldShape =
+  | "orb"
+  | "beacon"
+  | "wave"
+  | "shard"
+  | "ring"
+  | "glyph"
+  | "bloom"
+  | "thread";
+export type OpenWorldMotion = "none" | "pulse" | "float" | "sway" | "flicker" | "breathe" | "orbit";
+export type OpenWorldLabel = "always" | "hover" | "hidden";
+export type OpenWorldLayer = "back" | "mid" | "front";
+export type OpenWorldBindingTarget = "scale" | "glow" | "opacity" | "hue_shift" | "speed";
+export type OpenWorldBackdrop = "horizon" | "void" | "loom";
+export type OpenWorldAmbient = "none" | "stars" | "motes" | "rain" | "embers";
+export type OpenWorldLinkStyle = "thread" | "arc" | "orbit" | "hidden";
+export type OpenWorldConditionOp = "eq" | "ne" | "gt" | "gte" | "lt" | "lte" | "truthy" | "falsy";
 
 export interface OpenWorldField {
   key: string;
@@ -807,11 +824,47 @@ export interface OpenWorldField {
   type: OpenWorldFieldType;
 }
 
+export interface OpenWorldAppearance {
+  shape: OpenWorldShape;
+  size: number;
+  motion: OpenWorldMotion;
+  intensity: number;
+  glow: number;
+  label: OpenWorldLabel;
+  layer: OpenWorldLayer;
+}
+
+export interface OpenWorldBinding {
+  field: string;
+  target: OpenWorldBindingTarget;
+  in_min: number;
+  in_max: number;
+  out_min: number;
+  out_max: number;
+}
+
+export interface OpenWorldScene {
+  backdrop: OpenWorldBackdrop;
+  sky_hue: number;
+  ground_hue: number;
+  horizon: number;
+  accent_hue: number;
+  ambient: OpenWorldAmbient;
+  ambient_density: number;
+}
+
+export interface OpenWorldPresentation {
+  scene: OpenWorldScene;
+  link_style: OpenWorldLinkStyle;
+}
+
 export interface OpenWorldKind {
   id: string;
   name: string;
   hue: number;
   fields: OpenWorldField[];
+  appearance: OpenWorldAppearance;
+  bindings: OpenWorldBinding[];
 }
 
 export interface OpenWorldNode {
@@ -839,9 +892,17 @@ export interface OpenWorldEffect {
   value?: string | number | boolean;
 }
 
+export interface OpenWorldCondition {
+  node_id: string;
+  field: string;
+  op: OpenWorldConditionOp;
+  value?: string | number | boolean;
+}
+
 export interface OpenWorldRule {
   id: string;
   trigger_id: string;
+  condition?: OpenWorldCondition;
   effects: OpenWorldEffect[];
 }
 
@@ -854,12 +915,15 @@ export interface OpenWorldState {
   rules: OpenWorldRule[];
   views: OpenWorldView[];
   tags?: string[];
+  presentation: OpenWorldPresentation;
 }
 
 export interface OpenWorldKindInput {
   name: string;
   hue: number;
   fields: Array<{ key: string; label: string; type: OpenWorldFieldType }>;
+  appearance?: OpenWorldAppearance;
+  bindings?: OpenWorldBinding[];
 }
 
 export interface OpenWorldNodeInput {
@@ -868,6 +932,7 @@ export interface OpenWorldNodeInput {
   text: string;
   x?: number;
   y?: number;
+  values?: Record<string, string | number | boolean>;
 }
 
 export interface OpenWorldLinkInput {
@@ -876,8 +941,16 @@ export interface OpenWorldLinkInput {
   label: string;
 }
 
+export interface OpenWorldConditionInput {
+  node_index: number;
+  field: string;
+  op: OpenWorldConditionOp;
+  value?: string | number | boolean;
+}
+
 export interface OpenWorldRuleInput {
   trigger_index: number;
+  condition?: OpenWorldConditionInput;
   effects: Array<{
     node_index: number;
     field: string;
@@ -894,19 +967,110 @@ export interface OpenWorldContent {
   rules?: OpenWorldRuleInput[];
   views?: OpenWorldView[];
   tags?: string[];
+  presentation?: OpenWorldPresentation;
+}
+
+export const defaultOpenWorldAppearance: OpenWorldAppearance = {
+  shape: "orb",
+  size: 48,
+  motion: "float",
+  intensity: 50,
+  glow: 30,
+  label: "always",
+  layer: "mid"
+};
+
+export const defaultOpenWorldPresentation: OpenWorldPresentation = {
+  scene: {
+    backdrop: "horizon",
+    sky_hue: 222,
+    ground_hue: 205,
+    horizon: 62,
+    accent_hue: 42,
+    ambient: "stars",
+    ambient_density: 35
+  },
+  link_style: "thread"
+};
+
+const openWorldShapes: OpenWorldShape[] = ["orb", "beacon", "wave", "shard", "ring", "glyph", "bloom", "thread"];
+const openWorldMotions: OpenWorldMotion[] = ["none", "pulse", "float", "sway", "flicker", "breathe", "orbit"];
+const openWorldLabels: OpenWorldLabel[] = ["always", "hover", "hidden"];
+const openWorldLayers: OpenWorldLayer[] = ["back", "mid", "front"];
+const openWorldBackdrops: OpenWorldBackdrop[] = ["horizon", "void", "loom"];
+const openWorldAmbients: OpenWorldAmbient[] = ["none", "stars", "motes", "rain", "embers"];
+const openWorldLinkStyles: OpenWorldLinkStyle[] = ["thread", "arc", "orbit", "hidden"];
+const openWorldViews: OpenWorldView[] = ["scene", "stage", "cards", "timeline"];
+
+function boundedNumber(value: unknown, fallback: number, min: number, max: number): number {
+  return typeof value === "number" && Number.isFinite(value) && value >= min && value <= max ? value : fallback;
+}
+
+function enumValue<T extends string>(value: unknown, options: T[], fallback: T): T {
+  return typeof value === "string" && (options as string[]).includes(value) ? (value as T) : fallback;
+}
+
+function normalizeAppearance(value: unknown): OpenWorldAppearance {
+  if (!value || typeof value !== "object") {
+    return { ...defaultOpenWorldAppearance };
+  }
+  const appearance = value as Partial<OpenWorldAppearance>;
+  return {
+    shape: enumValue(appearance.shape, openWorldShapes, defaultOpenWorldAppearance.shape),
+    size: boundedNumber(appearance.size, defaultOpenWorldAppearance.size, 12, 200),
+    motion: enumValue(appearance.motion, openWorldMotions, defaultOpenWorldAppearance.motion),
+    intensity: boundedNumber(appearance.intensity, defaultOpenWorldAppearance.intensity, 0, 100),
+    glow: boundedNumber(appearance.glow, defaultOpenWorldAppearance.glow, 0, 100),
+    label: enumValue(appearance.label, openWorldLabels, defaultOpenWorldAppearance.label),
+    layer: enumValue(appearance.layer, openWorldLayers, defaultOpenWorldAppearance.layer)
+  };
+}
+
+function normalizePresentation(value: unknown): OpenWorldPresentation {
+  if (!value || typeof value !== "object") {
+    return { ...defaultOpenWorldPresentation, scene: { ...defaultOpenWorldPresentation.scene } };
+  }
+  const presentation = value as Partial<OpenWorldPresentation>;
+  const scene = (presentation.scene ?? {}) as Partial<OpenWorldScene>;
+  return {
+    scene: {
+      backdrop: enumValue(scene.backdrop, openWorldBackdrops, defaultOpenWorldPresentation.scene.backdrop),
+      sky_hue: boundedNumber(scene.sky_hue, defaultOpenWorldPresentation.scene.sky_hue, 0, 359),
+      ground_hue: boundedNumber(scene.ground_hue, defaultOpenWorldPresentation.scene.ground_hue, 0, 359),
+      horizon: boundedNumber(scene.horizon, defaultOpenWorldPresentation.scene.horizon, 0, 100),
+      accent_hue: boundedNumber(scene.accent_hue, defaultOpenWorldPresentation.scene.accent_hue, 0, 359),
+      ambient: enumValue(scene.ambient, openWorldAmbients, defaultOpenWorldPresentation.scene.ambient),
+      ambient_density: boundedNumber(
+        scene.ambient_density,
+        defaultOpenWorldPresentation.scene.ambient_density,
+        0,
+        100
+      )
+    },
+    link_style: enumValue(presentation.link_style, openWorldLinkStyles, defaultOpenWorldPresentation.link_style)
+  };
 }
 
 export function openWorldState(object: ObjectView): OpenWorldState {
   const state = object.state as Partial<OpenWorldState>;
+  const kinds = Array.isArray(state.kinds) ? state.kinds : [];
+  const views = Array.isArray(state.views)
+    ? state.views.filter((view): view is OpenWorldView => (openWorldViews as string[]).includes(view))
+    : [];
   return {
     title: typeof state.title === "string" ? state.title : "",
     premise: typeof state.premise === "string" ? state.premise : "",
-    kinds: Array.isArray(state.kinds) ? state.kinds : [],
+    kinds: kinds.map((kind) => ({
+      ...kind,
+      appearance: normalizeAppearance(kind?.appearance),
+      bindings: Array.isArray(kind?.bindings) ? kind.bindings : []
+    })),
     nodes: Array.isArray(state.nodes) ? state.nodes : [],
     links: Array.isArray(state.links) ? state.links : [],
     rules: Array.isArray(state.rules) ? state.rules : [],
-    views: Array.isArray(state.views) && state.views.length > 0 ? state.views : ["stage", "cards", "timeline"],
-    tags: Array.isArray(state.tags) ? state.tags : []
+    views: views.length > 0 ? views : [...openWorldViews],
+    tags: Array.isArray(state.tags) ? state.tags : [],
+    presentation: normalizePresentation(state.presentation)
   };
 }
 

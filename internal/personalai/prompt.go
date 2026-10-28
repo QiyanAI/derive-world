@@ -175,7 +175,9 @@ func objectProposalVocabulary(objectType string) string {
 			"add_link, remove_link, add_rule, remove_rule, and set_views. " +
 			"Use ids that already exist in the state; add_node must reuse an existing kind_id. " +
 			`For example use action add_node with input {"kind_id":"<an existing kind id>","name":"...","text":"..."}. ` +
-			"Rules are declarative and never executable code. "
+			"Kinds may carry a declarative appearance (shape, size, motion, glow, label, layer) and " +
+			"field-to-visual bindings; rules may carry an optional comparison condition. " +
+			"Presentation and rule behaviour are data, never executable code. "
 	case "living_scene":
 		return "Valid living_scene actions are set_title, set_premise, add_element, update_element, " +
 			"remove_element, move_element, add_tag, and remove_tag. " +

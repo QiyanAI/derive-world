@@ -30,7 +30,7 @@ test("Phase 2 free world: define kinds, place things, run a rule, persist and de
   const addKind = structure.locator("details.dw-open-add").filter({ hasText: "Add a kind" }).first();
   await addKind.getByPlaceholder("Key").fill("level");
   await addKind.getByPlaceholder("Label").fill("Level");
-  await addKind.locator("select").selectOption("number");
+  await addKind.locator("select").last().selectOption("number");
   await addKind.getByRole("button", { name: "Add field" }).click();
   await addKind.locator("form").getByRole("button", { name: "Add a kind", exact: true }).click();
   await expect(structure.locator(".dw-open-structure-list").first()).toContainText("Tide");

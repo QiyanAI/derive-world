@@ -15,8 +15,24 @@ implemented. This is a self-hostable OSS MVP, not a production platform.
 ## Free worlds on the development branch
 
 - A free world is declarative data: creators define kinds, things, relations,
-  and one-pass rules. The server interprets that data; it never executes user
-  code, loads native plugins, renders 3D scenes, or launches external apps.
+  one-pass rules, and a scene. The scene defines a backdrop, hue range,
+  horizon, ambient particles, relation style, and each kind's shape, size,
+  motion, glow, label, and layer. A bounded linear binding maps a numeric or
+  flag field onto scale, glow, opacity, hue shift, or speed. A rule may carry
+  one comparison guard. The server interprets that data; it never executes
+  user code, loads native plugins, renders 3D scenes, or launches external
+  apps.
+- Every world uses the same 2D SVG scene renderer. A world cannot supply
+  images, fonts, scripts, shaders, a physics engine, or per-world render code.
+  Ambient motion is presentation only; state changes only through persisted
+  actions, and there is no autonomous simulation clock. Presentation is
+  inherited as part of `structure` when deriving.
+- The frozen `object.propose_change` capability keeps its published action
+  set. Scene-level presentation (`set_presentation`) is edited through the
+  product's human action API, not that capability. An object-bound AI can
+  still propose `update_kind` appearance/bindings and `add_rule` guards, and
+  an unbound AI can propose a complete world with presentation through
+  `world.create`; both remain human-approved.
 - An unbound Personal AI can propose a complete world. The proposal is validated
   before storage and creates nothing until a human approves the five-minute
   confirmation.
