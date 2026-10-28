@@ -547,7 +547,7 @@ export default function WorldStagePage() {
         onCreated={(object) => {
           toast(zh ? "你的新世界开始生长了。" : "Your new world has begun to grow.");
           if (object.object_type === "open_world") {
-            navigate(`/worlds/${object.id}?build=1`);
+            navigate(`/worlds/${object.id}`);
             return;
           }
           setFocusId(object.id);
@@ -555,6 +555,12 @@ export default function WorldStagePage() {
           setSelectedId(object.id);
           setInspectorOpen(false);
           void load().then(() => openInspector(object.id, "work"));
+        }}
+        onAskAI={(prompt) => {
+          setCreateOpen(false);
+          window.dispatchEvent(
+            new CustomEvent("dw:ask-personal-ai", { detail: { prompt } })
+          );
         }}
       />
 

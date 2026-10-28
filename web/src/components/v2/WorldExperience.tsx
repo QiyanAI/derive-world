@@ -10,6 +10,10 @@ import type {
   WorldExperience,
   WorldViewNode
 } from "../../api";
+import CustomSurface from "./CustomSurface";
+import LiveSurface from "./LiveSurface";
+import StorySurface from "./StorySurface";
+import WorkspaceSurface from "./WorkspaceSurface";
 
 const WORLD_WIDTH = 1600;
 const WORLD_HEIGHT = 1000;
@@ -23,6 +27,11 @@ type ExperienceContext = {
   busy: boolean;
   onInvoke: (behaviorID: string, entityID?: string, value?: unknown) => void;
   onSetField: (entityID: string, field: string, value: string | number | boolean) => void;
+  onCustom: (
+    surfaceID: string,
+    event: "click" | "key" | "input" | "drag",
+    payload: { nodeID?: string; key?: string; value?: unknown }
+  ) => void;
 };
 
 export default function WorldExperience({
@@ -31,7 +40,8 @@ export default function WorldExperience({
   canContribute,
   busy,
   onInvoke,
-  onSetField
+  onSetField,
+  onCustom
 }: {
   world: OpenWorldState;
   experience: WorldExperience;
@@ -39,8 +49,15 @@ export default function WorldExperience({
   busy: boolean;
   onInvoke: (behaviorID: string, entityID?: string, value?: unknown) => void;
   onSetField: (entityID: string, field: string, value: string | number | boolean) => void;
+  onCustom: (
+    surfaceID: string,
+    event: "click" | "key" | "input" | "drag",
+    payload: { nodeID?: string; key?: string; value?: unknown }
+  ) => void;
 }) {
-  const context: ExperienceContext = { world, canContribute, busy, onInvoke, onSetField };
+  const context: ExperienceContext = {
+    world, canContribute, busy, onInvoke, onSetField, onCustom
+  };
   return (
     <div className="dw-experience" data-testid="world-experience" data-protocol={experience.protocol}>
       <NodeView node={experience.root} scope={{}} context={context} />
@@ -101,6 +118,52 @@ function NodeView({
       return <ChoiceNode props={props} context={context} scope={scope} node={node} />;
     case "core.meter":
       return <MeterNode props={props} context={context} scope={scope} node={node} />;
+    case "core.live":
+      return (
+        <LiveSurface
+          node={node}
+          world={context.world}
+          canContribute={context.canContribute}
+          busy={context.busy}
+          onInvoke={context.onInvoke}
+        />
+      );
+    case "core.story":
+      return (
+        <StorySurface
+          node={node}
+          world={context.world}
+          canContribute={context.canContribute}
+          busy={context.busy}
+          onInvoke={context.onInvoke}
+        />
+      );
+    case "core.workspace":
+      return (
+        <WorkspaceSurface
+          node={node}
+          world={context.world}
+          canContribute={context.canContribute}
+          busy={context.busy}
+          onInvoke={context.onInvoke}
+          onSetField={context.onSetField}
+        />
+      );
+    case "core.custom":
+      return (
+        <CustomSurface
+          surfaceID={node.id}
+          props={props}
+          world={context.world}
+          canContribute={context.canContribute}
+          busy={context.busy}
+          onCustom={context.onCustom}
+        />
+      );
+    case "core.tabs":
+      return (
+        <TabsNode props={props} node={node} scope={scope} context={context} />
+      );
     default:
       return (
         <p className="dw-exp-unsupported" data-testid="world-experience-unsupported">
@@ -512,9 +575,22 @@ function SpaceNode({
   const showLinks = props.show_links !== false;
   const linkStyle = stringValue(props.link_style, "curve");
   const activateBehaviorID = stringValue(props.activate_behavior_id, "");
+  const entityBehaviors = new Map<string, string>();
+  for (const raw of asArray(props.entity_actions)) {
+    const action = asRecord(raw);
+    const entityID = stringValue(action.entity_id, "");
+    const behaviorID = stringValue(action.behavior_id, "");
+    if (entityID && behaviorID) {
+      entityBehaviors.set(entityID, behaviorID);
+    }
+  }
   const nodeById = new Map(context.world.nodes.map((candidate) => [candidate.id, candidate]));
   const rendered = context.world.nodes
     .filter((candidate) => viewByKind.has(candidate.kind_id))
+    .filter((candidate) => {
+      const view = viewByKind.get(candidate.kind_id);
+      return !(view?.hide_done && candidate.status === "done");
+    })
     .sort((left, right) => {
       const leftView = viewByKind.get(left.kind_id);
       const rightView = viewByKind.get(right.kind_id);
@@ -568,12 +644,14 @@ function SpaceNode({
           const view = viewByKind.get(entity.kind_id)!;
           const visual = spaceVisual(view, entity);
           const color = `hsl(${visual.hue} 70% 62%)`;
-          const interactive = Boolean(activateBehaviorID) && context.canContribute && !context.busy;
+          const behaviorID = entityBehaviors.get(entity.id) ?? activateBehaviorID;
+          const interactive = Boolean(behaviorID) && context.canContribute && !context.busy;
           return (
             <g
               key={entity.id}
-              className="dw-exp-space-entity"
+              className={`dw-exp-space-entity${view.motion && view.motion !== "none" ? ` scene-motion-${view.motion}` : ""}`}
               data-testid="world-experience-entity"
+              data-motion={stringValue(view.motion, "")}
               data-entity-id={entity.id}
               data-kind-id={entity.kind_id}
               data-size={Math.round(visual.size)}
@@ -585,13 +663,13 @@ function SpaceNode({
               style={{ cursor: interactive ? "pointer" : "default", opacity: visual.opacity }}
               onClick={() => {
                 if (interactive) {
-                  context.onInvoke(activateBehaviorID, entity.id);
+                  context.onInvoke(behaviorID, entity.id);
                 }
               }}
               onKeyDown={(event) => {
                 if (interactive && (event.key === "Enter" || event.key === " ")) {
                   event.preventDefault();
-                  context.onInvoke(activateBehaviorID, entity.id);
+                  context.onInvoke(behaviorID, entity.id);
                 }
               }}
             >
@@ -887,4 +965,56 @@ function stringValue(value: unknown, fallback: string): string {
 
 function numberValue(value: unknown, fallback: number): number {
   return typeof value === "number" && Number.isFinite(value) ? value : fallback;
+}
+
+
+function TabsNode({
+  props,
+  node,
+  scope,
+  context
+}: {
+  props: Record<string, unknown>;
+  node: WorldViewNode;
+  scope: Scope;
+  context: ExperienceContext;
+}) {
+  const { t } = useI18n();
+  const tabs = asArray(props.tabs).map(asRecord);
+  const children = Array.isArray(node.children) ? node.children : [];
+  const fallback = stringValue(props.default, tabs[0]?.child_id ? stringValue(tabs[0].child_id, "") : "");
+  const [active, setActive] = useState<string>(fallback);
+  const activeChild = children.find((child) => child.id === active) ?? children[0];
+  return (
+    <section className="dw-exp-tabs" data-testid="world-experience-tabs">
+      <div className="dw-exp-tabbar" role="tablist" aria-label={t("openWorld.experience")}>
+        {tabs.map((tab, index) => {
+          const id = stringValue(tab.child_id, "");
+          const label = stringValue(tab.label, "…");
+          return (
+            <button
+              key={`${id}:${index}`}
+              type="button"
+              role="tab"
+              aria-selected={id === (activeChild?.id ?? "")}
+              className={`dw-exp-tab${id === (activeChild?.id ?? "") ? " is-active" : ""}`}
+              onClick={() => setActive(id)}
+            >
+              {label}
+            </button>
+          );
+        })}
+      </div>
+      <div className="dw-exp-tabpanel" role="tabpanel">
+        {activeChild ? (
+          <NodeView
+            node={activeChild}
+            scope={scope}
+            context={context}
+            itemKey={activeChild.id}
+          />
+        ) : null}
+      </div>
+    </section>
+  );
 }

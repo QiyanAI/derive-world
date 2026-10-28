@@ -34,7 +34,7 @@ type ProposalWriter interface {
 	CreateProposalTx(
 		ctx context.Context, tx pgx.Tx,
 		objectID, actorUserID, aiProfileID, delegationID uuid.UUID,
-		action string, input json.RawMessage, baseVersion int,
+		capabilityID, action string, input json.RawMessage, baseVersion int,
 		requestID string, ipHash []byte,
 	) (uuid.UUID, bool, error)
 }

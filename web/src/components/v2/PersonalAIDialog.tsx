@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: Apache-2.0
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   approveConfirmation,
   createConversation,
@@ -30,11 +30,13 @@ function profileName(profile: PersonalAIProfile | null, fallback: string): strin
 export default function PersonalAIDialog({
   open,
   onClose,
-  onWorldCreated
+  onWorldCreated,
+  initialPrompt
 }: {
   open: boolean;
   onClose: () => void;
   onWorldCreated: (object: ObjectView) => void;
+  initialPrompt?: string;
 }) {
   const { t, lang } = useI18n();
   const { mode } = useMeta();
@@ -48,6 +50,7 @@ export default function PersonalAIDialog({
   const [notice, setNotice] = useState("");
   const [error, setError] = useState<unknown>(null);
   const [lastMode, setLastMode] = useState<"fixture" | "real" | null>(null);
+  const sentInitial = useRef("");
 
   const worldProposals = useMemo(
     () => confirmations.filter((item) => item.action === "world.create"),
@@ -118,7 +121,20 @@ export default function PersonalAIDialog({
     };
   }, [open, loadConversation, loadPending]);
 
-  async function send(contentOverride?: string) {
+  useEffect(() => {
+    if (!open) {
+      sentInitial.current = "";
+      return;
+    }
+    if (!initialPrompt || sentInitial.current === initialPrompt) {
+      return;
+    }
+    sentInitial.current = initialPrompt;
+    void send(initialPrompt, "create");
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, initialPrompt]);
+
+  async function send(contentOverride?: string, intent?: "create" | "change") {
     const content = (contentOverride ?? draft).trim();
     if (!content || busy) {
       return;
@@ -133,7 +149,7 @@ export default function PersonalAIDialog({
         active = created.id;
         setConversationID(created.id);
       }
-      const result = await sendAIMessage(active, content);
+      const result = await sendAIMessage(active, content, intent);
       setMessages((previous) => [...previous, result.user_message, result.assistant_message]);
       setDraft("");
       setLastMode(result.model_mode);
@@ -274,6 +290,12 @@ export default function PersonalAIDialog({
                       })}
                     </small>
                   ) : null}
+                  {item.effect?.surfaces && item.effect.surfaces.length > 0 ? (
+                    <small className="dw-world-proposal-surfaces" data-testid="world-proposal-surfaces">
+                      {(zh ? "它将真正以这些方式运行：" : "It will really run as: ") +
+                        item.effect.surfaces.map((surface) => surfaceLabel(surface, zh)).join(" · ")}
+                    </small>
+                  ) : null}
                   <small>{item.permission_summary}</small>
                 </div>
                 <div className="dw-personal-ai-proposal-actions">
@@ -369,7 +391,27 @@ export default function PersonalAIDialog({
             ? "AI 只能提出方案。世界创建、提议应用与衍生都必须由你确认；服务商密钥永不进入浏览器。"
             : "The AI only proposes. World creation, proposal application, and derivation all require your confirmation; provider keys never reach the browser."}
         </p>
+        <p className="dw-fineprint dw-ai-limits">
+          <Icon name="layers" size={13} />
+          {t("ai.universal.limits")}
+        </p>
       </div>
     </Modal>
   );
+}
+
+
+function surfaceLabel(surface: string, zh: boolean): string {
+  switch (surface) {
+    case "live":
+      return zh ? "可游玩/可观看的实时世界" : "playable or playing 2D world";
+    case "story":
+      return zh ? "可阅读的互动故事" : "readable interactive story";
+    case "workspace":
+      return zh ? "可使用的工作台" : "usable workbench";
+    case "custom":
+      return zh ? "自定义交互表面" : "custom interactive surface";
+    default:
+      return zh ? "可视空间" : "visual space";
+  }
 }

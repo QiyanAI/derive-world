@@ -5,11 +5,16 @@
 Derive World is an open-source foundation for *Living Objects*: shared,
 versioned objects that people and their personal AI can read, contribute to,
 derive from, and trace through an explicit lineage. This development branch
-adds a World Stage, living scenes, free-form open worlds with a composable
-capability runtime (layout, text, vector space, collections, tables, fields,
-meters, buttons and choices, plus reusable behaviors), a universal Personal AI,
-direct friendship and messaging, opt-in public worlds, and public derivation on
-top of the published `v0.1.0` foundation.
+adds a World Stage, living scenes, and free creation and derivation: the user
+describes a world in their own words, the Personal AI writes a compact world
+brief, and a server-side composer expands it into a real runnable world — a
+time-based animation, a walkable space or playable game, a readable interactive
+story, an operable workbench, a visual space, and a bounded declarative custom
+surface for new forms. All surfaces share one content, state, variable,
+permission, version and lineage model. A universal Personal AI, direct
+friendship and messaging, opt-in public worlds, and public derivation remain.
+Real-model acceptance is still a separate gate; fixture output is always
+labelled demo data.
 
 **Why it is different:** most AI tools treat chat as the product. Derive World
 treats the *object* as the product: a Living Object has versions, members,

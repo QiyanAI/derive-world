@@ -9,6 +9,30 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Free-intent world creation and reshaping for `open_world_v1`. The Personal AI
+  writes a compact world brief; a server-side composer (`internal/worldseed`)
+  expands it into a complete, validated world with kinds, things, relations,
+  interactions, shared variables and an experience document. Create bodies may
+  use local `ref` slugs that the server remaps to minted UUIDs, so a complete
+  experience can be installed at creation. A bound Personal AI uses
+  `world.reimagine` to merge a brief into the current world; the server creates
+  an atomic `reshape_world` proposal that a human applies.
+- Universal world surfaces: `core.live` (time-based animation, walkable space,
+  or a playable collect/score/reach/survive game), `core.story` (chapters as
+  real things, choices as real links, persisted reading position),
+  `core.workspace` (editable tables, row creation, status and summaries),
+  `core.space`, `core.custom` (a safe declarative surface with shapes, text,
+  inputs, keys, drag, conditions, actions, timelines and procedural tones) and
+  `core.tabs` to combine surfaces in one world. World variables (<=128, <=8 KiB)
+  back scores, reading positions and custom state; `core.create` adds bounded
+  entities. `custom_action` interprets one validated custom event on the server.
+- Describe-first product entry: the create dialog asks what to create and sends
+  the user's own words to the Personal AI; the old type chooser is demoted to
+  an advanced blank-creation control. A world can be changed by natural
+  language from the world page and branched in one step with a visible source
+  chain. Fixture output remains labelled demo data; real-model acceptance
+  remains a separate, explicitly authorized gate.
+
 - A capability-composed world experience layer for `open_world_v1`. A world may
   store an optional `experience` document containing a tree of registered
   presentation capabilities (`core.stack`, `core.text`, `core.space`,

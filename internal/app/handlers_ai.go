@@ -346,9 +346,16 @@ func (a *App) sendMessage(w http.ResponseWriter, r *http.Request) {
 	}
 	var input struct {
 		Content string `json:"content"`
+		Intent  string `json:"intent"`
 	}
 	if err := httpx.DecodeJSON(w, r, &input, a.config.MaxRequestBytes); err != nil {
 		a.writeDomainError(w, r, err)
+		return
+	}
+	switch input.Intent {
+	case "", "create", "change":
+	default:
+		httpx.WriteError(w, r, httpx.NewError(httpx.CodeInvalidRequest, "intent must be create or change").WithDetails(map[string]any{"field": "/intent"}))
 		return
 	}
 	var access *personalai.ObjectAccess
@@ -397,6 +404,7 @@ func (a *App) sendMessage(w http.ResponseWriter, r *http.Request) {
 	}
 	result, err := a.personalAI.SendMessage(r.Context(), personalai.SendMessageInput{
 		UserID: principal.User.ID, ConversationID: conversationID, Content: input.Content,
+		Intent: input.Intent,
 		Object: access, Route: messageRoute, IdemKey: key, LeaseUntil: claim.LeaseUntil,
 		RequestID: httpx.RequestIDFromContext(r.Context()),
 		IPHash:    httpx.HashIPBytes(a.config.IPHashPepper, httpx.ClientIP(r, a.config.TrustProxyHeaders)),

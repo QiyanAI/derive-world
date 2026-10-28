@@ -47,6 +47,7 @@ func TestBuildPromptWrapsUntrustedObjectContentAndPrivateContext(t *testing.T) {
 		projection,
 		nil,
 		"hello",
+		"",
 	)
 	if err != nil {
 		t.Fatalf("build prompt: %v", err)
@@ -69,7 +70,7 @@ func TestBuildPromptTrimsOldestHistory(t *testing.T) {
 	for index := 0; index < 30; index++ {
 		history = append(history, Message{Role: "user", Content: strings.Repeat("h", 4096)})
 	}
-	_, messages, _, err := buildPrompt(nil, nil, nil, history, "latest")
+	_, messages, _, err := buildPrompt(nil, nil, nil, history, "latest", "")
 	if err != nil {
 		t.Fatalf("build prompt: %v", err)
 	}

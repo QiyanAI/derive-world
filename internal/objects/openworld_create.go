@@ -7,6 +7,8 @@ import (
 	"strings"
 
 	"github.com/google/uuid"
+
+	"github.com/QiyanAI/derive-world/internal/worldcap"
 )
 
 // buildOpenWorldState converts the strict create body into persisted state.
@@ -44,17 +46,32 @@ func buildOpenWorldState(title string, content OpenWorldContent) (*OpenWorldStat
 	if content.Presentation != nil {
 		state.Presentation = *content.Presentation
 	}
-	if content.Experience != nil {
-		state.Experience = content.Experience
+	if len(content.Variables) > 0 {
+		state.Variables = make(map[string]any, len(content.Variables))
+		for name, value := range content.Variables {
+			state.Variables[name] = value
+		}
 	}
 
 	kindIDs := make([]string, len(content.Kinds))
+	kindRefs := make(map[string]string, len(content.Kinds))
 	for index, kind := range content.Kinds {
+		if kind.Ref != "" {
+			if !ValidOpenWorldCreateRef(kind.Ref) {
+				return nil, fmt.Errorf("%w: content.kinds/%d/ref", ErrInvalidRequest, index)
+			}
+			if _, exists := kindRefs[kind.Ref]; exists {
+				return nil, fmt.Errorf("%w: content.kinds/%d/ref", ErrInvalidRequest, index)
+			}
+		}
 		id, err := uuid.NewV7()
 		if err != nil {
 			return nil, err
 		}
 		kindIDs[index] = id.String()
+		if kind.Ref != "" {
+			kindRefs[kind.Ref] = id.String()
+		}
 		fields := make([]OpenWorldField, len(kind.Fields))
 		copy(fields, kind.Fields)
 		appearance := DefaultOpenWorldAppearance()
@@ -70,15 +87,27 @@ func buildOpenWorldState(title string, content OpenWorldContent) (*OpenWorldStat
 	}
 
 	nodeIDs := make([]string, len(content.Nodes))
+	nodeRefs := make(map[string]string, len(content.Nodes))
 	for index, node := range content.Nodes {
 		if node.KindIndex < 0 || node.KindIndex >= len(kindIDs) {
 			return nil, fmt.Errorf("%w: content.nodes/%d/kind_index", ErrInvalidRequest, index)
+		}
+		if node.Ref != "" {
+			if !ValidOpenWorldCreateRef(node.Ref) {
+				return nil, fmt.Errorf("%w: content.nodes/%d/ref", ErrInvalidRequest, index)
+			}
+			if _, exists := nodeRefs[node.Ref]; exists {
+				return nil, fmt.Errorf("%w: content.nodes/%d/ref", ErrInvalidRequest, index)
+			}
 		}
 		id, err := uuid.NewV7()
 		if err != nil {
 			return nil, err
 		}
 		nodeIDs[index] = id.String()
+		if node.Ref != "" {
+			nodeRefs[node.Ref] = id.String()
+		}
 		x, y := defaultOpenWorldPosition(index, len(content.Nodes))
 		if node.X != nil {
 			x = *node.X
@@ -95,6 +124,17 @@ func buildOpenWorldState(title string, content OpenWorldContent) (*OpenWorldStat
 			Text: node.Text, Values: values,
 			Status: OpenWorldStatusOpen, X: x, Y: y,
 		})
+	}
+
+	// A create body may carry an experience document that refers to local
+	// refs. Remap those refs onto the UUIDs the server just minted before the
+	// normal reference validation runs.
+	if content.Experience != nil {
+		remapped, err := worldcap.RemapExperience(content.Experience, kindRefs, nodeRefs)
+		if err != nil {
+			return nil, fmt.Errorf("%w: content.experience", ErrInvalidRequest)
+		}
+		state.Experience = remapped
 	}
 
 	for index, link := range content.Links {

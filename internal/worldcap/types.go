@@ -155,6 +155,7 @@ type Context struct {
 	Kinds     map[string]KindContext
 	Entities  map[string]EntityContext
 	Behaviors map[string]bool
+	Variables map[string]string // variable name -> text | number | flag
 }
 
 // KindOfEntity returns the kind context of an entity.

@@ -3,6 +3,7 @@ import { useCallback, useEffect, useRef, useState, type FormEvent, type PointerE
 import { Link, useNavigate, useParams, useSearchParams } from "react-router";
 import {
   applyAction,
+  deriveObject,
   errorMessage,
   getObject,
   getWorldCapabilities,
@@ -79,6 +80,7 @@ export default function OpenWorldPage() {
   const [error, setError] = useState<unknown>(null);
   const [notice, setNotice] = useState("");
   const [busy, setBusy] = useState("");
+  const [deriving, setDeriving] = useState(false);
   const [view, setView] = useState<WorldViewMode | "">("");
   const [panel, setPanel] = useState<ViewMode>(
     searchParams.get("build") === "1" ? "experience" : "structure"
@@ -104,6 +106,24 @@ export default function OpenWorldPage() {
     } finally {
       setLoading(false);
     }
+  }, [id]);
+
+  useEffect(() => {
+    // A route change to another world must never leave the previous object
+    // interactive. Clear it and show loading until the new snapshot arrives;
+    // otherwise the first click after Branch can write to the parent world.
+    setObject(null);
+    setLoading(true);
+    setView("");
+    setError(null);
+    setNotice("");
+    setBusy("");
+    setDeriving(false);
+    setDrag(null);
+    setDragging(false);
+    setPremiseEditing(false);
+    setPanel(searchParams.get("build") === "1" ? "experience" : "structure");
+    setExperienceOpened(searchParams.get("build") === "1");
   }, [id]);
 
   useEffect(() => {
@@ -226,6 +246,26 @@ export default function OpenWorldPage() {
       window.removeEventListener("pointercancel", onCancel);
     };
   }, [drag]);
+
+  async function deriveQuick() {
+    if (!object || deriving || busy !== "") {
+      return;
+    }
+    setDeriving(true);
+    setError(null);
+    try {
+      const child = await deriveObject(object.id, {
+        title: `${String(openWorldState(object).title || t("common.untitled"))} ${t("derive.defaultSuffix")}`.trim().slice(0, 200),
+        source_version: object.version,
+        inheritance_fields: ["premise", "structure", "views"]
+      });
+      navigate(`/worlds/${child.id}?derived=1`);
+    } catch (failure) {
+      setError(failure);
+    } finally {
+      setDeriving(false);
+    }
+  }
 
   async function run(action: string, input: Record<string, unknown>) {
     if (!object || busy) {
@@ -393,11 +433,36 @@ export default function OpenWorldPage() {
             <Icon name="spark" size={15} />
             {t("openWorld.ai")}
           </button>
+          <button
+            className="dw-button dw-button-small dw-button-ghost"
+            type="button"
+            onClick={() => {
+              setPanel("ai");
+              window.setTimeout(() => document.getElementById("dw-ai-compose")?.focus(), 60);
+            }}
+          >
+            <Icon name="spark" size={15} />
+            {t("openWorld.changeWithAI")}
+          </button>
           {object.permissions.includes("derive") ? (
-            <Link className="dw-button dw-button-small dw-button-ghost" to={`/objects/${object.id}/derive`}>
-              <Icon name="branch" size={15} />
-              {t("stage.tab.branch")}
-            </Link>
+            <div className="dw-open-derive">
+              <button
+                className="dw-button dw-button-small dw-button-ghost"
+                type="button"
+                disabled={deriving || busy !== ""}
+                onClick={() => void deriveQuick()}
+              >
+                <Icon name="branch" size={15} />
+                {deriving ? t("derive.working") : t("openWorld.deriveQuick")}
+              </button>
+              <Link
+                className="dw-open-derive-more"
+                aria-label="Branch"
+                to={`/objects/${object.id}/derive`}
+              >
+                {t("openWorld.deriveOptions")}
+              </Link>
+            </div>
           ) : null}
         </div>
       </header>
@@ -489,6 +554,15 @@ export default function OpenWorldPage() {
               onInvoke={invokeBehavior}
               onSetField={(entityID, field, value) =>
                 void run("set_node_field", { node_id: entityID, field, value })
+              }
+              onCustom={(surfaceID, event, payload) =>
+                void run("custom_action", {
+                  surface_id: surfaceID,
+                  event,
+                  node_id: payload.nodeID,
+                  key: payload.key,
+                  value: payload.value
+                })
               }
             />
           ) : world.nodes.length === 0 ? (

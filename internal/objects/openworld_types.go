@@ -124,6 +124,11 @@ const (
 	openWorldMaxX              = openWorldWidth - 40
 	openWorldMinY              = 40.0
 	openWorldMaxY              = openWorldHeight - 60
+
+	maxOpenWorldVariables        = 32
+	maxOpenWorldVariableKeyRunes = 40
+	maxOpenWorldVariableTextRune = 1200
+	maxOpenWorldVariablesBytes   = 8 * 1024
 )
 
 // DefaultOpenWorldAppearance is the neutral look of a kind that has not chosen
@@ -275,6 +280,11 @@ type OpenWorldState struct {
 	Views        []string              `json:"views"`
 	Tags         []string              `json:"tags"`
 	Presentation OpenWorldPresentation `json:"presentation"`
+	// Variables are bounded world-wide values shared by every experience
+	// surface. They are not entity fields: a story can keep its reading
+	// position, a game its score, and a workspace its summary inputs without
+	// inventing a fake entity for each value.
+	Variables map[string]any `json:"variables,omitempty"`
 	// Experience is the optional capability-composed experience. Worlds that
 	// predate it omit the field and keep using views/presentation exactly as
 	// before. Its presence never changes the core entity/field/rule model.
@@ -295,7 +305,11 @@ func OpenWorldAvailableFields() []string {
 }
 
 // OpenWorldKindInput is the create-time kind shape; ids are generated.
+// Ref is an optional local slug that lets an experience document submitted in
+// the same create body refer to a kind before the server mints its UUID. The
+// server remaps every declared reference from Ref to the generated id.
 type OpenWorldKindInput struct {
+	Ref        string               `json:"ref,omitempty"`
 	Name       string               `json:"name"`
 	Hue        int                  `json:"hue"`
 	Fields     []OpenWorldField     `json:"fields"`
@@ -304,13 +318,33 @@ type OpenWorldKindInput struct {
 }
 
 // OpenWorldNodeInput references a kind by its index in the content arrays.
+// Ref is the same local-slug mechanism used by OpenWorldKindInput.
 type OpenWorldNodeInput struct {
+	Ref       string         `json:"ref,omitempty"`
 	KindIndex int            `json:"kind_index"`
 	Name      string         `json:"name"`
 	Text      string         `json:"text"`
 	X         *float64       `json:"x"`
 	Y         *float64       `json:"y"`
 	Values    map[string]any `json:"values"`
+}
+
+// ValidOpenWorldCreateRef reports whether a create-time local ref is a bounded
+// slug. Refs never become object identity; they exist only until remapping.
+func ValidOpenWorldCreateRef(value string) bool {
+	if len(value) < 1 || len(value) > 40 {
+		return false
+	}
+	for index, r := range value {
+		switch {
+		case r >= 'a' && r <= 'z':
+		case r >= '0' && r <= '9' && index > 0:
+		case (r == '_' || r == '-' || r == '.') && index > 0:
+		default:
+			return false
+		}
+	}
+	return true
 }
 
 // OpenWorldLinkInput references nodes by their content indexes.
@@ -354,6 +388,7 @@ type OpenWorldContent struct {
 	Views        []string               `json:"views"`
 	Tags         []string               `json:"tags"`
 	Presentation *OpenWorldPresentation `json:"presentation"`
+	Variables    map[string]any         `json:"variables,omitempty"`
 	Experience   *worldcap.Experience   `json:"experience"`
 }
 
@@ -913,6 +948,9 @@ func ValidateOpenWorldState(state *OpenWorldState) error {
 			}
 		}
 	}
+	if err := validateOpenWorldVariables(state.Variables); err != nil {
+		return err
+	}
 	if err := validateOpenWorldExperience(state); err != nil {
 		return err
 	}
@@ -923,6 +961,41 @@ func ValidateOpenWorldState(state *OpenWorldState) error {
 	state.Views = views
 	if err := normalizeOpenWorldTags(state); err != nil {
 		return err
+	}
+	return nil
+}
+
+// validateOpenWorldVariables keeps the shared surface state small and typed.
+// Variables are deliberately not a second entity system: they are flat scalar
+// values with a fixed key grammar, bounded count and bounded total bytes.
+func validateOpenWorldVariables(variables map[string]any) error {
+	if len(variables) == 0 {
+		return nil
+	}
+	if len(variables) > maxOpenWorldVariables {
+		return fmt.Errorf("%w: /variables", ErrInvalidRequest)
+	}
+	encoded, err := json.Marshal(variables)
+	if err != nil || len(encoded) > maxOpenWorldVariablesBytes {
+		return fmt.Errorf("%w: /variables", ErrInvalidRequest)
+	}
+	for name, value := range variables {
+		if !ValidOpenWorldCreateRef(name) || runeLength(name) > maxOpenWorldVariableKeyRunes {
+			return fmt.Errorf("%w: /variables/%s", ErrInvalidRequest, name)
+		}
+		switch typed := value.(type) {
+		case string:
+			if runeLength(typed) > maxOpenWorldVariableTextRune {
+				return fmt.Errorf("%w: /variables/%s", ErrInvalidRequest, name)
+			}
+		case float64:
+			if math.IsNaN(typed) || math.IsInf(typed, 0) {
+				return fmt.Errorf("%w: /variables/%s", ErrInvalidRequest, name)
+			}
+		case bool:
+		default:
+			return fmt.Errorf("%w: /variables/%s", ErrInvalidRequest, name)
+		}
 	}
 	return nil
 }
@@ -1043,6 +1116,12 @@ func OpenWorldDerivedState(title string, parent *OpenWorldState, selected map[st
 				return nil, err
 			}
 			child.Experience = experience
+		}
+		if len(parent.Variables) > 0 {
+			child.Variables = make(map[string]any, len(parent.Variables))
+			for name, value := range parent.Variables {
+				child.Variables[name] = value
+			}
 		}
 	}
 	if err := ValidateOpenWorldState(child); err != nil {

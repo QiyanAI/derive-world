@@ -74,6 +74,25 @@ implemented. This is a self-hostable OSS MVP, not a production platform.
   output is a separate, operator-configured mode and is never implied by
   fixture behaviour.
 
+
+## Multi-form worlds on the development branch (Phase 2D)
+
+- Creation is no longer a type choice. The user describes what they want; the Personal AI writes a compact world seed and a server-side composer expands it into real runnable content and experience. Ordinary users never see capabilities, fields, runtimes or JSON.
+- One world can carry several universal surfaces that share content, state, variables, permissions, versions and lineage:
+  - `core.live`: a time-based 2D world. With no avatar it genuinely plays an animation (timeline, particles, motion); with an avatar it is walkable, collidable and proximity-interactive; with a goal it is a collect/score/reach/survive game with win, loss and restart.
+  - `core.story`: chapters are real things, choices are real links, reading position is a shared variable; readable, choosable, extendable, rewritable and derivable.
+  - `core.workspace`: real things and fields as an editable table with row creation, status, actions and live summaries; a genuinely usable work environment.
+  - `core.space`: a static visual relation space.
+  - `core.custom`: a bounded declarative surface. The AI can define forms the fixed surfaces do not cover with shapes, text, inputs, keys, drag, conditions, actions, timelines and procedural tones; the server interprets it and the client renders it, never executing user code.
+  - `core.tabs`: combine any surfaces in one world; labels are world content, not product categories.
+- Create bodies may use local `ref` slugs; the server mints UUIDs and remaps experience references, so a complete experience can be installed at creation.
+- World variables (<=128, <=8 KiB total) store game scores, novel reading positions and workspace state; they participate in versions, events, audit, snapshots and derivation.
+- A bound Personal AI uses `world.reimagine` to propose a merged change; the server runs `worldseed.Reshape` and creates a `reshape_world` proposal. Applying it atomically replaces the world. Content merges by name and keeps existing ids, behaviours, arbitrary forms and entity actions; the experience shell is rebuilt for the requested surfaces.
+- Complex worlds grow across turns: each model turn remains bounded at 8 KiB, but the world can keep gaining things, chapters, surfaces and custom nodes up to the hard state/experience ceilings.
+- Limits (stated honestly): 2D declarative surfaces; no 3D, physics engine, audio engine, external images/fonts/audio/video/URLs, network access, user code or real-time multiplayer. A custom surface holds at most 40 nodes and 12 KiB props; the whole experience is 32 KiB; object state is 64 KiB; variables are 128 / 8 KiB; one model output is 8 KiB; one creation confirmation is 12 KiB. Anything beyond these is not pretended; new media or engines still require a validated universal module or host primitive, never a per-world page.
+- `core.custom` is a composable safe extension path, not a claim that arbitrary media are implemented. It can create forms the fixed surfaces do not cover inside the 2D declarative medium; it cannot grant 3D, physics or audio capabilities by itself.
+- Fixture output remains deterministic demo data and is always labelled; real-model acceptance requires separate authorization and configuration.
+
 ## Implemented in v0.1.0
 
 - Local registration, login, session rotation, logout, and session-bound CSRF.

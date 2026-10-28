@@ -569,9 +569,13 @@ SELECT `+objectColumns+`
 	voteOption := mutation.VoteOption
 	oldVoteOption := mutation.PreviousVoteOption
 
+	eventInput := plan.Input
+	if plan.EventInput != nil {
+		eventInput = plan.EventInput
+	}
 	eventPayload := map[string]any{
 		"action":      plan.Action,
-		"input":       plan.Input,
+		"input":       eventInput,
 		"state_after": json.RawMessage(newState),
 	}
 	if plan.Action == "set_shared_context" {

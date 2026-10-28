@@ -9,11 +9,12 @@ import (
 	"github.com/QiyanAI/derive-world/internal/handoff"
 	"github.com/QiyanAI/derive-world/internal/model"
 	"github.com/QiyanAI/derive-world/internal/objects"
+	"github.com/QiyanAI/derive-world/internal/worldseed"
 )
 
 func TestGlobalPromptOffersWorldCreation(t *testing.T) {
 	profile := &Profile{Name: "Test AI"}
-	system, messages, _, err := buildPrompt(profile, nil, nil, nil, "Create my first world")
+	system, messages, _, err := buildPrompt(profile, nil, nil, nil, "Create my first world", "")
 	if err != nil {
 		t.Fatalf("build prompt: %v", err)
 	}
@@ -39,7 +40,7 @@ func TestObjectPromptDoesNotOfferWorldCreation(t *testing.T) {
 			SharedContext: json.RawMessage(`{}`),
 		},
 	}
-	system, _, _, err := buildPrompt(profile, nil, projection, nil, "Change this world")
+	system, _, _, err := buildPrompt(profile, nil, projection, nil, "Change this world", "")
 	if err != nil {
 		t.Fatalf("build prompt: %v", err)
 	}
@@ -74,17 +75,30 @@ func TestFixtureWorldCreateProposalPassesServerValidation(t *testing.T) {
 	if err := decodeSingleJSON(string(actions[0].Input), &input); err != nil {
 		t.Fatalf("decode action input: %v", err)
 	}
+	content := input.Content
+	if len(input.Brief) > 0 {
+		seed, err := worldseed.Decode(input.Brief)
+		if err != nil {
+			t.Fatalf("decode fixture brief: %v", err)
+		}
+		composition, err := worldseed.Compose(seed, input.Title)
+		if err != nil {
+			t.Fatalf("compose fixture brief: %v", err)
+		}
+		content, _ = json.Marshal(composition.Content)
+	}
 	if _, _, err := objects.ValidateCreate(objects.CreateInput{
 		ObjectType: objects.TypeOpenWorld,
 		Title:      input.Title,
-		Content:    input.Content,
+		Content:    content,
 	}); err != nil {
 		t.Fatalf("fixture proposal is not a valid open world: %v", err)
 	}
-	encoded, _ := json.Marshal(input.Content)
+	encoded, _ := json.Marshal(content)
 	if len(encoded) == 0 {
 		t.Fatalf("empty content")
 	}
+	t.Logf("composed fixture content bytes=%d", len(encoded))
 }
 
 func contains(value, needle string) bool {
@@ -94,4 +108,14 @@ func contains(value, needle string) bool {
 		}
 	}
 	return false
+}
+
+func TestParseModelOutputStripsMarkdownFence(t *testing.T) {
+	reply, actions, status, err := parseModelOutput("```json\n{\"reply\":\"fenced\",\"proposed_actions\":[]}\n```")
+	if err != nil {
+		t.Fatalf("parse: %v", err)
+	}
+	if status != "structured" || reply != "fenced" || len(actions) != 0 {
+		t.Fatalf("status=%s reply=%q actions=%d", status, reply, len(actions))
+	}
 }

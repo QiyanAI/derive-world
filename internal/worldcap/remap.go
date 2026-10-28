@@ -104,6 +104,7 @@ func remapConditionRefs(condition *Condition, entityIDs map[string]string) {
 var referenceKeys = map[string]bool{
 	"kind_id": true, "entity_id": true, "from_entity": true,
 	"to_entity": true, "node_id": true, "trigger_id": true,
+	"chapter_kind_id": true, "solid_kinds": true, "progress_entity": true,
 }
 
 var templateTokenPattern = regexp.MustCompile(`\{\{[^{}]*\}\}`)

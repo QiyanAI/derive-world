@@ -3323,12 +3323,17 @@ components:
             - set_presentation
             - set_experience
             - invoke_behavior
+            - reshape_world
+            - custom_action
         input:
           type: object
           description: |
             Action input. `set_experience` takes a SetExperienceInput
             (`experience: WorldExperience` or null to clear); `invoke_behavior`
-            takes an InvokeBehaviorInput. Other actions keep their existing
+            takes an InvokeBehaviorInput; `reshape_world` takes a composed
+            world state with a human-readable note; `custom_action` routes one
+            validated custom-surface event (click, key, input or drag) through
+            the server interpreter. Other actions keep their existing
             template-specific inputs.
           additionalProperties: true
         expected_version:
@@ -4108,6 +4113,16 @@ components:
           type: string
           minLength: 1
           maxLength: 16384
+        intent:
+          type: string
+          description: >
+            Optional authoring intent. `create` includes the full world-brief
+            guide for a creation turn; `change` includes it for a reshape turn.
+            Omit it for ordinary chat so the model-input budget is not spent on
+            an unused guide.
+          enum:
+          - create
+          - change
     AcceptedAction:
       type: object
       additionalProperties: false

@@ -49,12 +49,15 @@ func (s *Service) CreateProposalTx(
 	ctx context.Context,
 	tx pgx.Tx,
 	objectID, actorUserID, aiProfileID, delegationID uuid.UUID,
-	action string,
+	capabilityID, action string,
 	input json.RawMessage,
 	baseVersion int,
 	requestID string,
 	ipHash []byte,
 ) (uuid.UUID, bool, error) {
+	if capabilityID == "" {
+		capabilityID = proposalCapability
+	}
 	if baseVersion < 1 {
 		return uuid.Nil, false, nil
 	}
@@ -122,7 +125,7 @@ INSERT INTO object_proposals (
 ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8::jsonb,$9,$10,'pending')
 RETURNING created_at`,
 		proposalID.String(), objectID.String(), actorUserID.String(),
-		aiProfileID.String(), delegationID.String(), proposalCapability, action,
+		aiProfileID.String(), delegationID.String(), capabilityID, action,
 		string(canonical), hash[:], baseVersion,
 	).Scan(&createdAt)
 	if err != nil {
@@ -332,9 +335,13 @@ UPDATE object_proposals SET status = 'expired'
 	}
 	newState := mutation.NewState
 	newVersion := mutation.NewVersion
+	eventInput := plan.Input
+	if plan.EventInput != nil {
+		eventInput = plan.EventInput
+	}
 	eventPayload := map[string]any{
 		"action":      plan.Action,
-		"input":       plan.Input,
+		"input":       eventInput,
 		"state_after": json.RawMessage(newState),
 	}
 	if plan.Action == "set_shared_context" {

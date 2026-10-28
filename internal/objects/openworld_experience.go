@@ -3,6 +3,9 @@ package objects
 
 import (
 	"fmt"
+	"strings"
+
+	"github.com/google/uuid"
 
 	"github.com/QiyanAI/derive-world/internal/worldcap"
 )
@@ -15,6 +18,7 @@ func openWorldCapabilityContext(state *OpenWorldState) *worldcap.Context {
 		Kinds:     make(map[string]worldcap.KindContext, len(state.Kinds)),
 		Entities:  make(map[string]worldcap.EntityContext, len(state.Nodes)),
 		Behaviors: map[string]bool{},
+		Variables: make(map[string]string, len(state.Variables)),
 	}
 	for _, kind := range state.Kinds {
 		fields := make(map[string]string, len(kind.Fields))
@@ -33,6 +37,16 @@ func openWorldCapabilityContext(state *OpenWorldState) *worldcap.Context {
 	if state.Experience != nil {
 		for _, behavior := range state.Experience.Behaviors {
 			context.Behaviors[behavior.ID] = true
+		}
+	}
+	for name, value := range state.Variables {
+		switch value.(type) {
+		case string:
+			context.Variables[name] = "text"
+		case float64:
+			context.Variables[name] = "number"
+		case bool:
+			context.Variables[name] = "flag"
 		}
 	}
 	return context
@@ -122,4 +136,101 @@ func (world openWorldCapabilityWorld) SetStatus(entityID, status string) error {
 	}
 	node.Status = status
 	return nil
+}
+
+func (world openWorldCapabilityWorld) Variable(name string) (any, bool) {
+	value, ok := world.state.Variables[name]
+	return value, ok
+}
+
+func (world openWorldCapabilityWorld) SetVariable(name string, value any) error {
+	if !ValidOpenWorldCreateRef(name) {
+		return fmt.Errorf("%w: experience variable name", ErrInvalidRequest)
+	}
+	switch typed := value.(type) {
+	case string:
+		if runeLength(typed) > maxOpenWorldVariableTextRune {
+			return fmt.Errorf("%w: experience variable value", ErrInvalidRequest)
+		}
+	case float64, bool:
+	default:
+		return fmt.Errorf("%w: experience variable value", ErrInvalidRequest)
+	}
+	existing, exists := world.state.Variables[name]
+	if !exists && len(world.state.Variables) >= maxOpenWorldVariables {
+		return fmt.Errorf("%w: experience variables", ErrInvalidRequest)
+	}
+	if exists {
+		existingType, _ := variableScalarType(existing)
+		nextType, _ := variableScalarType(value)
+		if existingType != nextType {
+			return fmt.Errorf("%w: experience variable type", ErrInvalidRequest)
+		}
+	}
+	if world.state.Variables == nil {
+		world.state.Variables = map[string]any{}
+	}
+	world.state.Variables[name] = value
+	return nil
+}
+
+func (world openWorldCapabilityWorld) CreateEntity(kindID, name string, values map[string]any) (string, error) {
+	kind := findOpenWorldKind(world.state, kindID)
+	if kind == nil {
+		return "", fmt.Errorf("%w: experience kind", ErrInvalidRequest)
+	}
+	name = strings.TrimSpace(name)
+	if name == "" || runeLength(name) > maxOpenWorldNodeNameRunes {
+		return "", fmt.Errorf("%w: experience entity name", ErrInvalidRequest)
+	}
+	if len(world.state.Nodes) >= maxOpenWorldNodes {
+		return "", fmt.Errorf("%w: experience entity count", ErrInvalidRequest)
+	}
+	nodeValues := make(map[string]any, len(kind.Fields))
+	for _, field := range kind.Fields {
+		value, ok := values[field.Key]
+		if !ok {
+			switch field.Type {
+			case OpenWorldFieldText:
+				nodeValues[field.Key] = ""
+			case OpenWorldFieldNumber:
+				nodeValues[field.Key] = float64(0)
+			case OpenWorldFieldFlag:
+				nodeValues[field.Key] = false
+			}
+			continue
+		}
+		if err := validateOpenWorldValue(field, value, "experience.create.values"); err != nil {
+			return "", err
+		}
+		nodeValues[field.Key] = value
+	}
+	for key := range values {
+		if _, ok := nodeValues[key]; !ok {
+			return "", fmt.Errorf("%w: experience.create.values", ErrInvalidRequest)
+		}
+	}
+	id, err := uuid.NewV7()
+	if err != nil {
+		return "", err
+	}
+	x, y := defaultOpenWorldPosition(len(world.state.Nodes), len(world.state.Nodes)+1)
+	world.state.Nodes = append(world.state.Nodes, OpenWorldNode{
+		ID: id.String(), KindID: kindID, Name: name, Values: nodeValues,
+		Status: OpenWorldStatusOpen, X: x, Y: y,
+	})
+	return id.String(), nil
+}
+
+func variableScalarType(value any) (string, bool) {
+	switch value.(type) {
+	case string:
+		return "text", true
+	case float64:
+		return "number", true
+	case bool:
+		return "flag", true
+	default:
+		return "", false
+	}
 }

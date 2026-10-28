@@ -132,7 +132,7 @@ export default function AIPanel({ object, canContribute, onChanged }: Props) {
         activeConversation = created.id;
         setConversationID(created.id);
       }
-      const result = await sendAIMessage(activeConversation, content);
+      const result = await sendAIMessage(activeConversation, content, "change");
       setMessages((previous) => [...previous, result.user_message, result.assistant_message]);
       setDraft("");
       const trace = { mode: result.model_mode, at: new Date().toISOString() };
@@ -284,6 +284,7 @@ export default function AIPanel({ object, canContribute, onChanged }: Props) {
       <label className="ai-compose">
         <span className="visually-hidden">{t("workspace.aiPlaceholder")}</span>
         <textarea
+          id="dw-ai-compose"
           rows={3}
           maxLength={16384}
           value={draft}
@@ -340,7 +341,7 @@ export default function AIPanel({ object, canContribute, onChanged }: Props) {
           {proposals.map((item) => {
             const preview = proposalPreview(item, object);
             return (
-              <article key={item.id} className="proposal-card">
+              <article key={item.id} className="proposal-card" data-testid="proposal-card">
                 <div className="proposal-head">
                   <strong>{t(actionKey(item.action))}</strong>
                   <small>{t("workspace.baseVersion", { version: item.base_version })}</small>

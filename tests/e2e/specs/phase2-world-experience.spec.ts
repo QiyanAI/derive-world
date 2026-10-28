@@ -12,6 +12,7 @@ async function createFreeWorld(page: Page, title: string): Promise<string> {
   await page.goto("/");
   await page.getByRole("button", { name: "Create a beginning" }).click();
   await fillStable(page.getByLabel("What do you want to begin?"), title);
+  await page.getByText("Advanced: start blank").click();
   await page.getByRole("button", { name: "Define a free world" }).click();
   await page.getByRole("button", { name: "Let it grow" }).click();
   await expect(page.getByTestId("open-world-page")).toBeVisible();

@@ -157,6 +157,8 @@ type spaceView struct {
 	Paint    string         `json:"paint"`
 	Label    string         `json:"label"`
 	Layer    string         `json:"layer"`
+	Motion   string         `json:"motion,omitempty"`
+	HideDone bool           `json:"hide_done,omitempty"`
 	Bindings []spaceBinding `json:"bindings,omitempty"`
 }
 
@@ -165,6 +167,7 @@ type spaceProps struct {
 	ShowLinks          bool            `json:"show_links"`
 	LinkStyle          string          `json:"link_style"`
 	Views              []spaceView     `json:"views"`
+	EntityActions      []entityAction  `json:"entity_actions,omitempty"`
 	ActivateBehaviorID string          `json:"activate_behavior_id"`
 }
 
@@ -239,6 +242,9 @@ func (spaceCapability) Validate(raw json.RawMessage, ctx ValidateContext) (json.
 		if view.Layer != "back" && view.Layer != "mid" && view.Layer != "front" {
 			return nil, fmt.Errorf("%w: space.views/%d/layer", ErrInvalid, index)
 		}
+		if !validSceneMotion(view.Motion) {
+			return nil, fmt.Errorf("%w: space.views/%d/motion", ErrInvalid, index)
+		}
 		if len(view.Bindings) > 4 {
 			return nil, fmt.Errorf("%w: space.views/%d/bindings", ErrInvalid, index)
 		}
@@ -253,6 +259,9 @@ func (spaceCapability) Validate(raw json.RawMessage, ctx ValidateContext) (json.
 		if !validLocalID(props.ActivateBehaviorID) || !ctx.World.HasBehavior(props.ActivateBehaviorID) {
 			return nil, fmt.Errorf("%w: space.activate_behavior_id", ErrInvalid)
 		}
+	}
+	if err := validateEntityActions(props.EntityActions, ctx); err != nil {
+		return nil, err
 	}
 	return json.Marshal(props)
 }
@@ -290,6 +299,13 @@ func validateSpaceBinding(binding *spaceBinding, kind KindContext, seenTargets m
 		return fmt.Errorf("%w: binding target", ErrInvalid)
 	}
 	return nil
+}
+
+// ValidateSVGPath is the public form of the drawing-command guard. The world
+// synthesizer uses the same authority as the space capability so a generated
+// path can never be persisted unless the renderer would accept it.
+func ValidateSVGPath(value string) error {
+	return validateSVGPath(value)
 }
 
 var svgPathPattern = regexp.MustCompile(`^[MmLlHhVvCcSsQqTtAaZz0-9eE+.,\-\s]+$`)

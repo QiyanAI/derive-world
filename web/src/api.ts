@@ -191,6 +191,7 @@ export interface ConfirmationEffect {
   kind_count?: number;
   node_count?: number;
   rule_count?: number;
+  surfaces?: string[];
 }
 
 export interface Confirmation {
@@ -656,12 +657,17 @@ export async function deleteConversation(id: string): Promise<void> {
 
 export async function sendAIMessage(
   conversationID: string,
-  content: string
+  content: string,
+  intent?: "create" | "change"
 ): Promise<SendMessageResult> {
+  const body: Record<string, unknown> = { content };
+  if (intent) {
+    body.intent = intent;
+  }
   return idempotentRequest<SendMessageResult>(
     "POST",
     `/api/v1/ai/conversations/${encodeURIComponent(conversationID)}/messages`,
-    { content }
+    body
   );
 }
 
@@ -963,6 +969,7 @@ export interface OpenWorldState {
   views: OpenWorldView[];
   tags?: string[];
   presentation: OpenWorldPresentation;
+  variables?: Record<string, string | number | boolean>;
   experience?: WorldExperience;
 }
 
@@ -1156,6 +1163,7 @@ export function openWorldState(object: ObjectView): OpenWorldState {
     premise: typeof state.premise === "string" ? state.premise : "",
     kinds: kinds.map((kind) => ({
       ...kind,
+      fields: Array.isArray(kind?.fields) ? kind.fields : [],
       appearance: normalizeAppearance(kind?.appearance),
       bindings: Array.isArray(kind?.bindings) ? kind.bindings : []
     })),
@@ -1165,6 +1173,10 @@ export function openWorldState(object: ObjectView): OpenWorldState {
     views: views.length > 0 ? views : [...openWorldViews],
     tags: Array.isArray(state.tags) ? state.tags : [],
     presentation: normalizePresentation(state.presentation),
+    variables:
+      state.variables && typeof state.variables === "object"
+        ? (state.variables as Record<string, string | number | boolean>)
+        : {},
     experience: normalizeExperience(state.experience)
   };
 }

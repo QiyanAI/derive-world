@@ -32,7 +32,8 @@ func isOpenWorldAction(action string) bool {
 		"add_node", "update_node", "remove_node", "move_node",
 		"set_node_field", "set_node_status", "touch_node",
 		"add_link", "remove_link", "add_rule", "remove_rule", "set_views",
-		"set_presentation", "set_experience", "invoke_behavior":
+		"set_presentation", "set_experience", "invoke_behavior", "reshape_world",
+		"custom_action":
 		return true
 	default:
 		return false
@@ -105,6 +106,19 @@ type setOpenWorldStatusInput struct {
 
 type touchOpenWorldNodeInput struct {
 	NodeID string `json:"node_id"`
+}
+
+type reshapeOpenWorldInput struct {
+	Note    string         `json:"note"`
+	Content OpenWorldState `json:"content"`
+}
+
+type customActionInput struct {
+	SurfaceID string `json:"surface_id"`
+	Event     string `json:"event"`
+	NodeID    string `json:"node_id,omitempty"`
+	Key       string `json:"key,omitempty"`
+	Value     any    `json:"value,omitempty"`
 }
 
 type addOpenWorldLinkInput struct {
@@ -673,6 +687,68 @@ func planOpenWorldAction(action string, raw json.RawMessage, plan *ActionPlan) e
 				return fmt.Errorf("%w: input.value", ErrPayloadTooLarge)
 			}
 			plan.Input["value"] = input.Value
+		}
+	case "reshape_world":
+		if err := validateInputKeys(raw, []string{"content"},
+			[]string{"note", "content"}); err != nil {
+			return err
+		}
+		var input reshapeOpenWorldInput
+		if err := decodeOpenWorldInput(raw, &input); err != nil {
+			return err
+		}
+		note := strings.TrimSpace(input.Note)
+		if runeLength(note) > 500 {
+			return fmt.Errorf("%w: input.note", ErrInvalidRequest)
+		}
+		if err := ValidateOpenWorldState(&input.Content); err != nil {
+			return err
+		}
+		plan.Input["note"] = note
+		plan.Input["content"] = input.Content
+		plan.EventInput = map[string]any{
+			"note": note, "kind_count": len(input.Content.Kinds),
+			"node_count": len(input.Content.Nodes), "link_count": len(input.Content.Links),
+			"variable_count": len(input.Content.Variables),
+			"experience":     input.Content.Experience != nil,
+		}
+	case "custom_action":
+		if err := validateInputKeys(raw, []string{"surface_id", "event"},
+			[]string{"surface_id", "event", "node_id", "key", "value"}); err != nil {
+			return err
+		}
+		var input customActionInput
+		if err := decodeOpenWorldInput(raw, &input); err != nil {
+			return err
+		}
+		if !worldcap.ValidLocalID(input.SurfaceID) {
+			return fmt.Errorf("%w: input.surface_id", ErrInvalidRequest)
+		}
+		switch input.Event {
+		case "click", "key", "input", "drag":
+		default:
+			return fmt.Errorf("%w: input.event", ErrInvalidRequest)
+		}
+		if input.NodeID != "" && !worldcap.ValidLocalID(input.NodeID) {
+			return fmt.Errorf("%w: input.node_id", ErrInvalidRequest)
+		}
+		if runeLength(input.Key) > 20 {
+			return fmt.Errorf("%w: input.key", ErrInvalidRequest)
+		}
+		if input.Value != nil {
+			encoded, err := json.Marshal(input.Value)
+			if err != nil || len(encoded) > 4096 {
+				return fmt.Errorf("%w: input.value", ErrPayloadTooLarge)
+			}
+			plan.Input["value"] = input.Value
+		}
+		plan.Input["surface_id"] = input.SurfaceID
+		plan.Input["event"] = input.Event
+		if input.NodeID != "" {
+			plan.Input["node_id"] = input.NodeID
+		}
+		if input.Key != "" {
+			plan.Input["key"] = input.Key
 		}
 	default:
 		return fmt.Errorf("%w: action", ErrInvalidRequest)
@@ -1338,6 +1414,46 @@ func applyOpenWorldAction(stateRaw, sharedRaw json.RawMessage, plan *ActionPlan)
 			return nil, nil, "", err
 		}
 		state.Experience = input.Experience
+	case "reshape_world":
+		var input reshapeOpenWorldInput
+		if err := decodeOpenWorldInput(plan.RawInput, &input); err != nil {
+			return nil, nil, "", err
+		}
+		if strings.TrimSpace(input.Content.Title) != state.Title {
+			input.Content.Title = state.Title
+		}
+		state = input.Content
+	case "custom_action":
+		var input customActionInput
+		if err := decodeOpenWorldInput(plan.RawInput, &input); err != nil {
+			return nil, nil, "", err
+		}
+		program, ok := worldcap.CustomProgramFor(state.Experience, input.SurfaceID)
+		if !ok {
+			return nil, nil, "", fmt.Errorf("%w: input.surface_id", ErrInvalidRequest)
+		}
+		applied, err := worldcap.ExecuteCustomEvent(program, worldcap.CustomEvent{
+			Event: input.Event, NodeID: input.NodeID, Key: input.Key, Value: input.Value,
+		}, openWorldCapabilityWorld{state: &state})
+		if err != nil {
+			return nil, nil, "", fmt.Errorf("%w: custom action", ErrInvalidRequest)
+		}
+		affected := make([]string, 0, len(applied))
+		seen := map[string]bool{}
+		for _, effect := range applied {
+			plan.Effects = append(plan.Effects, OpenWorldAppliedEffect{
+				Source: "custom", RuleID: "custom", NodeID: effect.EntityID,
+				Field: effect.Field, Op: effect.Action, Value: effect.Value,
+			})
+			if effect.EntityID != "" && !seen[effect.EntityID] {
+				seen[effect.EntityID] = true
+				affected = append(affected, effect.EntityID)
+			}
+		}
+		sort.Strings(affected)
+		for _, entityID := range affected {
+			plan.Effects = append(plan.Effects, applyOpenWorldRules(&state, entityID)...)
+		}
 	case "invoke_behavior":
 		var input invokeOpenWorldBehaviorInput
 		if err := decodeOpenWorldInput(plan.RawInput, &input); err != nil {

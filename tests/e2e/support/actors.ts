@@ -65,8 +65,8 @@ export async function registerFromInvite(page: Page, actor: Actor): Promise<void
 
 export async function login(page: Page, actor: Actor): Promise<void> {
   await page.goto("/login");
-  await page.getByLabel("Email", { exact: true }).fill(actor.email);
-  await page.getByLabel("Password").fill(actor.password);
+  await fillStable(page.getByLabel("Email", { exact: true }), actor.email);
+  await fillStable(page.getByLabel("Password"), actor.password);
   await page.getByRole("button", { name: "Sign in" }).click();
   await expect(page).not.toHaveURL(/\/login/);
 }

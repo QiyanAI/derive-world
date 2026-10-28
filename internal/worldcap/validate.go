@@ -171,19 +171,23 @@ func validateNode(node *ViewNode, ctx ValidateContext, state *nodeValidationStat
 		return fmt.Errorf("%w: unknown capability %q", ErrInvalid, node.Capability)
 	}
 	descriptor := capability.Descriptor()
-	if len(bytes.TrimSpace(node.Props)) > maxPropsBytes {
+	propsBudget := maxPropsBytes
+	if node.Capability == "core.custom" {
+		propsBudget = maxCustomPropsBytes
+	}
+	if len(bytes.TrimSpace(node.Props)) > propsBudget {
 		return fmt.Errorf("%w: node props size", ErrInvalid)
 	}
 	normalized, err := capability.Validate(node.Props, ctx)
 	if err != nil {
 		return fmt.Errorf("%w: node %q props: %v", ErrInvalid, node.ID, err)
 	}
-	if len(normalized) > maxPropsBytes {
+	if len(normalized) > propsBudget {
 		return fmt.Errorf("%w: node props size", ErrInvalid)
 	}
 	node.Props = normalized
 	switch node.Capability {
-	case "core.space":
+	case "core.space", "core.live":
 		// A space renders every entity that has a matching kind view. Charge
 		// that inner work for every instance of this node to the same budget.
 		state.expanded += instances * len(state.context.Entities)
@@ -237,6 +241,25 @@ func validateNode(node *ViewNode, ctx ValidateContext, state *nodeValidationStat
 	for index := range node.Children {
 		if err := validateNode(&node.Children[index], childContext, state, depth+1, childInstances); err != nil {
 			return err
+		}
+	}
+	if node.Capability == "core.tabs" {
+		childIDs := make(map[string]bool, len(node.Children))
+		for _, child := range node.Children {
+			childIDs[child.ID] = true
+		}
+		var props struct {
+			Tabs []struct {
+				ChildID string `json:"child_id"`
+			} `json:"tabs"`
+		}
+		if err := json.Unmarshal(normalized, &props); err != nil {
+			return fmt.Errorf("%w: node %q tabs", ErrInvalid, node.ID)
+		}
+		for _, tab := range props.Tabs {
+			if !childIDs[tab.ChildID] {
+				return fmt.Errorf("%w: node %q tab child %q", ErrInvalid, node.ID, tab.ChildID)
+			}
 		}
 	}
 	return nil

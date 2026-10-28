@@ -17,6 +17,7 @@ import (
 	"github.com/QiyanAI/derive-world/internal/handoff"
 	"github.com/QiyanAI/derive-world/internal/model"
 	"github.com/QiyanAI/derive-world/internal/trust"
+	"github.com/QiyanAI/derive-world/internal/worldseed"
 )
 
 const (
@@ -41,6 +42,7 @@ type SendMessageInput struct {
 	UserID         uuid.UUID
 	ConversationID uuid.UUID
 	Content        string
+	Intent         string
 	Object         *ObjectAccess
 	Route          string
 	IdemKey        string
@@ -146,7 +148,7 @@ func (s *Service) SendMessage(ctx context.Context, input SendMessageInput) (*Sen
 	if err != nil {
 		return nil, err
 	}
-	system, messages, inputChars, err := buildPrompt(profile, private, projection, history, input.Content)
+	system, messages, inputChars, err := buildPrompt(profile, private, projection, history, input.Content, input.Intent)
 	if err != nil {
 		return nil, err
 	}
@@ -423,6 +425,55 @@ func (s *Service) applyModelAction(
 			Kind: "confirmation", ConfirmationID: &confirmationID,
 			Action: trust.ConfirmationDeriveCreate,
 		}, nil
+	case "world.reimagine":
+		if input.Object == nil || input.Object.ObjectType != "open_world" || s.proposals == nil {
+			return nil, nil
+		}
+		if !effective.Can("contribute") {
+			return nil, nil
+		}
+		var reimagine worldReimagineInput
+		if err := decodeSingleJSON(string(action.Input), &reimagine); err != nil {
+			return nil, nil
+		}
+		if len(reimagine.Brief) == 0 {
+			return nil, nil
+		}
+		seed, err := worldseed.Decode(reimagine.Brief)
+		if err != nil {
+			return nil, nil
+		}
+		result, err := worldseed.Reshape(input.Object.State, seed)
+		if err != nil {
+			return nil, nil
+		}
+		encoded, err := json.Marshal(result.State)
+		if err != nil {
+			return nil, nil
+		}
+		summary := strings.TrimSpace(reimagine.Summary)
+		if summary == "" || utf8.RuneCountInString(summary) > 500 {
+			summary = result.Summary
+		}
+		payload, err := json.Marshal(map[string]any{
+			"note": summary, "content": json.RawMessage(encoded),
+		})
+		if err != nil {
+			return nil, nil
+		}
+		proposalID, accepted, err := s.proposals.CreateProposalTx(ctx, tx,
+			input.Object.ObjectID, input.UserID, effective.AIProfileID,
+			effective.DelegationID, "world.reimagine", "reshape_world", payload,
+			effective.ObjectVersion, input.RequestID, input.IPHash)
+		if err != nil {
+			return nil, err
+		}
+		if !accepted {
+			return nil, nil
+		}
+		return &AcceptedAction{
+			Kind: "proposal", ProposalID: &proposalID, Action: "reshape_world",
+		}, nil
 	default:
 		return nil, nil
 	}
@@ -448,14 +499,30 @@ func (s *Service) applyGlobalModelAction(
 	if err := decodeSingleJSON(string(action.Input), &create); err != nil {
 		return nil, nil
 	}
-	if strings.TrimSpace(create.Title) == "" || len(create.Content) == 0 {
+	if strings.TrimSpace(create.Title) == "" || (len(create.Content) == 0 && len(create.Brief) == 0) {
 		return nil, nil
+	}
+	content := create.Content
+	if len(create.Brief) > 0 {
+		seed, err := worldseed.Decode(create.Brief)
+		if err != nil {
+			return nil, nil
+		}
+		composition, err := worldseed.Compose(seed, strings.TrimSpace(create.Title))
+		if err != nil {
+			return nil, nil
+		}
+		encoded, err := json.Marshal(composition.Content)
+		if err != nil {
+			return nil, nil
+		}
+		content = encoded
 	}
 	confirmation, accepted, err := s.trust.CreateWorldCreateConfirmationTx(ctx, tx,
 		trust.WorldCreateConfirmationParams{
 			UserID: input.UserID, AIProfileID: effective.AIProfileID,
 			DelegationID: effective.DelegationID, Title: create.Title,
-			Content: create.Content, RequestID: input.RequestID, IPHash: input.IPHash,
+			Content: content, RequestID: input.RequestID, IPHash: input.IPHash,
 		})
 	if err != nil {
 		if errors.Is(err, trust.ErrInvalidRequest) || errors.Is(err, trust.ErrPayloadTooLarge) {
@@ -484,7 +551,8 @@ func (s *Service) recordProposalAction(ctx context.Context, tx pgx.Tx, input Sen
 		return proposalID, accepted, err
 	}
 	return s.proposals.CreateProposalTx(ctx, tx, input.Object.ObjectID, input.UserID,
-		effective.AIProfileID, effective.DelegationID, action, rawInput,
+		effective.AIProfileID, effective.DelegationID, "object.propose_change",
+		action, rawInput,
 		effective.ObjectVersion, input.RequestID, input.IPHash)
 }
 

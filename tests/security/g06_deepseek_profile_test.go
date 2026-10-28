@@ -116,6 +116,7 @@ func TestG06DeepSeekProfileMockRelay(t *testing.T) {
 	if err != nil {
 		t.Fatalf("create mock provider: %v", err)
 	}
+	baseline := g06FixtureBaseline(t)
 	env := newTestEnvWithProvider(t, func(cfg *config.Config) {
 		cfg.Model = config.ModelConfig{
 			Mode: "real", BaseURL: server.URL, Name: "deepseek-flash",
@@ -123,7 +124,7 @@ func TestG06DeepSeekProfileMockRelay(t *testing.T) {
 			ChatPath: "/chat/completions", ResponseFormat: "json_object",
 			ThinkingMode: "disabled", MaxInputChars: 8192,
 			DailyCallsPerUser: 2, DailyInputCharsPerUser: 16384,
-			ConcurrencyPerUser: 1, GlobalDailyCalls: 2,
+			ConcurrencyPerUser: 1, GlobalDailyCalls: baseline + 2,
 			IncludePrivateContext: true,
 		}
 	}, provider)

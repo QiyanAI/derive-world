@@ -24,6 +24,7 @@ func buildPrompt(
 	projection *handoff.Projection,
 	history []Message,
 	userContent string,
+	intent string,
 ) (string, []model.Message, int, error) {
 	var system strings.Builder
 	system.WriteString("You are the user's Personal AI inside Derive World. ")
@@ -61,9 +62,14 @@ func buildPrompt(
 		system.WriteString(fmt.Sprintf("%d", projection.ObjectVersion))
 		system.WriteString(`}}]}`)
 		system.WriteString("\n")
-		system.WriteString("The only supported action capabilities are object.propose_change and object.derive. ")
+		system.WriteString("The supported action capabilities are object.propose_change, object.derive and world.reimagine. ")
 		system.WriteString("Propose a change only when the handoff permissions include contribute. ")
 		system.WriteString(objectProposalVocabulary(projection.ObjectType))
+		system.WriteString("To change how an open world looks, moves, reads, is played or is worked in, use capability_id world.reimagine with input ")
+		system.WriteString(`{"summary":"...","brief":{...}}. The server merges the brief into the current world; the human still applies it. `)
+		if intent == "change" || wantsWorldChange(userContent, history) {
+			system.WriteString(worldSeedGuide)
+		}
 		system.WriteString("To create a derived object use capability_id object.derive with input ")
 		system.WriteString(`{"title":"...","source_version":N,"inheritance_fields":["..."]}. `)
 		system.WriteString("Do not propose invitations, member changes, deletions, shared_context changes, or capability invocations. ")
@@ -73,20 +79,11 @@ func buildPrompt(
 		system.WriteString("No world context in this turn. You are still the same Personal AI; you may propose one ")
 		system.WriteString("world.create action, but you never create it. The human approves every creation.\n")
 		system.WriteString(`Return ONLY {"reply":"...","proposed_actions":[]} or `)
-		system.WriteString(`{"reply":"...","proposed_actions":[{"capability_id":"world.create","input":{"title":"...","content":{...}}}]}.`)
-		system.WriteString(" If the user asks for a medium Derive World does not provide (arbitrary code, native 3D, external apps), say so and do not pretend it was created. ")
+		system.WriteString(`{"reply":"...","proposed_actions":[{"capability_id":"world.create","input":{"title":"...","brief":{...}}}]}.`)
+		system.WriteString(" If the user asks for something Derive World cannot run (native 3D, external assets, network, arbitrary code), say exactly what is missing and offer the closest runnable form; never pretend it was created. ")
 		system.WriteString("Use empty actions when no world creation is appropriate.\n")
-		if wantsWorldCreation(userContent, history) {
-			system.WriteString("A complete minimal content example: ")
-			system.WriteString(`{"premise":"The city remembers every choice.","kinds":[{"name":"Resident","hue":168,"fields":[{"key":"mood","label":"Mood","type":"text"}]},{"name":"Place","hue":214,"fields":[{"key":"light","label":"Light","type":"number"}]}],`)
-			system.WriteString(`"nodes":[{"kind_index":0,"name":"The first resident","text":"They heard the city first.","x":460,"y":330},{"kind_index":1,"name":"A square that listens","text":"Every choice leaves light.","x":760,"y":470}],`)
-			system.WriteString(`"links":[{"from_index":0,"to_index":1,"label":"visits"}],`)
-			system.WriteString(`"rules":[{"trigger_index":0,"effects":[{"node_index":1,"field":"light","op":"add","value":1}]}],`)
-			system.WriteString(`"views":["stage","cards","timeline"],"tags":[]}. `)
-			system.WriteString("Types are exactly text, number, flag. Rule ops are exactly set, add, toggle; add only for number, toggle only for flag or status. ")
-			system.WriteString("Limits: 6 kinds, 16 nodes, 24 links, 12 rules, 6 fields per kind, 4 effects per rule. Coordinates optional. ")
-			system.WriteString("A rule targets a field declared on the target kind, runs once when its trigger is touched, and never chains. ")
-			system.WriteString("Users define their own kinds; do not force a game, animation, or document category.\n")
+		if intent == "create" || wantsWorldCreation(userContent, history) {
+			system.WriteString(worldSeedGuide)
 		}
 		system.WriteString("</world_creation_mode>\n")
 	}
@@ -126,13 +123,41 @@ func buildPrompt(
 // The prompt budget is part of the per-user cost guard; a 100-message budget
 // test must not pay for the full world schema on every turn. Once a
 // conversation has expressed creation intent, later turns keep the schema.
+func wantsWorldChange(content string, history []Message) bool {
+	matches := func(value string) bool {
+		lower := strings.ToLower(value)
+		for _, marker := range []string{
+			"change", "walk", "play", "game", "animation", "story", "novel",
+			"workbench", "instrument", "music", "table", "form", "combine",
+			"改变", "变成", "走动", "玩", "游戏", "动画", "小说", "故事",
+			"工作台", "乐器", "音乐", "表格", "组合", "衍生",
+		} {
+			if strings.Contains(lower, marker) {
+				return true
+			}
+		}
+		return false
+	}
+	if matches(content) {
+		return true
+	}
+	for _, message := range history {
+		if message.Role == "user" && matches(message.Content) {
+			return true
+		}
+	}
+	return false
+}
+
 func wantsWorldCreation(content string, history []Message) bool {
 	matches := func(value string) bool {
 		lower := strings.ToLower(value)
 		for _, marker := range []string{
 			"创造", "创建", "世界", "create a world", "create my first world",
 			"build a world", "make a world", "design a world", "my first world",
-			"world that",
+			"world that", "game", "animation", "story", "novel", "workbench",
+			"instrument", "music", "游戏", "动画", "小说", "故事", "工作台",
+			"乐器", "音乐",
 		} {
 			if strings.Contains(lower, marker) {
 				return true
@@ -222,12 +247,29 @@ type deriveActionInput struct {
 type worldCreateActionInput struct {
 	Title   string          `json:"title"`
 	Content json.RawMessage `json:"content"`
+	Brief   json.RawMessage `json:"brief"`
+}
+
+// worldReimagineInput is the bound-world change action. The brief is merged
+// into the current state by the same compiler that creates new worlds.
+type worldReimagineInput struct {
+	Summary string          `json:"summary"`
+	Brief   json.RawMessage `json:"brief"`
 }
 
 const maxModelOutputBytes = 8 * 1024
 
 func parseModelOutput(text string) (string, []rawAction, string, error) {
 	trimmed := strings.TrimSpace(text)
+	// Real providers often wrap JSON in a Markdown fence even when asked for
+	// JSON only. Strip one fence without accepting prose around the object.
+	if strings.HasPrefix(trimmed, "```") {
+		if newline := strings.IndexByte(trimmed, '\n'); newline >= 0 {
+			body := strings.TrimSpace(trimmed[newline+1:])
+			body = strings.TrimSuffix(body, "```")
+			trimmed = strings.TrimSpace(body)
+		}
+	}
 	if trimmed == "" {
 		return "", nil, "", &model.Error{Code: model.CodeInvalidOutput, Message: "model response is empty"}
 	}
@@ -258,3 +300,12 @@ func decodeSingleJSON(text string, destination any) error {
 	}
 	return nil
 }
+
+// worldSeedGuide is the compact authoring contract shared by creation and
+// reshape. It names no product category: the same content can be played,
+// watched, read, worked in, mapped or extended with a custom surface.
+const worldSeedGuide = `A world brief has this shape (omit what does not apply):
+{"premise":"...","atmosphere":"...","kinds":[{"name":"...","hue":200,"motion":"float","form":"M 0 -24 A 24 24 0 1 1 0 24 A 24 24 0 1 1 0 -24 Z","solid":false,"fields":[{"label":"...","type":"text|number|flag","initial":0}]}],"things":[{"kind":0,"name":"...","text":"...","values":{"label":0},"x":0.4,"y":0.5}],"relations":[{"from":0,"to":1,"label":"..."}],"interactions":[{"from":0,"verb":"...","to":1,"field":"label","op":"set|add|toggle","value":0}],"experience":{"surfaces":["live","story","workspace","space","custom"],"primary":"live","live":{"avatar":0,"speed":1.8,"timer":60,"particles":{"kind":"rain|motes|stars|snow","count":40},"goal":{"type":"collect|score|reach|survive","kind":1,"count":3,"entity":0,"field":"...","variable":"score","target":5,"label":"..."},"timeline":{"duration":12,"loop":true,"tracks":[{"entity":0,"property":"x|y|scale|opacity|rotate|hue","keys":[{"t":0,"v":400},{"t":6,"v":800}]}]}},"story":{"title":"...","kind":"篇章","chapters":[{"title":"...","text":"...","choices":[{"label":"...","to":1}]}]},"workspace":{"title":"...","kind":0,"columns":["..."],"actions":[{"label":"...","type":"create|done|progress","field":"..."}]},"custom":{"title":"...","width":1200,"height":800,"vars":{"a":0},"nodes":[{"id":"n1","type":"box|dot|path|text|input","x":100,"y":100,"w":80,"h":40,"r":20,"hue":200,"text":"...","path":"M 0 -20 L 20 0 L 0 20 Z","size":20,"bindings":[{"prop":"opacity","var":"a","in_min":0,"in_max":1,"out_min":0.3,"out_max":1}],"bind_text":{"var":"a"},"input":{"var":"a","type":"text|number"},"drag":{"var":"a","min":0,"max":100,"axis":"x"},"on_click":[{"type":"set_var|add_var","name":"a","value":1},{"type":"toggle_var","name":"b"},{"type":"if","cond":{"var":"a","op":"gt","value":2},"then":[],"else":[]},{"type":"sound","freq":440,"duration":0.2,"wave":"sine"}]}],"keys":[{"key":"ArrowRight","actions":[]}],"timeline":{"duration":8,"loop":true,"tracks":[{"node_id":"n1","property":"x|y|w|h|r|rotate|scale|opacity|hue","keys":[{"t":0,"v":0}]}]}}}}
+Surface choice is by intent, never a product category: live = time, movement, play or watching; story = readable chapters and choices; workspace = real tables, editing and operations; space = a visual map of things; custom = a safe declarative surface for forms the others do not cover. Combine surfaces in one world when the idea needs it; all share one state.
+Custom values can be literals, "$event.value", or {"expr":"$a + $b"} (numbers, + - * /, parentheses). Conditions use {var|entity_id,field,op eq|ne|gt|gte|lt|lte|truthy|falsy,value,all,any,not}. Nodes may use text/inputs/keys/drag/conditions/actions/timelines/tones. Custom programs can be extended in later turns; keep the first one small.
+Never present module names, schema or code to the user. Never claim 3D, a physics engine, external media, network access or user code; state the concrete gap if the idea needs one.`

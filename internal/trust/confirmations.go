@@ -106,6 +106,9 @@ type ConfirmationEffect struct {
 	KindCount  int    `json:"kind_count,omitempty"`
 	NodeCount  int    `json:"node_count,omitempty"`
 	RuleCount  int    `json:"rule_count,omitempty"`
+	// Surfaces names the real universal runtimes the pending world will use.
+	// It is derived from the validated experience document, never from prose.
+	Surfaces []string `json:"surfaces,omitempty"`
 }
 
 type confirmationPayloadProjection struct {
@@ -591,15 +594,35 @@ func scanConfirmationView(row rowScanner) (ConfirmationView, error) {
 		var worldPayload WorldCreatePayload
 		if json.Unmarshal(payload, &worldPayload) == nil && strings.TrimSpace(worldPayload.Title) != "" {
 			var content struct {
-				Premise string            `json:"premise"`
-				Kinds   []json.RawMessage `json:"kinds"`
-				Nodes   []json.RawMessage `json:"nodes"`
-				Rules   []json.RawMessage `json:"rules"`
+				Premise    string            `json:"premise"`
+				Kinds      []json.RawMessage `json:"kinds"`
+				Nodes      []json.RawMessage `json:"nodes"`
+				Rules      []json.RawMessage `json:"rules"`
+				Experience *struct {
+					Root struct {
+						Capability string `json:"capability"`
+						Children   []struct {
+							Capability string `json:"capability"`
+						} `json:"children"`
+					} `json:"root"`
+				} `json:"experience"`
 			}
 			_ = json.Unmarshal(worldPayload.Content, &content)
 			summary := strings.TrimSpace(content.Premise)
 			if runes := []rune(summary); len(runes) > 300 {
 				summary = string(runes[:300])
+			}
+			surfaces := []string{}
+			if content.Experience != nil {
+				if content.Experience.Root.Capability == "core.tabs" {
+					for _, child := range content.Experience.Root.Children {
+						if surface := surfaceNameForCapability(child.Capability); surface != "" {
+							surfaces = append(surfaces, surface)
+						}
+					}
+				} else if surface := surfaceNameForCapability(content.Experience.Root.Capability); surface != "" {
+					surfaces = append(surfaces, surface)
+				}
 			}
 			view.Effect = &ConfirmationEffect{
 				Title:      strings.TrimSpace(worldPayload.Title),
@@ -608,6 +631,7 @@ func scanConfirmationView(row rowScanner) (ConfirmationView, error) {
 				KindCount:  len(content.Kinds),
 				NodeCount:  len(content.Nodes),
 				RuleCount:  len(content.Rules),
+				Surfaces:   surfaces,
 			}
 		}
 	}
@@ -701,4 +725,21 @@ func safeRequestID(value string) string {
 		return value
 	}
 	return "internal-ai"
+}
+
+func surfaceNameForCapability(capability string) string {
+	switch capability {
+	case "core.live":
+		return "live"
+	case "core.story":
+		return "story"
+	case "core.workspace":
+		return "workspace"
+	case "core.custom":
+		return "custom"
+	case "core.space":
+		return "space"
+	default:
+		return ""
+	}
 }

@@ -29,6 +29,20 @@ type WorldAccess interface {
 	SetStatus(entityID, status string) error
 }
 
+// VariableWorld is implemented by worlds that expose bounded shared variables.
+// It is a separate interface so a capability that does not need variables can
+// run against the smaller WorldAccess surface.
+type VariableWorld interface {
+	Variable(name string) (any, bool)
+	SetVariable(name string, value any) error
+}
+
+// EntityWorld is implemented by worlds that allow a behavior to create one
+// bounded entity of a declared kind. The server mints the id.
+type EntityWorld interface {
+	CreateEntity(kindID, name string, values map[string]any) (string, error)
+}
+
 // BehaviorCapability is one implementation of a state-changing capability.
 // It validates its own action params and executes only against WorldAccess.
 type BehaviorCapability interface {
@@ -56,13 +70,16 @@ func NewRegistry() *Registry {
 	for _, capability := range []Presentation{
 		stackCapability{}, textCapability{}, spaceCapability{}, collectionCapability{},
 		tableCapability{}, fieldCapability{}, buttonCapability{}, choiceCapability{},
-		meterCapability{},
+		meterCapability{}, liveCapability{}, storyCapability{}, workspaceCapability{},
+		tabsCapability{}, customCapability{},
 	} {
 		if err := registry.RegisterPresentation(capability); err != nil {
 			panic(fmt.Sprintf("worldcap: register presentation: %v", err))
 		}
 	}
-	for _, capability := range []BehaviorCapability{stateCapability{}, transferCapability{}} {
+	for _, capability := range []BehaviorCapability{
+		stateCapability{}, transferCapability{}, variableCapability{}, createCapability{},
+	} {
 		if err := registry.RegisterBehavior(capability); err != nil {
 			panic(fmt.Sprintf("worldcap: register behavior: %v", err))
 		}

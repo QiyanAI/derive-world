@@ -34,7 +34,8 @@ const actionKeys: Record<string, MessageKey> = {
   remove_link: "action.remove_link",
   add_rule: "action.add_rule",
   remove_rule: "action.remove_rule",
-  set_views: "action.set_views"
+  set_views: "action.set_views",
+  reshape_world: "action.reshape_world"
 };
 
 const eventKeys: Record<string, MessageKey> = {
@@ -298,6 +299,29 @@ export function proposalPreview(proposal: Proposal, object: ObjectView | null): 
         action: proposal.action,
         fields: [field("value", Array.isArray(input.views) ? input.views.join(", ") : "")]
       };
+    case "reshape_world": {
+      const content =
+        input.content && typeof input.content === "object"
+          ? (input.content as Record<string, unknown>)
+          : {};
+      const kinds = Array.isArray(content.kinds) ? content.kinds.length : 0;
+      const nodes = Array.isArray(content.nodes) ? content.nodes.length : 0;
+      const variables =
+        content.variables && typeof content.variables === "object"
+          ? Object.keys(content.variables as Record<string, unknown>).length
+          : 0;
+      const experience = content.experience && typeof content.experience === "object";
+      return {
+        action: proposal.action,
+        fields: [
+          field("summary", String(input.note ?? "")),
+          field(
+            "input",
+            `${kinds} kinds · ${nodes} things · ${variables} variables${experience ? " · experience" : ""}`
+          )
+        ]
+      };
+    }
     default:
       return {
         action: proposal.action,

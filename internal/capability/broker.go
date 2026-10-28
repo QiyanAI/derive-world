@@ -579,7 +579,8 @@ func (s *Service) executePropose(ctx context.Context, object *objects.Object,
 	}
 	defer func() { _ = tx.Rollback(ctx) }()
 	proposalID, accepted, err := s.objects.CreateProposalTx(ctx, tx, object.ID,
-		request.Actor.UserID, plan.proposalProfileID, plan.proposalDelegationID, action, rawInput,
+		request.Actor.UserID, plan.proposalProfileID, plan.proposalDelegationID,
+		"object.propose_change", action, rawInput,
 		expectedVersion, request.RequestID, request.IPHash)
 	if err != nil {
 		if errors.Is(err, objects.ErrVersionConflict) || errors.Is(err, objects.ErrNotFound) ||
