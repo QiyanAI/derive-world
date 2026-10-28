@@ -1,76 +1,62 @@
 // SPDX-License-Identifier: Apache-2.0
 import { expect, test, type Page } from "@playwright/test";
-import { register, uniqueActor, fillStable } from "../support/actors";
+import { fillStable, register, uniqueActor } from "../support/actors";
 
 async function createScrollableWorld(page: Page, title: string) {
-  await page.goto("/");
-  await page.getByRole("button", { name: "Create a beginning" }).click();
-  await fillStable(page.getByLabel("What do you want to begin?"), title);
-  await expect(page.getByLabel("What do you want to begin?")).toHaveValue(title);
-  await page.getByRole("button", { name: "Let it grow" }).click();
-  const inspector = page.getByTestId("stage-inspector");
-  await expect(inspector).toBeVisible();
-
-  // This spec is about inspector scrolling, not the add form. Seed the twelve
-  // rows through the same real action API so a stage refresh cannot race a
-  // rapid sequence of controlled-input fills on a loaded CI runner. One
-  // opening element is created with the world, so the final list has 13 rows.
-  const object = await page.evaluate(async (worldTitle) => {
-    const response = await fetch("/api/v1/objects?scope=owned", {
-      credentials: "same-origin"
+  // This spec is about inspector scrolling, not the create or add forms. Seed
+  // one living scene with 25 elements through the real create API; the stage
+  // node and inspector then render the same real product. One create call
+  // also avoids the per-user API bucket that a rapid add loop can exhaust on
+  // loaded CI runners.
+  const created = await page.evaluate(async (worldTitle) => {
+    const csrf = document.cookie
+      .split("; ")
+      .find((entry) => entry.startsWith("dw_csrf="))
+      ?.split("=")[1];
+    const idempotency = Array.from({ length: 40 }, () =>
+      "abcdefghijklmnopqrstuvwxyz0123456789"[Math.floor(Math.random() * 36)]
+    ).join("");
+    const elements = Array.from({ length: 25 }, (_, index) => ({
+      kind: "idea",
+      text: `Scroll item ${index + 1} that makes this panel taller`
+    }));
+    const response = await fetch("/api/v1/objects", {
+      method: "POST",
+      credentials: "same-origin",
+      headers: {
+        "Content-Type": "application/json",
+        "Idempotency-Key": idempotency,
+        ...(csrf ? { "X-CSRF-Token": csrf } : {})
+      },
+      body: JSON.stringify({
+        object_type: "living_scene",
+        title: worldTitle,
+        content: { purpose: "project", premise: "", elements, tags: [] },
+        shared_context: {}
+      })
     });
-    const payload = (await response.json()) as {
-      items: Array<{ id: string; title: string; version: number }>;
+    return {
+      ok: response.ok,
+      status: response.status,
+      detail: response.ok ? "" : await response.text()
     };
-    return payload.items.find((item) => item.title === worldTitle) ?? null;
   }, title);
-  expect(object).not.toBeNull();
-  if (!object) {
-    return inspector;
-  }
-  const seeded = await page.evaluate(
-    async ({ id, version }) => {
-      const csrf = document.cookie
-        .split("; ")
-        .find((entry) => entry.startsWith("dw_csrf="))
-        ?.split("=")[1];
-      let current = version;
-      for (let index = 0; index < 12; index += 1) {
-        const idempotency = Array.from({ length: 40 }, () =>
-          "abcdefghijklmnopqrstuvwxyz0123456789"[Math.floor(Math.random() * 36)]
-        ).join("");
-        const response = await fetch(`/api/v1/objects/${id}/actions`, {
-          method: "POST",
-          credentials: "same-origin",
-          headers: {
-            "Content-Type": "application/json",
-            "Idempotency-Key": idempotency,
-            ...(csrf ? { "X-CSRF-Token": csrf } : {})
-          },
-          body: JSON.stringify({
-            action: "add_element",
-            input: { kind: "idea", text: `Scroll item ${index + 1} that makes this panel taller` },
-            expected_version: current
-          })
-        });
-        if (!response.ok) {
-          return { ok: false, status: response.status };
-        }
-        const updated = (await response.json()) as { version: number };
-        current = updated.version;
-      }
-      return { ok: true, status: 200 };
-    },
-    { id: object.id, version: object.version }
-  );
-  expect(seeded.ok).toBe(true);
+  expect(created.ok, JSON.stringify(created)).toBe(true);
 
-  await page.reload();
+  await page.goto("/");
   const stageNode = page.getByTestId("dw-stage-node").filter({ hasText: title }).first();
   await expect(stageNode).toBeVisible();
   await stageNode.click();
+  const inspector = page.getByTestId("stage-inspector");
   await expect(inspector).toBeVisible();
-  await expect(inspector.locator(".dw-live-list > li")).toHaveCount(13);
+  await expect(inspector.locator(".dw-live-list > li")).toHaveCount(25);
+  await expect
+    .poll(
+      () =>
+        inspector.evaluate((element) => element.scrollHeight > element.clientHeight + 20),
+      { timeout: 15_000 }
+    )
+    .toBe(true);
   return inspector;
 }
 
@@ -79,15 +65,10 @@ test("V2 scroll: the inspector scrolls, stays open, and never zooms the canvas",
   await register(page, actor);
   const inspector = await createScrollableWorld(page, "A world with a scrollable story");
 
-  const scrollable = await inspector.evaluate(
-    (element) => element.scrollHeight > element.clientHeight + 20
-  );
-  expect(scrollable).toBe(true);
-
   const viewport = page.getByTestId("dw-stage-viewport");
   const zoomBefore = await viewport.getAttribute("data-zoom");
   const list = inspector.locator(".dw-live-list");
-  await expect(list.locator("> li")).toHaveCount(13);
+  await expect(list.locator("> li")).toHaveCount(25);
   await page.waitForTimeout(250);
   await list.hover({ position: { x: 20, y: 20 } });
   await page.mouse.wheel(0, 420);
