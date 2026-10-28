@@ -24,7 +24,6 @@ var (
 	collaborativeFields = []string{"summary", "body", "checklist", "tags"}
 	interactiveFields   = []string{"prompt", "options"}
 	livingSceneFields   = []string{"premise", "elements", "tags"}
-	openWorldFields     = []string{"premise", "structure", "views", "tags"}
 )
 
 // AvailableFields returns the derive inheritance whitelist for an object type.
@@ -320,7 +319,7 @@ func whitelistFor(objectType string) []string {
 	case objects.TypeLivingScene:
 		return livingSceneFields
 	case objects.TypeOpenWorld:
-		return openWorldFields
+		return objects.OpenWorldAvailableFields()
 	default:
 		return nil
 	}

@@ -626,7 +626,7 @@ function FieldControl({
           disabled={disabled}
           onClick={() => onCommit(value !== true)}
         >
-          {value === true ? t("openWorld.status.done") : t("openWorld.status.open")}
+          {value === true ? t("openWorld.on") : t("openWorld.off")}
         </button>
       </label>
     );
@@ -708,7 +708,7 @@ function StructurePanel({
   const [effectTarget, setEffectTarget] = useState("");
   const [effectField, setEffectField] = useState("status");
   const [effectOp, setEffectOp] = useState<"set" | "add" | "toggle">("set");
-  const [effectValue, setEffectValue] = useState("");
+  const [effectValue, setEffectValue] = useState("done");
   const [kindFieldDrafts, setKindFieldDrafts] = useState<Record<string, { key: string; label: string; type: "text" | "number" | "flag" }>>({});
 
   const firstKind = world.kinds[0]?.id ?? "";
@@ -803,7 +803,7 @@ function StructurePanel({
     let value: string | number | boolean | undefined;
     if (effectField === "status") {
       if (effectOp === "set") {
-        value = effectValue === "done" ? "done" : "open";
+        value = effectValue === "open" ? "open" : "done";
       }
     } else if (targetField?.type === "number") {
       const parsed = Number(effectValue);
@@ -813,7 +813,7 @@ function StructurePanel({
       value = parsed;
     } else if (targetField?.type === "flag") {
       if (effectOp === "set") {
-        value = effectValue === "true";
+        value = effectValue !== "false";
       }
     } else {
       value = effectValue;
@@ -1070,7 +1070,7 @@ function StructurePanel({
                 onChange={(event) => {
                   setEffectTarget(event.target.value);
                   setEffectField("status");
-                  setEffectValue("");
+                  setEffectValue("done");
                 }}
               >
                 {world.nodes.map((node) => (
@@ -1078,7 +1078,17 @@ function StructurePanel({
                 ))}
               </select>
               <label className="dw-field-label" htmlFor="ow-effect-field">{t("openWorld.effectField")}</label>
-              <select id="ow-effect-field" className="dw-input" value={effectField} onChange={(event) => setEffectField(event.target.value)}>
+              <select
+                id="ow-effect-field"
+                className="dw-input"
+                value={effectField}
+                onChange={(event) => {
+                  const next = event.target.value;
+                  setEffectField(next);
+                  const nextField = effectFields.find((field) => field.key === next);
+                  setEffectValue(next === "status" ? "done" : nextField?.type === "flag" ? "true" : "");
+                }}
+              >
                 <option value="status">{t("openWorld.statusField")}</option>
                 {effectFields.map((field) => (
                   <option key={field.key} value={field.key}>{field.label || field.key}</option>
@@ -1100,8 +1110,8 @@ function StructurePanel({
                     </select>
                   ) : targetField?.type === "flag" ? (
                     <select id="ow-effect-value" className="dw-input" value={effectValue} onChange={(event) => setEffectValue(event.target.value)}>
-                      <option value="true">{t("openWorld.status.done")}</option>
-                      <option value="false">{t("openWorld.status.open")}</option>
+                      <option value="true">{t("openWorld.on")}</option>
+                      <option value="false">{t("openWorld.off")}</option>
                     </select>
                   ) : (
                     <input

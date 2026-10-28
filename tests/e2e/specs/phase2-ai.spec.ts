@@ -90,6 +90,22 @@ test("Phase 2 AI: world context is explicit and switching back to general keeps 
 
   // The general conversation is unbound; the world's conversation is bound to
   // that object. They are separate private records with no cross-reading.
+  // The send response is persisted before the message renders; poll the list
+  // so a slow list read cannot race the just-created conversation row.
+  await expect
+    .poll(async () => {
+      const items = await page.evaluate(async () => {
+        const response = await fetch("/api/v1/ai/conversations", { credentials: "include" });
+        return ((await response.json()) as {
+          items: Array<{ id: string; object_id: string | null }>;
+        }).items;
+      });
+      return {
+        bound: items.some((item) => item.object_id !== null),
+        general: items.some((item) => item.object_id === null)
+      };
+    }, { timeout: 15_000 })
+    .toEqual({ bound: true, general: true });
   const conversations = await page.evaluate(async () => {
     const response = await fetch("/api/v1/ai/conversations", { credentials: "include" });
     return (await response.json()) as {

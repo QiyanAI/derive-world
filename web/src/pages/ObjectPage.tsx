@@ -370,7 +370,9 @@ export default function ObjectPage() {
       ? t("object.create.scene")
       : object.object_type === "interactive"
         ? t("object.create.interactive")
-        : t("object.create.collaborative");
+        : object.object_type === "open_world"
+          ? t("object.create.open_world")
+          : t("object.create.collaborative");
 
   return (
     <div className="page page-wide object-page">

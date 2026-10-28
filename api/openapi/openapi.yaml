@@ -4248,6 +4248,15 @@ components:
           enum: [collaborative, interactive, living_scene, open_world]
         summary:
           type: string
+        kind_count:
+          type: integer
+          minimum: 0
+        node_count:
+          type: integer
+          minimum: 0
+        rule_count:
+          type: integer
+          minimum: 0
     ConfirmationList:
       type: object
       additionalProperties: false

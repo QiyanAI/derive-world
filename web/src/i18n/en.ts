@@ -1194,6 +1194,8 @@ export const en = {
   "openWorld.op.add": "Add",
   "openWorld.op.toggle": "Toggle",
   "openWorld.statusField": "Status",
+  "openWorld.on": "On",
+  "openWorld.off": "Off",
   "openWorld.status.open": "Open",
   "openWorld.status.done": "Done",
   "openWorld.lastEffects": "Last change",

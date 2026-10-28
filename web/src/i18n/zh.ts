@@ -1155,6 +1155,8 @@ export const zh: Messages = {
   "openWorld.op.add": "增加",
   "openWorld.op.toggle": "切换",
   "openWorld.statusField": "状态",
+  "openWorld.on": "开",
+  "openWorld.off": "关",
   "openWorld.status.open": "未完成",
   "openWorld.status.done": "已完成",
   "openWorld.lastEffects": "最近的变化",
