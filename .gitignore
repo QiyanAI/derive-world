@@ -26,8 +26,9 @@ Thumbs.db
 .vscode/
 *.swp
 
-# Local database data
+# Local database and uploaded asset data
 tmp/
+var/
 
 # Playwright session material
 tests/.auth/

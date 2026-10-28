@@ -6,8 +6,13 @@ import {
   deriveObject,
   errorMessage,
   getObject,
+  generateObjectAsset,
   getWorldCapabilities,
+  listObjectAssets,
   openWorldState,
+  removeObjectAsset,
+  uploadObjectAsset,
+  type AssetKind,
   type ObjectView,
   type OpenWorldField,
   type OpenWorldKind,
@@ -15,6 +20,7 @@ import {
   type OpenWorldPresentation,
   type OpenWorldState,
   type OpenWorldView,
+  type WorldAsset,
   type WorldCapabilityDescriptor,
   type WorldExperience as WorldExperienceDocument
 } from "../api";
@@ -88,6 +94,8 @@ export default function OpenWorldPage() {
   const [experienceOpened, setExperienceOpened] = useState(searchParams.get("build") === "1");
   const [capabilities, setCapabilities] = useState<WorldCapabilityDescriptor[]>([]);
   const [capabilityError, setCapabilityError] = useState("");
+  const [assets, setAssets] = useState<WorldAsset[]>([]);
+  const [assetError, setAssetError] = useState("");
   const [premiseEditing, setPremiseEditing] = useState(false);
   const [premiseDraft, setPremiseDraft] = useState("");
   const [drag, setDrag] = useState<{ id: string; x: number; y: number } | null>(null);
@@ -138,6 +146,26 @@ export default function OpenWorldPage() {
       navigate(`/worlds/${id}`, { replace: true });
     }
   }, [id, navigate, searchParams]);
+
+  useEffect(() => {
+    let active = true;
+    setAssets([]);
+    setAssetError("");
+    listObjectAssets(id)
+      .then((items) => {
+        if (active) {
+          setAssets(items);
+        }
+      })
+      .catch(() => {
+        if (active) {
+          setAssetError(zh ? "无法加载世界文件。" : "The world files could not be loaded.");
+        }
+      });
+    return () => {
+      active = false;
+    };
+  }, [id, zh]);
 
   useEffect(() => {
     let active = true;
@@ -312,6 +340,67 @@ export default function OpenWorldPage() {
   async function saveExperience(experience: WorldExperienceDocument | null): Promise<boolean> {
     const updated = await run("set_experience", { experience });
     return Boolean(updated);
+  }
+
+  async function uploadAsset(kind: AssetKind, file: File): Promise<WorldAsset | null> {
+    if (!object || busy) {
+      return null;
+    }
+    setBusy(`asset:${kind}`);
+    setError(null);
+    setNotice("");
+    try {
+      const created = await uploadObjectAsset(object.id, kind, file);
+      setAssets((current) => [created, ...current]);
+      setNotice(t("openWorld.saved"));
+      return created;
+    } catch (failure) {
+      setError(failure);
+      return null;
+    } finally {
+      setBusy("");
+    }
+  }
+
+  async function generateAsset(): Promise<WorldAsset | null> {
+    if (!object || busy) {
+      return null;
+    }
+    setBusy("asset:generate");
+    setError(null);
+    setNotice("");
+    try {
+      const generated = await generateObjectAsset(object.id, {
+        hue: world?.presentation.scene.sky_hue ?? 222,
+        hue2: world?.presentation.scene.ground_hue ?? 265,
+        lightness: 14
+      });
+      setAssets((current) => [generated, ...current]);
+      setNotice(t("openWorld.saved"));
+      return generated;
+    } catch (failure) {
+      setError(failure);
+      return null;
+    } finally {
+      setBusy("");
+    }
+  }
+
+  async function removeAsset(assetID: string): Promise<void> {
+    if (!object || busy) {
+      return;
+    }
+    setBusy("asset:remove");
+    setError(null);
+    try {
+      await removeObjectAsset(object.id, assetID);
+      setAssets((current) => current.filter((asset) => asset.id !== assetID));
+      setNotice(t("openWorld.saved"));
+    } catch (failure) {
+      setError(failure);
+    } finally {
+      setBusy("");
+    }
   }
 
   async function savePremise() {
@@ -549,6 +638,7 @@ export default function OpenWorldPage() {
             <WorldExperience
               world={world}
               experience={world.experience}
+              assetBase={`/api/v1/objects/${object.id}/assets`}
               canContribute={canContribute}
               busy={busy !== ""}
               onInvoke={invokeBehavior}
@@ -729,6 +819,11 @@ export default function OpenWorldPage() {
           ) : null}
           {experienceOpened ? (
             <div hidden={panel !== "experience"} data-testid="world-experience-panel">
+              {assetError ? (
+                <p className="dw-form-error" role="alert">
+                  {assetError}
+                </p>
+              ) : null}
               {capabilityError ? (
                 <p className="dw-form-error" role="alert">
                   {capabilityError}
@@ -741,10 +836,16 @@ export default function OpenWorldPage() {
                 <WorldExperienceEditor
                   key={object.id}
                   world={world}
+                  objectID={object.id}
+                  assets={assets}
+                  canManage={object.permissions.includes("manage")}
                   catalog={capabilities}
                   busy={busy !== ""}
                   canContribute={canContribute}
                   onSave={saveExperience}
+                  onUploadAsset={uploadAsset}
+                  onGenerateAsset={generateAsset}
+                  onRemoveAsset={removeAsset}
                 />
               )}
             </div>

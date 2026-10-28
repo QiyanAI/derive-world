@@ -62,6 +62,19 @@ export interface ObjectView {
 
 export type Permission = "read" | "contribute" | "derive" | "invite" | "manage";
 
+export type AssetKind = "image" | "video" | "audio" | "model";
+
+export interface WorldAsset {
+  id: string;
+  kind: AssetKind;
+  mime: string;
+  byte_size: number;
+  width?: number;
+  height?: number;
+  name: string;
+  created_at: string;
+}
+
 export interface ObjectListItem {
   id: string;
   object_type: ObjectType;
@@ -498,6 +511,96 @@ export async function getWorldCapabilities(
     { signal }
   );
   return response.items;
+}
+
+export function objectAssetURL(objectID: string, assetID: string): string {
+  return `/api/v1/objects/${encodeURIComponent(objectID)}/assets/${encodeURIComponent(assetID)}`;
+}
+
+export async function listObjectAssets(
+  objectID: string,
+  signal?: AbortSignal
+): Promise<WorldAsset[]> {
+  const response = await request<{ items: WorldAsset[] }>(
+    `/api/v1/objects/${encodeURIComponent(objectID)}/assets`,
+    { signal }
+  );
+  return response.items;
+}
+
+export async function uploadObjectAsset(
+  objectID: string,
+  kind: AssetKind,
+  file: File
+): Promise<WorldAsset> {
+  const params = new URLSearchParams({ kind, name: file.name });
+  const headers: Record<string, string> = {
+    Accept: "application/json",
+    "Content-Type": file.type || "application/octet-stream"
+  };
+  const csrf = readCookie("dw_csrf");
+  if (csrf) {
+    headers["X-CSRF-Token"] = csrf;
+  }
+  const response = await fetch(
+    `/api/v1/objects/${encodeURIComponent(objectID)}/assets?${params.toString()}`,
+    {
+      method: "POST",
+      headers,
+      body: file,
+      cache: "no-store",
+      credentials: "same-origin"
+    }
+  );
+  const text = await response.text();
+  let payload: unknown = null;
+  if (text) {
+    try {
+      payload = JSON.parse(text);
+    } catch {
+      payload = null;
+    }
+  }
+  if (!response.ok) {
+    const envelope = payload as
+      | {
+          error?: {
+            code?: string;
+            message?: string;
+            request_id?: string;
+            details?: Record<string, unknown>;
+          };
+        }
+      | null;
+    throw new APIError(
+      response.status,
+      envelope?.error?.code ?? "internal",
+      envelope?.error?.message ?? `Upload failed with status ${response.status}`,
+      envelope?.error?.details ?? {},
+      envelope?.error?.request_id ?? ""
+    );
+  }
+  return payload as WorldAsset;
+}
+
+export async function generateObjectAsset(
+  objectID: string,
+  params: Record<string, number>
+): Promise<WorldAsset> {
+  return request<WorldAsset>(
+    `/api/v1/objects/${encodeURIComponent(objectID)}/asset-generation`,
+    {
+      method: "POST",
+      body: { kind: "image", provider: "procedural", params }
+    }
+  );
+}
+
+export async function removeObjectAsset(objectID: string, assetID: string): Promise<void> {
+  await request<void>(
+    `/api/v1/objects/${encodeURIComponent(objectID)}/assets/${encodeURIComponent(assetID)}`,
+    { method: "DELETE" }
+  );
 }
 
 export async function deleteObject(id: string): Promise<void> {
@@ -983,6 +1086,7 @@ export interface WorldCapabilityProperty {
   title: LocalizedLabel;
   description?: LocalizedLabel;
   format?: string;
+  asset_kind?: AssetKind;
   enum?: string[];
   minimum?: number;
   maximum?: number;

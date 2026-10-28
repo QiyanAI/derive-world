@@ -20,6 +20,7 @@ import (
 	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgxpool"
 
+	"github.com/QiyanAI/derive-world/internal/assets"
 	"github.com/QiyanAI/derive-world/internal/audit"
 	"github.com/QiyanAI/derive-world/internal/derive"
 	"github.com/QiyanAI/derive-world/internal/objects"
@@ -130,13 +131,15 @@ type PublicLineage struct {
 type Service struct {
 	db      *pgxpool.Pool
 	objects *objects.Service
+	assets  *assets.Service
 	audit   *audit.Writer
 	idem    *store.Idempotency
 }
 
 // NewService assembles the Publication service.
-func NewService(db *pgxpool.Pool, objectService *objects.Service, auditWriter *audit.Writer, idem *store.Idempotency) *Service {
-	return &Service{db: db, objects: objectService, audit: auditWriter, idem: idem}
+func NewService(db *pgxpool.Pool, objectService *objects.Service, assetService *assets.Service,
+	auditWriter *audit.Writer, idem *store.Idempotency) *Service {
+	return &Service{db: db, objects: objectService, assets: assetService, audit: auditWriter, idem: idem}
 }
 
 // Create publishes one object version. It requires object ownership and manage
@@ -182,6 +185,13 @@ func (s *Service) Create(ctx context.Context, publisherID, objectID uuid.UUID, i
 	if err != nil {
 		return nil, err
 	}
+	if s.assets != nil {
+		assetCreators, err := s.assets.AssetCreatorsForState(ctx, tx, objectID, sourceState)
+		if err != nil {
+			return nil, err
+		}
+		contributors = unionContributors(contributors, assetCreators, publisherID)
+	}
 	status := "active"
 	if len(contributors) > 0 {
 		status = "pending_consent"
@@ -206,6 +216,11 @@ RETURNING created_at, updated_at`,
 	).Scan(&createdAt, &updatedAt)
 	if err != nil {
 		return nil, mapPublicationError(err)
+	}
+	if s.assets != nil {
+		if err := s.assets.FreezePublicationAssets(ctx, tx, objectID, publicationID, sourceState); err != nil {
+			return nil, err
+		}
 	}
 	for _, contributorID := range contributors {
 		consentID, err := uuid.NewV7()
@@ -734,6 +749,13 @@ SELECT object_id, source_version, object_type, presentation_template, snapshot,
 	if err != nil {
 		return nil, err
 	}
+	refs, err := assets.ObjectRefsFromState(childState)
+	if err != nil {
+		return nil, fmt.Errorf("%w: snapshot asset", ErrInvalidRequest)
+	}
+	if err := assets.CopyPublicationRefs(ctx, tx, publicationID, childID, actorID, refs); err != nil {
+		return nil, fmt.Errorf("%w: snapshot asset", ErrInvalidRequest)
+	}
 	if _, err := tx.Exec(ctx, `
 INSERT INTO publication_derivations (child_object_id, publication_id)
 VALUES ($1,$2)`, childID.String(), publicationID.String()); err != nil {
@@ -937,3 +959,16 @@ func contains(values []string, target string) bool {
 func stringPtr(value string) *string { return &value }
 
 func timePtr(value time.Time) *time.Time { return &value }
+
+func unionContributors(existing, extra []uuid.UUID, publisher uuid.UUID) []uuid.UUID {
+	seen := make(map[uuid.UUID]bool, len(existing)+len(extra))
+	out := make([]uuid.UUID, 0, len(existing)+len(extra))
+	for _, id := range append(append([]uuid.UUID(nil), existing...), extra...) {
+		if id == publisher || seen[id] {
+			continue
+		}
+		seen[id] = true
+		out = append(out, id)
+	}
+	return out
+}

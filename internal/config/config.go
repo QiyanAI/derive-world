@@ -34,6 +34,7 @@ func EnvKeys() []string {
 		"BIND_ADDR",
 		"DATABASE_URL",
 		"WEB_DIST_DIR",
+		"ASSET_DIR",
 		"CURSOR_HMAC_SECRET",
 		"IP_HASH_PEPPER",
 		"CAPABILITY_HMAC_SECRET",
@@ -103,6 +104,7 @@ type Config struct {
 	BindAddr             string
 	DatabaseURL          string
 	WebDistDir           string
+	AssetDir             string
 	CursorHMACSecret     string
 	IPHashPepper         string
 	CapabilityHMACSecret string
@@ -198,6 +200,11 @@ func LoadFrom(lookup func(string) (string, bool)) (*Config, error) {
 	webDistDir := get("WEB_DIST_DIR")
 	if webDistDir == "" {
 		webDistDir = "./web/dist"
+	}
+
+	assetDir := get("ASSET_DIR")
+	if assetDir == "" {
+		assetDir = "./var/assets"
 	}
 
 	cursorSecret := get("CURSOR_HMAC_SECRET")
@@ -421,6 +428,7 @@ func LoadFrom(lookup func(string) (string, bool)) (*Config, error) {
 		BindAddr:             bindAddr,
 		DatabaseURL:          databaseURL,
 		WebDistDir:           webDistDir,
+		AssetDir:             assetDir,
 		CursorHMACSecret:     cursorSecret,
 		IPHashPepper:         ipPepper,
 		CapabilityHMACSecret: capabilitySecret,

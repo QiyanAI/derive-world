@@ -62,7 +62,7 @@ export default defineConfig({
         hasTouch: true,
         ...chromeChannel
       },
-      testMatch: /(responsive-i18n|v2-mobile|phase2d-mobile)\.spec\.ts/
+      testMatch: /(responsive-i18n|v2-mobile|phase2d-mobile|phase2e-mobile)\.spec\.ts/
     }
   ]
 });

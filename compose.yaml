@@ -54,8 +54,11 @@ services:
     environment:
       BIND_ADDR: 0.0.0.0:8080
       WEB_DIST_DIR: /app/web
+      ASSET_DIR: /app/var/assets
       DATABASE_URL: postgres://derive:dw_local_only@db:5432/derive_world?sslmode=disable
       TMPDIR: /tmp
+    volumes:
+      - dw_assets:/app/var/assets
     ports:
       - "127.0.0.1:8080:8080"
     networks:
@@ -70,6 +73,7 @@ services:
       capability-provider:
         condition: service_healthy
     read_only: true
+    mem_limit: 1g
     tmpfs:
       - /tmp
     cap_drop:
@@ -116,6 +120,7 @@ services:
 
 volumes:
   dw_pgdata:
+  dw_assets:
 
 networks:
   edge:

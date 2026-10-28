@@ -49,7 +49,8 @@ func Compose(brief *Brief, title string) (*Composition, error) {
 		hasStory := brief.Experience != nil && brief.Experience.Story != nil &&
 			len(brief.Experience.Story.Chapters) > 0
 		hasCustom := brief.Experience != nil && len(brief.Experience.Custom) > 0
-		if !hasStory && !hasCustom {
+		hasMedia := brief.Experience != nil && brief.Experience.Media != nil
+		if !hasStory && !hasCustom && !hasMedia {
 			return nil, fmt.Errorf("%w: a world needs content, chapters or a custom surface", ErrInvalid)
 		}
 	}
@@ -321,14 +322,24 @@ func inspectPreserved(experience *worldcap.Experience) *preservedExperience {
 		return preserved
 	}
 	preserved.behaviors = append([]worldcap.Behavior(nil), experience.Behaviors...)
-	if experience.Root.Capability == "core.tabs" {
-		props := decodeProps(experience.Root.Props)
+	contentRoot := experience.Root
+	if contentRoot.Capability == "core.stack" {
+		for index := range contentRoot.Children {
+			if contentRoot.Children[index].Capability != "core.audio" {
+				contentRoot = &contentRoot.Children[index]
+				break
+			}
+		}
+	}
+	tabsNode := findCapabilityNode(contentRoot, "core.tabs")
+	if tabsNode != nil {
+		props := decodeProps(tabsNode.Props)
 		if defaultTab, ok := props["default"].(string); ok && defaultTab != "" {
 			preserved.primary = defaultTab
 		}
-		surfaces := make([]string, 0, len(experience.Root.Children))
-		for index := range experience.Root.Children {
-			surfaces = append(surfaces, surfaceForCapability(experience.Root.Children[index].Capability))
+		surfaces := make([]string, 0, len(tabsNode.Children))
+		for index := range tabsNode.Children {
+			surfaces = append(surfaces, surfaceForCapability(tabsNode.Children[index].Capability))
 		}
 		if len(surfaces) > 0 {
 			preserved.surfaces = surfaces
@@ -336,9 +347,8 @@ func inspectPreserved(experience *worldcap.Experience) *preservedExperience {
 				preserved.primary = surfaces[0]
 			}
 		}
-	}
-	if experience.Root.Capability != "core.tabs" {
-		preserved.surfaces = []string{surfaceForCapability(experience.Root.Capability)}
+	} else {
+		preserved.surfaces = []string{surfaceForCapability(contentRoot.Capability)}
 		if len(preserved.surfaces) == 1 {
 			preserved.primary = preserved.surfaces[0]
 		}
@@ -402,6 +412,12 @@ func inspectPreserved(experience *worldcap.Experience) *preservedExperience {
 	if customNode != nil {
 		preserved.customRaw = append(json.RawMessage(nil), customNode.Props...)
 	}
+	if audioNode := findCapabilityNode(experience.Root, "core.audio"); audioNode != nil {
+		preserved.audioRaw = append(json.RawMessage(nil), audioNode.Props...)
+	}
+	if mediaNode := findCapabilityNode(experience.Root, "core.media"); mediaNode != nil {
+		preserved.mediaRaw = append(json.RawMessage(nil), mediaNode.Props...)
+	}
 	storyNode := findCapabilityNode(experience.Root, "core.story")
 	if storyNode != nil {
 		props := decodeProps(storyNode.Props)
@@ -436,6 +452,10 @@ func surfaceForCapability(capability string) string {
 		return "workspace"
 	case "core.custom":
 		return "custom"
+	case "core.scene3d":
+		return "scene3d"
+	case "core.media":
+		return "media"
 	case "core.space":
 		return "space"
 	default:

@@ -1,7 +1,9 @@
 // SPDX-License-Identifier: Apache-2.0
-import { useEffect, useRef, useState } from "react";
-import type {
-  LocalizedLabel,
+import { createContext, useContext, useEffect, useRef, useState } from "react";
+import {
+  objectAssetURL,
+  type AssetKind,
+  type LocalizedLabel,
   OpenWorldKind,
   OpenWorldState,
   WorldBehavior,
@@ -11,27 +13,42 @@ import type {
   WorldCapabilitySchema,
   WorldCondition,
   WorldExperience,
+  WorldAsset,
   WorldViewNode
 } from "../../api";
 import { useI18n } from "../../i18n";
+
+const AssetCatalogContext = createContext<WorldAsset[]>([]);
 
 const DEFAULT_PATH = "M 0 -40 A 40 40 0 1 1 0 40 A 40 40 0 1 1 0 -40 Z";
 const NODE_ID_PATTERN = /^[a-z][a-z0-9_-]{0,63}$/;
 
 type EditorProps = {
   world: OpenWorldState;
+  objectID: string;
+  assets: WorldAsset[];
+  canManage: boolean;
   catalog: WorldCapabilityDescriptor[];
   busy: boolean;
   canContribute: boolean;
   onSave: (experience: WorldExperience | null) => Promise<boolean>;
+  onUploadAsset: (kind: AssetKind, file: File) => Promise<WorldAsset | null>;
+  onGenerateAsset: () => Promise<WorldAsset | null>;
+  onRemoveAsset: (assetID: string) => Promise<void>;
 };
 
 export default function WorldExperienceEditor({
   world,
+  objectID,
+  assets,
+  canManage,
   catalog,
   busy,
   canContribute,
-  onSave
+  onSave,
+  onUploadAsset,
+  onGenerateAsset,
+  onRemoveAsset
 }: EditorProps) {
   const { t, lang } = useI18n();
   const zh = lang === "zh";
@@ -107,7 +124,7 @@ export default function WorldExperienceEditor({
     updateDraft({ ...draft, root: moveNode(draft.root, selectedNode.id, delta) });
   }
 
-  function startScaffold(kind: "blank" | "text" | "space" | "workspace" | "composite") {
+  function startScaffold(kind: "blank" | "text" | "space" | "workspace" | "composite" | "media" | "scene3d") {
     const next = makeScaffold(kind, world, behaviors, zh);
     setDraft(next);
     setSelectedID(next.root.id);
@@ -158,7 +175,7 @@ export default function WorldExperienceEditor({
         <p className="dw-open-hint">{t("openWorld.experienceEmpty")}</p>
         <p className="dw-open-hint">{t("openWorld.startHint")}</p>
         <div className="dw-exp-scaffolds">
-          {(["blank", "text", "space", "workspace", "composite"] as const).map((kind) => (
+          {(["blank", "text", "space", "workspace", "composite", "media", "scene3d"] as const).map((kind) => (
             <button
               key={kind}
               type="button"
@@ -175,7 +192,19 @@ export default function WorldExperienceEditor({
   }
 
   return (
+    <AssetCatalogContext.Provider value={assets}>
     <section className="dw-experience-editor" data-testid="world-experience-editor">
+      <AssetsPanel
+        world={world}
+        objectID={objectID}
+        assets={assets}
+        canManage={canManage}
+        busy={busy}
+        canContribute={canContribute}
+        onUpload={onUploadAsset}
+        onGenerate={onGenerateAsset}
+        onRemove={onRemoveAsset}
+      />
       <div className="dw-exp-editor-head">
         <div>
           <h2>{t("openWorld.experience")}</h2>
@@ -327,6 +356,170 @@ export default function WorldExperienceEditor({
           {t("openWorld.clearExperience")}
         </button>
       </div>
+    </section>
+    </AssetCatalogContext.Provider>
+  );
+}
+
+const ASSET_KINDS: Array<{ kind: AssetKind; accept: string }> = [
+  { kind: "image", accept: ".png,.jpg,.jpeg,.gif,image/png,image/jpeg,image/gif" },
+  { kind: "video", accept: ".mp4,.webm,video/mp4,video/webm" },
+  { kind: "audio", accept: ".mp3,.ogg,.wav,.m4a,audio/mpeg,audio/ogg,audio/wav,audio/mp4" },
+  { kind: "model", accept: ".glb,model/gltf-binary" }
+];
+
+function formatBytes(value: number): string {
+  if (value >= 1024 * 1024) {
+    return `${(value / (1024 * 1024)).toFixed(1)} MB`;
+  }
+  if (value >= 1024) {
+    return `${Math.round(value / 1024)} KB`;
+  }
+  return `${value} B`;
+}
+
+function AssetsPanel({
+  world,
+  objectID,
+  assets,
+  canManage,
+  busy,
+  canContribute,
+  onUpload,
+  onGenerate,
+  onRemove
+}: {
+  world: OpenWorldState;
+  objectID: string;
+  assets: WorldAsset[];
+  canManage: boolean;
+  busy: boolean;
+  canContribute: boolean;
+  onUpload: (kind: AssetKind, file: File) => Promise<WorldAsset | null>;
+  onGenerate: () => Promise<WorldAsset | null>;
+  onRemove: (assetID: string) => Promise<void>;
+}) {
+  const { t } = useI18n();
+  const inputRef = useRef<HTMLInputElement | null>(null);
+  const pendingKindRef = useRef<AssetKind>("image");
+  const [pendingKind, setPendingKind] = useState<AssetKind>("image");
+  const [uploading, setUploading] = useState<AssetKind | "generate" | "">("");
+  const [error, setError] = useState("");
+
+  if (!canContribute) {
+    return null;
+  }
+
+  return (
+    <section className="dw-exp-assets" data-testid="world-assets-panel">
+      <div className="dw-exp-section-head">
+        <h3>{t("openWorld.assets")}</h3>
+        <span className="dw-open-hint">{world.title}</span>
+      </div>
+      <p className="dw-open-hint">{t("openWorld.assetHint")}</p>
+      <input
+        ref={inputRef}
+        type="file"
+        hidden
+        accept={ASSET_KINDS.find((entry) => entry.kind === pendingKind)?.accept}
+        data-testid="world-asset-file"
+        onChange={async (event) => {
+          const file = event.target.files?.[0];
+          event.target.value = "";
+          if (!file) {
+            return;
+          }
+          setUploading(pendingKindRef.current);
+          setError("");
+          const created = await onUpload(pendingKindRef.current, file);
+          setUploading("");
+          if (!created) {
+            setError(t("openWorld.assetFailed"));
+          }
+        }}
+      />
+      <div className="dw-exp-asset-buttons">
+        <button
+          type="button"
+          className="dw-button dw-button-small dw-button-ghost"
+          disabled={busy || uploading !== ""}
+          data-testid="world-asset-generate"
+          onClick={async () => {
+            setUploading("generate");
+            setError("");
+            const created = await onGenerate();
+            setUploading("");
+            if (!created) {
+              setError(t("openWorld.assetFailed"));
+            }
+          }}
+        >
+          {uploading === "generate" ? t("openWorld.assetUploading") : t("openWorld.assetGenerate")}
+        </button>
+        {ASSET_KINDS.map((entry) => (
+          <button
+            key={entry.kind}
+            type="button"
+            className="dw-button dw-button-small dw-button-ghost"
+            disabled={busy || uploading !== ""}
+            onClick={() => {
+              pendingKindRef.current = entry.kind;
+              setPendingKind(entry.kind);
+              inputRef.current?.click();
+            }}
+            data-testid={`world-asset-upload-${entry.kind}`}
+          >
+            {uploading === entry.kind
+              ? t("openWorld.assetUploading")
+              : t(`openWorld.assetKind.${entry.kind}` as never)}
+          </button>
+        ))}
+      </div>
+      {error ? (
+        <p className="dw-form-error" role="alert">
+          {error}
+        </p>
+      ) : null}
+      {assets.length === 0 ? (
+        <p className="dw-open-hint">{t("openWorld.assetEmpty")}</p>
+      ) : (
+        <ul className="dw-exp-asset-list">
+          {assets.map((asset) => (
+            <li key={asset.id} data-testid="world-asset-item" data-asset-id={asset.id}>
+              {asset.kind === "image" ? (
+                <img
+                  className="dw-exp-asset-thumb"
+                  src={objectAssetURL(objectID, asset.id)}
+                  alt=""
+                  loading="lazy"
+                />
+              ) : (
+                <span className="dw-exp-asset-glyph" aria-hidden="true">
+                  {asset.kind === "video" ? "▶" : asset.kind === "audio" ? "♪" : "◇"}
+                </span>
+              )}
+              <span className="dw-exp-asset-meta">
+                <strong>{asset.name}</strong>
+                <small>
+                  {t(`openWorld.assetKind.${asset.kind}` as never)} · {formatBytes(asset.byte_size)}
+                </small>
+              </span>
+              {canManage ? (
+                <button
+                  type="button"
+                  className="dw-icon-button"
+                  aria-label={t("openWorld.assetRemove")}
+                  disabled={busy}
+                  data-testid="world-asset-remove"
+                  onClick={() => void onRemove(asset.id)}
+                >
+                  ×
+                </button>
+              ) : null}
+            </li>
+          ))}
+        </ul>
+      )}
     </section>
   );
 }
@@ -958,6 +1151,7 @@ function SchemaField({
   contextProps: Record<string, unknown>;
 }) {
   const { t, lang } = useI18n();
+  const assets = useContext(AssetCatalogContext);
   const label = localized(property.title, lang) || name;
   const description = property.description ? localized(property.description, lang) : "";
 
@@ -1069,7 +1263,7 @@ function SchemaField({
 
   if (property.type === "string") {
     const text = typeof value === "string" ? value : "";
-    const options = stringOptions(property, world, behaviors, contextProps, lang);
+    const options = stringOptions(property, world, behaviors, contextProps, lang, assets);
     if (options.length > 0) {
       return (
         <label className="dw-exp-field-label">
@@ -1125,7 +1319,8 @@ function stringOptions(
   world: OpenWorldState,
   behaviors: WorldBehavior[],
   contextProps: Record<string, unknown>,
-  lang: "en" | "zh"
+  lang: "en" | "zh",
+  assets: WorldAsset[]
 ): Array<{ value: string; label: string }> {
   if (property.enum) {
     return property.enum.map((value) => ({ value, label: value }));
@@ -1145,6 +1340,19 @@ function stringOptions(
       ];
     case "behavior":
       return behaviors.map((behavior) => ({ value: behavior.id, label: behavior.name || behavior.id }));
+    case "node":
+      return world.nodes.map((node) => ({ value: node.id, label: node.name }));
+    case "variable":
+      return Object.keys(world.variables ?? {}).map((name) => ({ value: name, label: name }));
+    case "asset": {
+      let kind = property.asset_kind;
+      if (!kind && (contextProps.kind === "image" || contextProps.kind === "video")) {
+        kind = contextProps.kind;
+      }
+      return assets
+        .filter((asset) => !kind || asset.kind === kind)
+        .map((asset) => ({ value: asset.id, label: asset.name }));
+    }
     case "field":
       return fieldOptions(world, contextProps.entity_id, contextProps.kind_id).map((entry) => ({
         value: entry.value,
@@ -1308,8 +1516,22 @@ function nextArrayItem(
       return null;
     }
     next.kind_id = kind.id;
-    next.path = DEFAULT_PATH;
-    next.fill_hue = kind.hue;
+    if (itemSchema.properties?.path) {
+      next.path = DEFAULT_PATH;
+    }
+    if (itemSchema.properties?.fill_hue) {
+      next.fill_hue = kind.hue;
+    }
+    if (itemSchema.properties?.hue) {
+      next.hue = kind.hue;
+    }
+  }
+  if (name === "cues" && itemSchema.properties?.variable) {
+    const variable = Object.keys(world.variables ?? {})[0] ?? "";
+    next.variable = variable;
+    const value = world.variables?.[variable];
+    next.mode = typeof value === "boolean" ? "truthy" : "change";
+    next.tone = { frequency: 440, wave: "sine", volume: 0.12, pulse: 0 };
   }
   if (name === "columns") {
     const kind = world.kinds.find((entry) => entry.id === contextProps.kind_id);
@@ -1403,6 +1625,15 @@ function defaultValueForProperty(
       if (property.format === "behavior") {
         return behaviors[0]?.id ?? "";
       }
+      if (property.format === "node") {
+        return world.nodes[0]?.id ?? "";
+      }
+      if (property.format === "variable") {
+        return Object.keys(world.variables ?? {})[0] ?? "";
+      }
+      if (property.format === "asset") {
+        return "";
+      }
       if (property.format === "state_field") {
         return fieldOptions(world, contextProps.entity_id, contextProps.kind_id)[0]?.value ?? "status";
       }
@@ -1480,6 +1711,59 @@ function makeNode(
       props.max = 10;
     }
   }
+  if (capability.id === "core.media") {
+    props.kind = "image";
+    props.asset_id = "";
+    props.caption = "";
+    props.fit = "contain";
+    props.controls = false;
+    props.loop = false;
+    props.muted = true;
+    props.autoplay = false;
+    props.play_variable = "";
+    props.show_variable = "";
+  }
+  if (capability.id === "core.audio") {
+    props.title = "Sound";
+    props.ambient_asset_id = "";
+    props.tone = { frequency: 280, wave: "sine", volume: 0.06, pulse: 0.2 };
+    props.loop = true;
+    props.volume = 0.35;
+    props.muted = false;
+    props.cues = [];
+  }
+  if (capability.id === "core.scene3d") {
+    const primitives = ["sphere", "box", "cylinder", "cone", "torus"];
+    props.title = world.title;
+    props.sky_hue = world.presentation.scene.sky_hue;
+    props.ground_hue = world.presentation.scene.ground_hue;
+    props.fog = 0.02;
+    props.camera_mode = "follow";
+    props.camera_distance = 14;
+    props.camera_height = 8;
+    props.fov = 55;
+    props.gravity = 20;
+    props.ambient_light = 0.8;
+    props.player_enabled = world.nodes.length > 0;
+    props.player_node_id = world.nodes[0]?.id ?? "";
+    props.player_speed = 4;
+    props.player_height = 1;
+    props.views = world.kinds.map((kind, index) => ({
+      kind_id: kind.id,
+      primitive: primitives[index % primitives.length],
+      scale: 1,
+      elevation: 0,
+      hue: kind.hue,
+      opacity: 0.95,
+      collider: "none",
+      label: "always",
+      hide_done: false
+    }));
+    props.show_links = true;
+    props.activate_behavior_id = "";
+    props.bump_behavior_id = "";
+    props.entity_actions = [];
+  }
   if (capability.id === "core.button" || capability.id === "core.choice") {
     const behaviorID = behaviors[0]?.id ?? "";
     if (capability.id === "core.button") {
@@ -1504,7 +1788,7 @@ function nextNodeID(): string {
 }
 
 function makeScaffold(
-  kind: "blank" | "text" | "space" | "workspace" | "composite",
+  kind: "blank" | "text" | "space" | "workspace" | "composite" | "media" | "scene3d",
   world: OpenWorldState,
   behaviors: WorldBehavior[],
   zh: boolean
@@ -1546,6 +1830,12 @@ function makeScaffold(
       const space = makeNode({ id: "core.space", kind: "presentation", version: 1, title: { en: "Space", zh: "空间" }, description: { en: "", zh: "" } }, world, behaviors);
       root.children.push({ ...space, id: "space" });
     }
+  } else if (kind === "media") {
+    const media = makeNode({ id: "core.media", kind: "presentation", version: 1, title: { en: "Media", zh: "媒体" }, description: { en: "", zh: "" } }, world, behaviors);
+    root.children = [title, { ...media, id: "media" }, premise];
+  } else if (kind === "scene3d") {
+    const scene3d = makeNode({ id: "core.scene3d", kind: "presentation", version: 1, title: { en: "3D world", zh: "三维世界" }, description: { en: "", zh: "" } }, world, behaviors);
+    root.children = [{ ...scene3d, id: "scene3d" }, title];
   }
   return { protocol: 1, root, behaviors };
 }

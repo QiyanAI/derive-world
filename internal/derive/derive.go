@@ -110,20 +110,21 @@ func (s *Service) Create(
 		return nil, claim, err
 	}
 	view, err := s.objects.CreateDerived(ctx, tx, objects.DerivedInput{
-		ChildID:         childID,
-		ParentID:        parentID,
-		ParentType:      prepared.Parent.ObjectType,
-		Template:        prepared.Parent.PresentationTemplate,
-		ActorID:         actorID,
-		State:           prepared.ChildState,
-		SourceVersion:   prepared.SourceVersion,
-		InheritedFields: request.InheritanceFields,
-		Lineage:         prepared.Lineage,
-		Route:           route,
-		IdemKey:         idemKey,
-		LeaseUntil:      claim.LeaseUntil,
-		RequestID:       requestID,
-		IPHash:          ipHash,
+		ChildID:          childID,
+		ParentID:         parentID,
+		ParentType:       prepared.Parent.ObjectType,
+		Template:         prepared.Parent.PresentationTemplate,
+		ActorID:          actorID,
+		State:            prepared.ChildState,
+		SourceVersion:    prepared.SourceVersion,
+		InheritedFields:  request.InheritanceFields,
+		Lineage:          prepared.Lineage,
+		Route:            route,
+		IdemKey:          idemKey,
+		LeaseUntil:       claim.LeaseUntil,
+		RequestID:        requestID,
+		IPHash:           ipHash,
+		CopyObjectAssets: true,
 	})
 	if err != nil {
 		return nil, claim, err
@@ -184,6 +185,7 @@ func (s *Service) CreateCapability(ctx context.Context, actorID, parentID uuid.U
 		State: prepared.ChildState, SourceVersion: prepared.SourceVersion,
 		InheritedFields: request.InheritanceFields, Lineage: prepared.Lineage,
 		RequestID: requestID, IPHash: ipHash, SkipIdempotency: true,
+		CopyObjectAssets: true,
 	})
 	if err != nil {
 		return nil, err

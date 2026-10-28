@@ -126,7 +126,8 @@ type ParamProperty struct {
 	Type        string                    `json:"type"` // string, number, integer, boolean, array, object
 	Title       Localized                 `json:"title"`
 	Description Localized                 `json:"description,omitempty"`
-	Format      string                    `json:"format,omitempty"` // text, textarea, template, path, kind, entity, behavior, field, item_entity, color_hue
+	Format      string                    `json:"format,omitempty"`     // text, textarea, template, path, kind, entity, node, behavior, field, item_entity, variable, asset, color_hue
+	AssetKind   string                    `json:"asset_kind,omitempty"` // image, video, audio, or model for Format asset
 	Enum        []string                  `json:"enum,omitempty"`
 	Minimum     *float64                  `json:"minimum,omitempty"`
 	Maximum     *float64                  `json:"maximum,omitempty"`

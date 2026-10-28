@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: Apache-2.0
-import { useEffect, useId, useState, type CSSProperties, type ReactNode } from "react";
+import { lazy, Suspense, useEffect, useId, useState, type CSSProperties, type ReactNode } from "react";
 import { useI18n, type MessageKey } from "../../i18n";
 import type {
   OpenWorldField,
@@ -10,10 +10,14 @@ import type {
   WorldExperience,
   WorldViewNode
 } from "../../api";
+import AudioSurface from "./AudioSurface";
 import CustomSurface from "./CustomSurface";
 import LiveSurface from "./LiveSurface";
+import MediaSurface from "./MediaSurface";
 import StorySurface from "./StorySurface";
 import WorkspaceSurface from "./WorkspaceSurface";
+
+const Scene3DSurface = lazy(() => import("./Scene3DSurface"));
 
 const WORLD_WIDTH = 1600;
 const WORLD_HEIGHT = 1000;
@@ -23,6 +27,7 @@ type Scope = { item?: OpenWorldNode };
 
 type ExperienceContext = {
   world: OpenWorldState;
+  assetBase: string;
   canContribute: boolean;
   busy: boolean;
   onInvoke: (behaviorID: string, entityID?: string, value?: unknown) => void;
@@ -37,6 +42,7 @@ type ExperienceContext = {
 export default function WorldExperience({
   world,
   experience,
+  assetBase,
   canContribute,
   busy,
   onInvoke,
@@ -45,6 +51,7 @@ export default function WorldExperience({
 }: {
   world: OpenWorldState;
   experience: WorldExperience;
+  assetBase: string;
   canContribute: boolean;
   busy: boolean;
   onInvoke: (behaviorID: string, entityID?: string, value?: unknown) => void;
@@ -56,7 +63,7 @@ export default function WorldExperience({
   ) => void;
 }) {
   const context: ExperienceContext = {
-    world, canContribute, busy, onInvoke, onSetField, onCustom
+    world, assetBase, canContribute, busy, onInvoke, onSetField, onCustom
   };
   return (
     <div className="dw-experience" data-testid="world-experience" data-protocol={experience.protocol}>
@@ -159,6 +166,38 @@ function NodeView({
           busy={context.busy}
           onCustom={context.onCustom}
         />
+      );
+    case "core.media":
+      return (
+        <MediaSurface
+          props={props}
+          world={context.world}
+          assetBase={context.assetBase}
+          nodeID={node.id}
+        />
+      );
+    case "core.audio":
+      return (
+        <AudioSurface
+          props={props}
+          world={context.world}
+          assetBase={context.assetBase}
+          nodeID={node.id}
+        />
+      );
+    case "core.scene3d":
+      return (
+        <Suspense fallback={<p className="dw-page-loading" role="status">…</p>}>
+          <Scene3DSurface
+            props={props}
+            world={context.world}
+            assetBase={context.assetBase}
+            canContribute={context.canContribute}
+            busy={context.busy}
+            onInvoke={context.onInvoke}
+            nodeID={node.id}
+          />
+        </Suspense>
       );
     case "core.tabs":
       return (

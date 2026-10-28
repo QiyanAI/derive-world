@@ -19,8 +19,10 @@ implemented. This is a self-hostable OSS MVP, not a production platform.
   not selected from a fixed product taxonomy.
 - An experience is a bounded tree of registered capabilities: layout, text,
   vector space with arbitrary SVG paths, repeating collections, data tables,
-  field editors, meters, buttons, and choices. Reusable behaviors currently
-  cover state changes and numeric transfer. `GET
+  field editors, meters, buttons, choices, uploaded image/video, uploaded or
+  procedural audio, and a real 3D scene with camera movement, gravity and
+  collisions. Reusable behaviors cover state changes, numeric transfer and
+  event cues. `GET
   /api/v1/world-capabilities` publishes the same catalog that drives the
   product palette and generated forms.
 - Adding a capability is a module change (Go validator/executor plus its
@@ -28,16 +30,20 @@ implemented. This is a self-hostable OSS MVP, not a production platform.
   registered capability is available to every world. The classic scene,
   stage, cards, and timeline remain selectable views for the same world; a
   world does not become a different object type when its experience changes.
-- The server interprets every value. It never executes user code, loads
-  external URLs, images, fonts or scripts, opens network access, renders 3D,
-  or runs a physics/audio engine. Strings are rendered as text, vector paths
-  use a restricted drawing-command grammar, and all values are bounded.
-  Entity field primitives are still text, number and flag; structured content
-  can be stored as text, but there is no new rich value type yet.
+- The server interprets every value. It never executes user code, loads an
+  external URL, font or script, or opens network access. Uploaded images,
+  video, audio and GLB models are validated by content, served from this
+  server under the world's own permissions, and referenced by opaque ids.
+  Images are decoded and re-encoded; GLB files may only use an embedded BIN
+  chunk. 3D rendering, camera control, gravity and simple collisions run in the
+  browser (three.js); physics transforms are ephemeral and only behavior-driven
+  state changes are persisted. Strings are rendered as text, vector paths use
+  a restricted drawing-command grammar, and all values are bounded.
 - Bounds: 64 static view nodes, depth 8, 24 children per node, 24 behaviors,
-  8 actions per behavior, 4 KiB of props per node, 32 KiB per experience, 400
-  expanded render instances, and the existing 64 KiB object-state cap. Actions
-  remain single-pass and never chain.
+  8 actions per behavior, 4 KiB of props per node (12 KiB for scene3d and
+  custom, 8 KiB for audio), 48 KiB per experience, 400 expanded render
+  instances, and the existing 64 KiB object-state cap. Actions remain
+  single-pass and never chain.
 - `set_experience` and `invoke_behavior` require `contribute`; a caller
   without read permission still receives 404. Every change uses the existing
   row lock, `expected_version`, idempotency, event and audit path.
@@ -83,14 +89,18 @@ implemented. This is a self-hostable OSS MVP, not a production platform.
   - `core.story`: chapters are real things, choices are real links, reading position is a shared variable; readable, choosable, extendable, rewritable and derivable.
   - `core.workspace`: real things and fields as an editable table with row creation, status, actions and live summaries; a genuinely usable work environment.
   - `core.space`: a static visual relation space.
+  - `core.media`: a real uploaded image or video with fit, controls, looping, muted/autoplay intent and world-variable visibility/playback control.
+  - `core.audio`: an ambient uploaded file or procedural tone plus bounded cues driven by world-variable transitions. The browser requires an explicit gesture before sound starts.
+  - `core.scene3d`: the same things as a real 3D scene. Kinds select a primitive or an uploaded GLB; the camera can orbit or follow a player; gravity, jumping and box/sphere collisions run client-side; clicking a thing runs its behavior.
   - `core.custom`: a bounded declarative surface. The AI can define forms the fixed surfaces do not cover with shapes, text, inputs, keys, drag, conditions, actions, timelines and procedural tones; the server interprets it and the client renders it, never executing user code.
-  - `core.tabs`: combine any surfaces in one world; labels are world content, not product categories.
+  - `core.tabs`: combine any surfaces in one world; labels are world content, not product categories. An audio layer can sit outside the tabs so it keeps playing while the user switches surfaces.
 - Create bodies may use local `ref` slugs; the server mints UUIDs and remaps experience references, so a complete experience can be installed at creation.
 - World variables (<=128, <=8 KiB total) store game scores, novel reading positions and workspace state; they participate in versions, events, audit, snapshots and derivation.
 - A bound Personal AI uses `world.reimagine` to propose a merged change; the server runs `worldseed.Reshape` and creates a `reshape_world` proposal. Applying it atomically replaces the world. Content merges by name and keeps existing ids, behaviours, arbitrary forms and entity actions; the experience shell is rebuilt for the requested surfaces.
 - Complex worlds grow across turns: each model turn remains bounded at 8 KiB, but the world can keep gaining things, chapters, surfaces and custom nodes up to the hard state/experience ceilings.
-- Limits (stated honestly): 2D declarative surfaces; no 3D, physics engine, audio engine, external images/fonts/audio/video/URLs, network access, user code or real-time multiplayer. A custom surface holds at most 40 nodes and 12 KiB props; the whole experience is 32 KiB; object state is 64 KiB; variables are 128 / 8 KiB; one model output is 8 KiB; one creation confirmation is 12 KiB. Anything beyond these is not pretended; new media or engines still require a validated universal module or host primitive, never a per-world page.
-- `core.custom` is a composable safe extension path, not a claim that arbitrary media are implemented. It can create forms the fixed surfaces do not cover inside the 2D declarative medium; it cannot grant 3D, physics or audio capabilities by itself.
+- Limits (stated honestly): declarative 2D and 3D surfaces; uploaded images/video/audio/GLB models; simple client physics; no network access, arbitrary code, live multiplayer sync, or arbitrary video generation. Uploads are capped per file (image 8 MiB, audio 16 MiB, GLB 32 MiB, video 40 MiB), per world (40 files / 64 MiB) and per user per UTC day (256 MiB). A custom surface holds at most 40 nodes and 12 KiB props; the whole experience is 48 KiB; object state is 64 KiB; variables are 128 / 8 KiB; one model output is 8 KiB; one creation confirmation is 12 KiB. A media file's bytes never enter object state. Anything beyond these is not pretended; new media or generation providers still require a validated universal module, never a per-world page.
+- Video and audio files are stored byte-for-byte; unlike images they are not re-encoded, so someone uploading media with embedded location/device metadata should strip it first. The product does not claim metadata removal for those containers.
+- `core.custom` is a composable safe extension path, not a claim that every medium is implemented. It can create forms the fixed surfaces do not cover; uploaded media, audio and 3D are provided by their own universal modules.
 - Fixture output remains deterministic demo data and is always labelled; real-model acceptance requires separate authorization and configuration.
 
 ## Implemented in v0.1.0
@@ -205,7 +215,8 @@ scope.
 
 - The published `v0.1.0` has a 22-table schema. This development branch adds
   version-6 social/publication/scene tables and version-7 privacy-aware account
-  discovery plus user-private World Stage layout state (31 tables total).
+  discovery, user-private World Stage layout state, open worlds and world
+  assets (34 tables total at schema version 9).
   Earlier migrations are not rewritten.
 - Object state is capped at 64 KiB; `shared_context` at 8 KiB.
 - AI proposal input storage is capped at 64 KiB.

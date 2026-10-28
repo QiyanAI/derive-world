@@ -35,8 +35,10 @@ what you build.
 > **Status: unreleased development branch on top of public OSS MVP `v0.1.0`.**
 > The published `v0.1.0` remains the 22-table, two-object foundation described
 > in its [release notes](docs/en/release-notes.md). This branch adds a
-> version-8 migration (31 tables), a fourth object type, a composable
-> world-experience capability runtime, social discovery, publication,
+> version-9 migration (34 tables), a fourth object type, a composable
+> world-experience capability runtime, real uploaded image/video/audio/GLB
+> media with permission-scoped storage, a 3D surface with client camera,
+> gravity and collisions, event-linked audio, social discovery, publication,
 > user-private world layout, the V2 World Stage client, and a universal
 > Personal AI that can propose a real first world. It is
 > reviewable code, not a released
@@ -57,7 +59,9 @@ what you build.
   (ideas, steps, scenes, choices, outcomes), and free worlds whose creator
   defines the kinds of things, their relations, and one-pass rules. A free
   world can compose its own experience from registered presentation and
-  behavior capabilities; the classic scene, stage, cards and timeline remain
+  behavior capabilities, including uploaded images/video/audio, a GLB model
+  or primitive 3D scene, sound cues and a simple physics world; the classic
+  scene, stage, cards and timeline remain
   selectable views. Every type has versioned actions, members, invitations,
   Handoff, AI collaboration, a Derive Lens, history, and lineage.
 - **Friends** — direct human friendship, messages, blocks, and object

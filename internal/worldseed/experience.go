@@ -35,6 +35,8 @@ type preservedExperience struct {
 	storyVariable string
 	storyJump     map[string]string
 	customRaw     json.RawMessage
+	audioRaw      json.RawMessage
+	mediaRaw      json.RawMessage
 }
 
 type surfaceBuilder struct {
@@ -101,8 +103,23 @@ func buildExperience(world *authoredWorld, brief *Brief,
 	if containsString(built.surfaces, "space") {
 		nodes["space"] = built.buildSpace()
 	}
+	if containsString(built.surfaces, "scene3d") {
+		nodes["scene3d"] = built.buildScene3D()
+	}
+	if containsString(built.surfaces, "media") {
+		nodes["media"] = built.buildMedia()
+	}
 	if containsString(built.surfaces, "custom") {
 		nodes["custom"] = built.buildCustom()
+	}
+	var audioNode *worldcap.ViewNode
+	if brief.Experience != nil && brief.Experience.Audio != nil {
+		audioNode = built.buildAudio()
+	} else if preserved != nil && len(preserved.audioRaw) > 0 {
+		audioNode = &worldcap.ViewNode{
+			ID: "audio", Capability: "core.audio",
+			Props: append(json.RawMessage(nil), preserved.audioRaw...),
+		}
 	}
 	if built.err != nil {
 		return nil, nil, "", built.err
@@ -137,6 +154,17 @@ func buildExperience(world *authoredWorld, brief *Brief,
 				"tabs": tabs, "default": built.primary,
 			}),
 			Children: children,
+		}
+	}
+	if audioNode != nil {
+		root.ID = "content"
+		root = &worldcap.ViewNode{
+			ID: "root", Capability: "core.stack",
+			Props: mustJSON(map[string]any{
+				"direction": "vertical", "gap": 10, "padding": 0,
+				"align": "stretch", "tone": "plain",
+			}),
+			Children: []worldcap.ViewNode{*audioNode, *root},
 		}
 	}
 	return &worldcap.Experience{
@@ -190,6 +218,24 @@ func (built *surfaceBuilder) surfaceLabel(surface string) string {
 			return "工作台"
 		}
 		return "Workbench"
+	case "scene3d":
+		if built.brief.Experience != nil && built.brief.Experience.Scene3D != nil &&
+			built.brief.Experience.Scene3D.Title != "" {
+			return truncate(built.brief.Experience.Scene3D.Title, 40)
+		}
+		if zh {
+			return "三维世界"
+		}
+		return "3D world"
+	case "media":
+		if built.brief.Experience != nil && built.brief.Experience.Media != nil &&
+			built.brief.Experience.Media.Title != "" {
+			return truncate(built.brief.Experience.Media.Title, 40)
+		}
+		if zh {
+			return "图像与视频"
+		}
+		return "Media"
 	case "custom":
 		if built.brief.Experience != nil && len(built.brief.Experience.Custom) > 0 {
 			var program struct {
@@ -416,6 +462,327 @@ func (builder *surfaceBuilder) buildLive() *worldcap.ViewNode {
 		ID: "live", Capability: "core.live", Props: mustJSON(props),
 	}
 }
+
+func (builder *surfaceBuilder) buildMedia() *worldcap.ViewNode {
+	spec := (*MediaSpec)(nil)
+	if builder.brief.Experience != nil {
+		spec = builder.brief.Experience.Media
+	}
+	if spec == nil && builder.preserved != nil && len(builder.preserved.mediaRaw) > 0 {
+		return &worldcap.ViewNode{
+			ID: "media", Capability: "core.media",
+			Props: append(json.RawMessage(nil), builder.preserved.mediaRaw...),
+		}
+	}
+	if spec == nil {
+		spec = &MediaSpec{Kind: "image"}
+	}
+	kind := spec.Kind
+	if kind != "video" {
+		kind = "image"
+	}
+	if spec.ShowVariable != "" {
+		builder.ensureAudioVariable(spec.ShowVariable, "truthy")
+	}
+	if spec.PlayVariable != "" {
+		builder.ensureAudioVariable(spec.PlayVariable, "truthy")
+	}
+	return &worldcap.ViewNode{
+		ID: "media", Capability: "core.media",
+		Props: mustJSON(map[string]any{
+			"kind": kind, "asset_id": "", "caption": spec.Caption,
+			"fit": "contain", "controls": kind == "video", "loop": false,
+			"muted": true, "autoplay": false,
+			"play_variable": spec.PlayVariable, "show_variable": spec.ShowVariable,
+		}),
+	}
+}
+
+func (builder *surfaceBuilder) buildScene3D() *worldcap.ViewNode {
+	spec := (*Scene3DSpec)(nil)
+	if builder.brief.Experience != nil {
+		spec = builder.brief.Experience.Scene3D
+	}
+	_, _, entityActions, _ := builder.scene(nil)
+	specViews := map[int]Scene3DViewSpec{}
+	if spec != nil {
+		for _, view := range spec.Views {
+			specViews[view.Kind] = view
+		}
+	}
+	primitives := []string{"sphere", "box", "cylinder", "cone", "torus"}
+	views := make([]map[string]any, 0, len(builder.world.Kinds))
+	chapterKindID := ""
+	if builder.chapterKind != nil {
+		chapterKindID = builder.chapterKind.ID
+	}
+	kindIndex := 0
+	for _, kind := range builder.world.Kinds {
+		if kind.ID == chapterKindID {
+			continue
+		}
+		primitive := primitives[kindIndex%len(primitives)]
+		scale := 1.0
+		elevation := 0.0
+		collider := "none"
+		hideDone := false
+		if kind.Solid {
+			collider = "box"
+		}
+		if view, ok := specViews[kindIndex]; ok {
+			if view.Primitive != "" {
+				primitive = view.Primitive
+			}
+			if view.Scale != nil {
+				scale = *view.Scale
+			}
+			if view.Elevation != nil {
+				elevation = *view.Elevation
+			}
+			if view.Collider != "" {
+				collider = view.Collider
+			}
+			hideDone = view.HideDone
+		}
+		views = append(views, map[string]any{
+			"kind_id": kind.ID, "primitive": primitive, "scale": scale,
+			"elevation": elevation, "hue": float64(kind.Hue), "opacity": 0.95,
+			"collider": collider, "label": "always", "hide_done": hideDone,
+		})
+		kindIndex++
+	}
+	playerIndex := -1
+	if spec != nil && spec.Player != nil {
+		playerIndex = *spec.Player
+	} else {
+		for index := range builder.brief.Things {
+			node := builder.world.findNodeByID(builder.nodeIDForSeedThing(index))
+			if node == nil {
+				continue
+			}
+			kind := builder.world.findKindByID(node.KindID)
+			if kind != nil && !kind.Solid {
+				playerIndex = index
+				break
+			}
+		}
+		if playerIndex < 0 && len(builder.brief.Things) > 0 {
+			playerIndex = 0
+		}
+	}
+	playerNodeID := ""
+	if playerIndex >= 0 {
+		playerNodeID = builder.nodeIDForSeedThing(playerIndex)
+	}
+	skyHue := builder.world.Presentation.Scene.SkyHue
+	groundHue := builder.world.Presentation.Scene.GroundHue
+	fog := 0.02
+	camera := "follow"
+	distance := 14.0
+	speed := 4.0
+	gravity := 20.0
+	title := truncate(builder.world.Premise, 120)
+	if spec != nil {
+		if spec.SkyHue != nil {
+			skyHue = *spec.SkyHue
+		}
+		if spec.GroundHue != nil {
+			groundHue = *spec.GroundHue
+		}
+		if spec.Fog != nil {
+			fog = *spec.Fog
+		}
+		if spec.Camera != "" {
+			camera = spec.Camera
+		}
+		if spec.Distance != nil {
+			distance = *spec.Distance
+		}
+		if spec.Speed != nil {
+			speed = *spec.Speed
+		}
+		if spec.Gravity != nil {
+			gravity = *spec.Gravity
+		}
+		if spec.Title != "" {
+			title = truncate(spec.Title, 120)
+		}
+	}
+	activate := ""
+	if len(entityActions) == 0 {
+		activate = builder.senseBehavior()
+	}
+	return &worldcap.ViewNode{
+		ID: "scene3d", Capability: "core.scene3d",
+		Props: mustJSON(map[string]any{
+			"title": title, "sky_hue": float64(skyHue), "ground_hue": float64(groundHue),
+			"fog": fog, "camera_mode": camera, "camera_distance": distance,
+			"camera_height": 8.0, "fov": 55.0, "gravity": gravity,
+			"ambient_light": 0.8, "player_enabled": playerNodeID != "",
+			"player_node_id": playerNodeID, "player_speed": speed, "player_height": 1.0,
+			"views": views, "show_links": true, "activate_behavior_id": activate,
+			"entity_actions": entityActions,
+		}),
+	}
+}
+
+// senseBehavior makes a 3D click mark the clicked thing done and increment a
+// numeric audio cue variable. It is created only when the seed declares a
+// numeric cue and no per-thing interaction already owns the click.
+func (builder *surfaceBuilder) senseBehavior() string {
+	if builder.brief.Experience == nil || builder.brief.Experience.Audio == nil {
+		return ""
+	}
+	variable := ""
+	for _, cue := range builder.brief.Experience.Audio.Cues {
+		if cue.Mode == "increase" {
+			variable = cue.Variable
+			break
+		}
+	}
+	if variable == "" {
+		return ""
+	}
+	if declared, ok := builder.world.Variables[variable]; ok {
+		if _, isNumber := declared.(float64); !isNumber {
+			return ""
+		}
+	} else {
+		builder.world.Variables[variable] = float64(0)
+	}
+	return builder.addBehavior("sense", "signal", []worldcap.Action{
+		{
+			Capability: "core.state", Action: "set",
+			Params: mustJSON(map[string]any{
+				"entity_id": "$event.entity", "field": "status", "value": "done",
+			}),
+		},
+		{
+			Capability: "core.variable", Action: "add",
+			Params: mustJSON(map[string]any{"name": variable, "value": float64(1)}),
+		},
+	})
+}
+
+func (builder *surfaceBuilder) buildAudio() *worldcap.ViewNode {
+	spec := builder.brief.Experience.Audio
+	title := "Sound"
+	if spec.Title != "" {
+		title = truncate(spec.Title, 80)
+	}
+	tone := spec.Tone
+	if tone == nil {
+		frequency := 280.0
+		atmosphere := strings.ToLower(builder.brief.Atmosphere)
+		switch {
+		case strings.Contains(atmosphere, "rain") || strings.Contains(atmosphere, "雨"):
+			frequency = 220
+		case strings.Contains(atmosphere, "star") || strings.Contains(atmosphere, "星"):
+			frequency = 330
+		case strings.Contains(atmosphere, "forest") || strings.Contains(atmosphere, "森林"):
+			frequency = 196
+		}
+		tone = &ToneSpec{
+			Frequency: &frequency, Wave: "sine",
+			Volume: floatPointer(0.06), Pulse: floatPointer(0.18),
+		}
+	}
+	volume := 0.35
+	if spec.Volume != nil {
+		volume = *spec.Volume
+	}
+	loop := true
+	if spec.Loop != nil {
+		loop = *spec.Loop
+	}
+	props := map[string]any{
+		"title": title, "tone": toneMap(tone), "loop": loop,
+		"volume": volume, "muted": false,
+	}
+	cues := make([]map[string]any, 0, len(spec.Cues))
+	for index, cue := range spec.Cues {
+		mode := cue.Mode
+		if mode == "" {
+			mode = "change"
+		}
+		builder.ensureAudioVariable(cue.Variable, mode)
+		cueTone := cue.Tone
+		if cueTone == nil {
+			frequency := 440.0 + float64(index)*90
+			cueTone = &ToneSpec{
+				Frequency: &frequency, Wave: "triangle",
+				Volume: floatPointer(0.12), Pulse: floatPointer(0),
+			}
+		}
+		entry := map[string]any{
+			"variable": cue.Variable, "mode": mode, "tone": toneMap(cueTone),
+		}
+		if cue.Volume != nil {
+			entry["volume"] = *cue.Volume
+		}
+		cues = append(cues, entry)
+	}
+	if len(cues) > 0 {
+		props["cues"] = cues
+	}
+	return &worldcap.ViewNode{ID: "audio", Capability: "core.audio", Props: mustJSON(props)}
+}
+
+func (builder *surfaceBuilder) ensureAudioVariable(name, mode string) {
+	want := "text"
+	switch mode {
+	case "truthy", "falsy":
+		want = "flag"
+	case "increase", "decrease":
+		want = "number"
+	}
+	existing, ok := builder.world.Variables[name]
+	if !ok {
+		switch want {
+		case "flag":
+			builder.world.Variables[name] = false
+		case "number":
+			builder.world.Variables[name] = float64(0)
+		default:
+			builder.world.Variables[name] = ""
+		}
+		return
+	}
+	if builder.err != nil {
+		return
+	}
+	switch want {
+	case "flag":
+		if _, good := existing.(bool); !good {
+			builder.err = fmt.Errorf("%w: audio cue variable type", ErrInvalid)
+		}
+	case "number":
+		if _, good := existing.(float64); !good {
+			builder.err = fmt.Errorf("%w: audio cue variable type", ErrInvalid)
+		}
+	}
+}
+
+func toneMap(tone *ToneSpec) map[string]any {
+	entry := map[string]any{"wave": "sine", "volume": 0.08, "pulse": 0.0}
+	if tone.Wave != "" {
+		entry["wave"] = tone.Wave
+	}
+	if tone.Frequency != nil {
+		entry["frequency"] = *tone.Frequency
+	} else {
+		entry["frequency"] = 280.0
+	}
+	if tone.Volume != nil {
+		entry["volume"] = *tone.Volume
+	}
+	if tone.Pulse != nil {
+		entry["pulse"] = *tone.Pulse
+	}
+	return entry
+}
+
+func floatPointer(value float64) *float64 { return &value }
 
 func (builder *surfaceBuilder) buildSpace() *worldcap.ViewNode {
 	views, background, entityActions, _ := builder.scene(nil)

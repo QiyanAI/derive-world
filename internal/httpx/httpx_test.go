@@ -77,8 +77,13 @@ func TestSecurityHeaders(t *testing.T) {
 	recorder := httptest.NewRecorder()
 	handler.ServeHTTP(recorder, httptest.NewRequest(http.MethodGet, "/", nil))
 
-	if got := recorder.Header().Get("Content-Security-Policy"); !strings.Contains(got, "default-src 'self'") {
-		t.Fatalf("CSP missing: %q", got)
+	csp := recorder.Header().Get("Content-Security-Policy")
+	if !strings.Contains(csp, "default-src 'self'") ||
+		!strings.Contains(csp, "connect-src 'self' blob:") ||
+		!strings.Contains(csp, "object-src 'none'") ||
+		!strings.Contains(csp, "img-src 'self' blob:") ||
+		strings.Contains(csp, "worker-src") {
+		t.Fatalf("CSP is not the reviewed policy: %q", csp)
 	}
 	if got := recorder.Header().Get("X-Content-Type-Options"); got != "nosniff" {
 		t.Fatalf("nosniff = %q", got)

@@ -11,6 +11,7 @@ import "./styles/living-world.css";
 import "./styles/v2.css";
 import "./styles/phase2.css";
 import "./styles/phase2c.css";
+import "./styles/phase2e.css";
 
 const rootElement = document.getElementById("root");
 if (!rootElement) {

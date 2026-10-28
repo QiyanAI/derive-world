@@ -71,7 +71,8 @@ func NewRegistry() *Registry {
 		stackCapability{}, textCapability{}, spaceCapability{}, collectionCapability{},
 		tableCapability{}, fieldCapability{}, buttonCapability{}, choiceCapability{},
 		meterCapability{}, liveCapability{}, storyCapability{}, workspaceCapability{},
-		tabsCapability{}, customCapability{},
+		tabsCapability{}, customCapability{}, mediaCapability{}, audioCapability{},
+		scene3DCapability{},
 	} {
 		if err := registry.RegisterPresentation(capability); err != nil {
 			panic(fmt.Sprintf("worldcap: register presentation: %v", err))

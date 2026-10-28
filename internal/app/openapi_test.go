@@ -25,15 +25,16 @@ func TestOpenAPI(t *testing.T) {
 	}
 
 	publicPaths := map[string]bool{
-		"/healthz":                           true,
-		"/readyz":                            true,
-		"/api/v1/meta":                       true,
-		"/api/v1/openapi.yaml":               true,
-		"/api/v1/auth/register":              true,
-		"/api/v1/auth/login":                 true,
-		"/api/v1/public/worlds":              true,
-		"/api/v1/public/worlds/{id}":         true,
-		"/api/v1/public/worlds/{id}/lineage": true,
+		"/healthz":                                     true,
+		"/readyz":                                      true,
+		"/api/v1/meta":                                 true,
+		"/api/v1/openapi.yaml":                         true,
+		"/api/v1/auth/register":                        true,
+		"/api/v1/auth/login":                           true,
+		"/api/v1/public/worlds":                        true,
+		"/api/v1/public/worlds/{id}":                   true,
+		"/api/v1/public/worlds/{id}/lineage":           true,
+		"/api/v1/public/worlds/{id}/assets/{asset_id}": true,
 	}
 	bodyRoutes := map[string]bool{
 		"POST /api/v1/auth/register":                       true,

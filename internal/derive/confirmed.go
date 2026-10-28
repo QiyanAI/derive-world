@@ -65,7 +65,8 @@ func (s *Service) CreateConfirmedWithResultTx(
 		State: prepared.ChildState, SourceVersion: prepared.SourceVersion,
 		InheritedFields: request.InheritanceFields, Lineage: prepared.Lineage,
 		RequestID: requestID, IPHash: ipHash, SkipIdempotency: true,
-		ConfirmationID: &confirmationID, ConfirmedBy: &confirmedBy,
+		CopyObjectAssets: true,
+		ConfirmationID:   &confirmationID, ConfirmedBy: &confirmedBy,
 	})
 	if err != nil {
 		return nil, err

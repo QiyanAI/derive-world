@@ -9,6 +9,36 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Real world media for `open_world_v1`: permission-scoped uploads of images,
+  video, audio and binary glTF models; content-based validation (magic bytes,
+  image re-encoding, GLB chunk and resource bounds, explicit media allowlists);
+  byte-range streaming; per-world and per-user durable budgets; audit actions;
+  and a deterministic procedural image provider behind the same validation,
+  quota and audit path. A file's bytes never enter object state.
+- `core.media`, `core.audio` and `core.scene3d` capabilities. The same world can
+  show real images and video, play an ambient file or procedural tone with
+  variable-driven cues, and render its own things as a 3D scene with camera
+  movement, GLB models, gravity, jumping and box/sphere collisions. Clicking a
+  thing runs the same behavior path as every other surface; physics transforms
+  and the player position are client state, while behavior-driven changes are
+  versioned and persisted.
+- Asset references are state-derived: save-time validation checks active
+  membership, existence and media kind; derivation copies only references in
+  the inherited state; publications freeze exactly the referenced assets and
+  include their uploaders in consent. Removing an in-use asset is rejected
+  until a versioned experience change clears the reference.
+- A version-9 migration adds `assets`, `object_asset_refs` and
+  `publication_asset_refs` plus the `asset.upload` and `asset.remove` audit
+  actions. Images are decoded and re-encoded to strip metadata and trailing
+  payloads; GLB files must carry an embedded BIN chunk and no external or data
+  URIs. Video and audio are stored byte-for-byte; their embedded metadata is a
+  documented boundary.
+- The web client adds lazy-loaded three.js 3D rendering, Web Audio and HTML
+  audio playback with a user-gesture gate, image/video surfaces, an asset
+  upload/generation panel and descriptor-driven asset pickers. The page CSP
+  permits same-origin media plus the blob URLs three.js uses for GLB textures,
+  while asset responses carry a stricter sandbox policy.
+
 - Free-intent world creation and reshaping for `open_world_v1`. The Personal AI
   writes a compact world brief; a server-side composer (`internal/worldseed`)
   expands it into a complete, validated world with kinds, things, relations,

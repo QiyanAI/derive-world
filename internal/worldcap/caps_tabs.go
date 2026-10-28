@@ -54,7 +54,7 @@ func (tabsCapability) Validate(raw json.RawMessage, _ ValidateContext) (json.Raw
 	if err := decodeStrict(raw, &props); err != nil {
 		return nil, err
 	}
-	if len(props.Tabs) < 1 || len(props.Tabs) > 6 {
+	if len(props.Tabs) < 1 || len(props.Tabs) > 8 {
 		return nil, fmt.Errorf("%w: tabs.tabs", ErrInvalid)
 	}
 	seen := map[string]bool{}

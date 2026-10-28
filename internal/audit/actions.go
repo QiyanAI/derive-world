@@ -77,6 +77,11 @@ const (
 	ActionPublicationConsent          Action = "publication.consent"
 	ActionPublicationDerive           Action = "publication.derive"
 	ActionPublicationReport           Action = "publication.report"
+
+	// World asset actions. They are registered by migration 00009 and expand
+	// the frozen registry without changing any existing action.
+	ActionAssetUpload Action = "asset.upload"
+	ActionAssetRemove Action = "asset.remove"
 )
 
 // AllActions is the normative G00 49-action set plus the living-world additions
@@ -106,6 +111,7 @@ func AllActions() []Action {
 		ActionSocialDiscoverabilityUpdate,
 		ActionPublicationCreate, ActionPublicationActivate, ActionPublicationRevoke,
 		ActionPublicationConsent, ActionPublicationDerive, ActionPublicationReport,
+		ActionAssetUpload, ActionAssetRemove,
 	}
 }
 

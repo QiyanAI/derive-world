@@ -46,6 +46,8 @@ Windows 下二进制为 `derive-world.exe`；请用 PowerShell 或 cmd 导出 `.
 
 所有应用配置来自环境变量。Compose 读取 `.env`，该文件被 Git 忽略。生产要求 HTTPS `PUBLIC_BASE_URL`，拒绝 `dw_dev_only_` 密钥、`sslmode=disable` 与 `dw_local_only` 数据库密码。
 
+`ASSET_DIR` 用于保存上传的图像、视频、音频与 GLB 模型，不在 PostgreSQL 中。该目录必须可写，且不能位于 `WEB_DIST_DIR` 下。Compose 将命名卷 `dw_assets` 挂载到 `/app/var/assets`。请将此卷与数据库一起备份；仅 `pg_dump` 不包含媒体字节。删除该卷会保留资源元数据，但已有媒体将不可用。
+
 `MODEL_MODE=fixture` 不需要模型账户。`MODEL_MODE=real` 要求 `MODEL_BASE_URL`、`MODEL_NAME`、`MODEL_API_KEY`，缺一即启动失败。
 
 ## 模型预算与停止控制

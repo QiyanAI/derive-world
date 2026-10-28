@@ -110,6 +110,17 @@ type Experience struct {
 	Live      *LiveSpec      `json:"live,omitempty"`
 	Story     *StorySpec     `json:"story,omitempty"`
 	Workspace *WorkspaceSpec `json:"workspace,omitempty"`
+	// Scene3D turns the same things into a real three-dimensional scene with
+	// camera movement, gravity and collisions. It references no uploaded model
+	// in a seed; a human may attach a GLB later in the world editor.
+	Scene3D *Scene3DSpec `json:"scene3d,omitempty"`
+	// Audio adds an ambient procedural tone and bounded event cues. Uploaded
+	// audio files are attached by a human after creation; a seed never invents
+	// an asset id.
+	Audio *AudioSpec `json:"audio,omitempty"`
+	// Media reserves a real image or video slot. The seed cannot carry bytes or
+	// asset ids; the human uploads the file in the world editor afterwards.
+	Media *MediaSpec `json:"media,omitempty"`
 	// Custom is a bounded declarative surface for forms the fixed surfaces do
 	// not cover. It is validated by worldcap.ValidateCustom and interpreted by
 	// the shared client/server runtime, never compiled to code.
@@ -205,6 +216,68 @@ type WorkspaceActionSpec struct {
 	Label string `json:"label"`
 	Type  string `json:"type"` // create | done | progress
 	Field string `json:"field,omitempty"`
+}
+
+// Scene3DSpec places the seed's own things in a 3D scene. Views are keyed by
+// kind index; omitted views receive a deterministic primitive. Player is a
+// thing index, not a new entity.
+type Scene3DSpec struct {
+	Title     string            `json:"title,omitempty"`
+	SkyHue    *int              `json:"sky_hue,omitempty"`
+	GroundHue *int              `json:"ground_hue,omitempty"`
+	Fog       *float64          `json:"fog,omitempty"`
+	Camera    string            `json:"camera,omitempty"` // orbit | follow
+	Distance  *float64          `json:"distance,omitempty"`
+	Player    *int              `json:"player,omitempty"`
+	Speed     *float64          `json:"speed,omitempty"`
+	Gravity   *float64          `json:"gravity,omitempty"`
+	Views     []Scene3DViewSpec `json:"views,omitempty"`
+}
+
+// Scene3DViewSpec is one kind's 3D form.
+type Scene3DViewSpec struct {
+	Kind      int      `json:"kind"`
+	Primitive string   `json:"primitive,omitempty"`
+	Scale     *float64 `json:"scale,omitempty"`
+	Elevation *float64 `json:"elevation,omitempty"`
+	Collider  string   `json:"collider,omitempty"`
+	HideDone  bool     `json:"hide_done,omitempty"`
+}
+
+// AudioSpec is a procedural ambient tone plus variable-driven cues. It never
+// references an uploaded file; those are attached by the human.
+// MediaSpec is an empty media slot. It names the intended kind and the words
+// displayed until the human uploads a file.
+type MediaSpec struct {
+	Title        string `json:"title,omitempty"`
+	Kind         string `json:"kind,omitempty"` // image | video
+	Caption      string `json:"caption,omitempty"`
+	ShowVariable string `json:"show_variable,omitempty"`
+	PlayVariable string `json:"play_variable,omitempty"`
+}
+
+type AudioSpec struct {
+	Title  string    `json:"title,omitempty"`
+	Tone   *ToneSpec `json:"tone,omitempty"`
+	Loop   *bool     `json:"loop,omitempty"`
+	Volume *float64  `json:"volume,omitempty"`
+	Cues   []CueSpec `json:"cues,omitempty"`
+}
+
+// ToneSpec is a bounded Web Audio oscillator description.
+type ToneSpec struct {
+	Frequency *float64 `json:"frequency,omitempty"`
+	Wave      string   `json:"wave,omitempty"`
+	Volume    *float64 `json:"volume,omitempty"`
+	Pulse     *float64 `json:"pulse,omitempty"`
+}
+
+// CueSpec fires a tone when a world variable changes.
+type CueSpec struct {
+	Variable string    `json:"variable"`
+	Mode     string    `json:"mode,omitempty"` // truthy | falsy | change | increase | decrease
+	Tone     *ToneSpec `json:"tone,omitempty"`
+	Volume   *float64  `json:"volume,omitempty"`
 }
 
 // Decode parses one strict seed document. Unknown fields are rejected so a

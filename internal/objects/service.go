@@ -412,6 +412,11 @@ func (s *Service) createObjectTx(ctx context.Context, tx pgx.Tx, actorID uuid.UU
 	if err != nil {
 		return nil, err
 	}
+	if input.ObjectType == TypeOpenWorld {
+		if err := ensureNoAssetRefs(state); err != nil {
+			return nil, err
+		}
+	}
 	template := TemplateCollaborative
 	switch input.ObjectType {
 	case TypeInteractive:
@@ -886,8 +891,12 @@ type DerivedInput struct {
 	RequestID       string
 	IPHash          []byte
 	SkipIdempotency bool
-	ConfirmationID  *uuid.UUID
-	ConfirmedBy     *uuid.UUID
+	// CopyObjectAssets clones the parent's active asset references into the
+	// child. Public derivation uses publication refs instead and leaves this
+	// false.
+	CopyObjectAssets bool
+	ConfirmationID   *uuid.UUID
+	ConfirmedBy      *uuid.UUID
 }
 
 // CreateDerived writes the child object, owner membership, derivation edge,
@@ -923,6 +932,12 @@ INSERT INTO derivation_edges (
 		input.ChildID.String(), input.ParentID.String(), input.SourceVersion,
 		input.InheritedFields, input.ActorID.String()); err != nil {
 		return nil, err
+	}
+	if input.CopyObjectAssets {
+		if err := copyOpenWorldAssetRefs(ctx, tx, input.ParentID, input.ChildID,
+			input.ActorID, input.State); err != nil {
+			return nil, err
+		}
 	}
 	eventPayload := map[string]any{
 		"parent_object_id": input.ParentID.String(),

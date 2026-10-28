@@ -91,7 +91,7 @@ func validMotion(value string) bool {
 
 func validSurface(value string) bool {
 	switch value {
-	case "live", "space", "story", "workspace", "custom":
+	case "live", "space", "story", "workspace", "custom", "scene3d", "media":
 		return true
 	default:
 		return false
@@ -118,6 +118,12 @@ func surfacesOf(experience *Experience) []string {
 	if experience.Workspace != nil {
 		surfaces = append(surfaces, "workspace")
 	}
+	if experience.Scene3D != nil {
+		surfaces = append(surfaces, "scene3d")
+	}
+	if experience.Media != nil {
+		surfaces = append(surfaces, "media")
+	}
 	if len(experience.Custom) > 0 {
 		surfaces = append(surfaces, "custom")
 	}
@@ -130,7 +136,7 @@ func surfacesOf(experience *Experience) []string {
 func validateExperienceSpec(brief *Brief) error {
 	experience := brief.Experience
 	surfaces := surfacesOf(experience)
-	if len(surfaces) > 4 {
+	if len(surfaces) > 7 {
 		return fmt.Errorf("%w: experience/surfaces", ErrInvalid)
 	}
 	seen := map[string]bool{}
@@ -268,6 +274,93 @@ func validateExperienceSpec(brief *Brief) error {
 				}
 			default:
 				return fmt.Errorf("%w: experience/workspace/actions/%d/type", ErrInvalid, actionIndex)
+			}
+		}
+	}
+	if experience.Scene3D != nil {
+		spec := experience.Scene3D
+		var err error
+		if spec.Title, err = boundedText(spec.Title, 120, "experience/scene3d/title"); err != nil {
+			return err
+		}
+		if !validHue(spec.SkyHue) || !validHue(spec.GroundHue) {
+			return fmt.Errorf("%w: experience/scene3d/hue", ErrInvalid)
+		}
+		if spec.Fog != nil && (!finite(*spec.Fog) || *spec.Fog < 0 || *spec.Fog > 0.2) {
+			return fmt.Errorf("%w: experience/scene3d/fog", ErrInvalid)
+		}
+		if spec.Camera != "" && spec.Camera != "orbit" && spec.Camera != "follow" {
+			return fmt.Errorf("%w: experience/scene3d/camera", ErrInvalid)
+		}
+		if spec.Distance != nil && (!finite(*spec.Distance) || *spec.Distance < 4 || *spec.Distance > 40) {
+			return fmt.Errorf("%w: experience/scene3d/distance", ErrInvalid)
+		}
+		if spec.Player != nil && (*spec.Player < 0 || *spec.Player >= len(brief.Things)) {
+			return fmt.Errorf("%w: experience/scene3d/player", ErrInvalid)
+		}
+		if spec.Speed != nil && (!finite(*spec.Speed) || *spec.Speed < 1 || *spec.Speed > 10) {
+			return fmt.Errorf("%w: experience/scene3d/speed", ErrInvalid)
+		}
+		if spec.Gravity != nil && (!finite(*spec.Gravity) || *spec.Gravity < 0 || *spec.Gravity > 40) {
+			return fmt.Errorf("%w: experience/scene3d/gravity", ErrInvalid)
+		}
+		if len(spec.Views) > maxSeedKinds {
+			return fmt.Errorf("%w: experience/scene3d/views", ErrInvalid)
+		}
+		seenKinds := map[int]bool{}
+		for index := range spec.Views {
+			view := &spec.Views[index]
+			if view.Kind < 0 || view.Kind >= len(brief.Kinds) || seenKinds[view.Kind] {
+				return fmt.Errorf("%w: experience/scene3d/views/%d/kind", ErrInvalid, index)
+			}
+			seenKinds[view.Kind] = true
+			if view.Primitive != "" {
+				switch view.Primitive {
+				case "sphere", "box", "cylinder", "cone", "torus":
+				default:
+					return fmt.Errorf("%w: experience/scene3d/views/%d/primitive", ErrInvalid, index)
+				}
+			}
+			if view.Scale != nil && (!finite(*view.Scale) || *view.Scale < 0.2 || *view.Scale > 10) {
+				return fmt.Errorf("%w: experience/scene3d/views/%d/scale", ErrInvalid, index)
+			}
+			if view.Elevation != nil && (!finite(*view.Elevation) || *view.Elevation < 0 || *view.Elevation > 30) {
+				return fmt.Errorf("%w: experience/scene3d/views/%d/elevation", ErrInvalid, index)
+			}
+			if view.Collider != "" && view.Collider != "none" && view.Collider != "box" && view.Collider != "sphere" {
+				return fmt.Errorf("%w: experience/scene3d/views/%d/collider", ErrInvalid, index)
+			}
+		}
+	}
+	if experience.Audio != nil {
+		if err := validateAudioSpec(experience.Audio); err != nil {
+			return err
+		}
+	}
+	if experience.Media != nil {
+		media := experience.Media
+		var err error
+		if media.Title, err = boundedText(media.Title, 80, "experience/media/title"); err != nil {
+			return err
+		}
+		if media.Kind == "" {
+			media.Kind = "image"
+		}
+		if media.Kind != "image" && media.Kind != "video" {
+			return fmt.Errorf("%w: experience/media/kind", ErrInvalid)
+		}
+		if media.Caption, err = boundedText(media.Caption, 300, "experience/media/caption"); err != nil {
+			return err
+		}
+		if media.ShowVariable != "" && !validVariableName(media.ShowVariable) {
+			return fmt.Errorf("%w: experience/media/show_variable", ErrInvalid)
+		}
+		if media.PlayVariable != "" {
+			if !validVariableName(media.PlayVariable) {
+				return fmt.Errorf("%w: experience/media/play_variable", ErrInvalid)
+			}
+			if media.Kind != "video" {
+				return fmt.Errorf("%w: experience/media/play_variable", ErrInvalid)
 			}
 		}
 	}
@@ -666,4 +759,62 @@ func validVariableName(value string) bool {
 		}
 	}
 	return true
+}
+
+func validateAudioSpec(spec *AudioSpec) error {
+	var err error
+	if spec.Title, err = boundedText(spec.Title, 80, "experience/audio/title"); err != nil {
+		return err
+	}
+	if spec.Tone != nil {
+		if err := validateToneSpec(spec.Tone, "experience/audio/tone"); err != nil {
+			return err
+		}
+	}
+	if spec.Volume != nil && (!finite(*spec.Volume) || *spec.Volume < 0 || *spec.Volume > 1) {
+		return fmt.Errorf("%w: experience/audio/volume", ErrInvalid)
+	}
+	if len(spec.Cues) > 8 {
+		return fmt.Errorf("%w: experience/audio/cues", ErrInvalid)
+	}
+	for index := range spec.Cues {
+		cue := &spec.Cues[index]
+		if !validVariableName(cue.Variable) {
+			return fmt.Errorf("%w: experience/audio/cues/%d/variable", ErrInvalid, index)
+		}
+		if cue.Mode == "" {
+			cue.Mode = "change"
+		}
+		switch cue.Mode {
+		case "truthy", "falsy", "change", "increase", "decrease":
+		default:
+			return fmt.Errorf("%w: experience/audio/cues/%d/mode", ErrInvalid, index)
+		}
+		if cue.Tone != nil {
+			if err := validateToneSpec(cue.Tone, fmt.Sprintf("experience/audio/cues/%d/tone", index)); err != nil {
+				return err
+			}
+		}
+		if cue.Volume != nil && (!finite(*cue.Volume) || *cue.Volume < 0 || *cue.Volume > 1) {
+			return fmt.Errorf("%w: experience/audio/cues/%d/volume", ErrInvalid, index)
+		}
+	}
+	return nil
+}
+
+func validateToneSpec(tone *ToneSpec, path string) error {
+	if tone.Frequency != nil && (!finite(*tone.Frequency) || *tone.Frequency < 40 || *tone.Frequency > 8000) {
+		return fmt.Errorf("%w: %s/frequency", ErrInvalid, path)
+	}
+	if tone.Wave != "" && tone.Wave != "sine" && tone.Wave != "square" &&
+		tone.Wave != "triangle" && tone.Wave != "sawtooth" {
+		return fmt.Errorf("%w: %s/wave", ErrInvalid, path)
+	}
+	if tone.Volume != nil && (!finite(*tone.Volume) || *tone.Volume < 0 || *tone.Volume > 0.5) {
+		return fmt.Errorf("%w: %s/volume", ErrInvalid, path)
+	}
+	if tone.Pulse != nil && (!finite(*tone.Pulse) || *tone.Pulse < 0 || *tone.Pulse > 4) {
+		return fmt.Errorf("%w: %s/pulse", ErrInvalid, path)
+	}
+	return nil
 }

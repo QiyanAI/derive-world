@@ -66,6 +66,12 @@ by Compose and is ignored by Git. Production requires HTTPS `PUBLIC_BASE_URL`,
 rejects `dw_dev_only_` secrets, rejects `sslmode=disable`, and rejects the
 `dw_local_only` database password.
 
+`ASSET_DIR` stores uploaded images, video, audio and GLB models outside
+PostgreSQL. It must be writable and must not live under `WEB_DIST_DIR`. Compose
+mounts the named volume `dw_assets` at `/app/var/assets`. Back up that volume
+together with the database; `pg_dump` alone does not include media bytes.
+Deleting the volume leaves asset metadata but makes existing media unavailable.
+
 `MODEL_MODE=fixture` needs no model account. `MODEL_MODE=real` requires
 `MODEL_BASE_URL`, `MODEL_NAME`, and `MODEL_API_KEY`, and fails at startup if any
 is missing.

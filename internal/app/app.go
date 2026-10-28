@@ -20,6 +20,7 @@ import (
 	"time"
 
 	"github.com/QiyanAI/derive-world/api/openapi"
+	"github.com/QiyanAI/derive-world/internal/assets"
 	"github.com/QiyanAI/derive-world/internal/audit"
 	"github.com/QiyanAI/derive-world/internal/capability"
 	"github.com/QiyanAI/derive-world/internal/config"
@@ -78,6 +79,7 @@ type App struct {
 	idem        *store.Idempotency
 	identity    *identity.Service
 	objects     *objects.Service
+	assets      *assets.Service
 	derive      *derive.Service
 	trust       *trust.Service
 	handoff     *handoff.Service
@@ -102,6 +104,7 @@ type App struct {
 	userSearchLimiter    *httpx.Limiter
 	reportLimiter        *httpx.Limiter
 	modelCheckLimiter    *httpx.Limiter
+	assetUploadLimiter   *httpx.Limiter
 	rateAuthLimit        int
 	rateAuthAccountLimit int
 	rateAPILimit         int
@@ -210,6 +213,7 @@ func New(options Options) (*App, error) {
 	application.userSearchLimiter = httpx.NewLimiterWithBurst(60, time.Minute, 20)
 	application.reportLimiter = httpx.NewLimiterWithBurst(5, time.Hour, 2)
 	application.modelCheckLimiter = httpx.NewLimiterWithBurst(5, time.Hour, 2)
+	application.assetUploadLimiter = httpx.NewLimiterWithBurst(30, time.Hour, 10)
 	if options.Store != nil {
 		application.audit = audit.NewWriter(options.Store.Pool())
 		application.idem = options.Store.Idempotency()
@@ -219,9 +223,27 @@ func New(options Options) (*App, error) {
 		// trust import (D08 §3.2).
 		application.trust = trust.NewService(options.Store.Pool(), application.audit, application.idem)
 		application.objects = objects.NewService(options.Store.Pool(), application.audit, application.idem, application.trust)
+		assetDir := options.Config.AssetDir
+		if strings.TrimSpace(assetDir) == "" {
+			assetDir = "./var/assets"
+		}
+		absoluteAssetDir, assetDirErr := filepath.Abs(assetDir)
+		if assetDirErr != nil {
+			return nil, fmt.Errorf("resolve ASSET_DIR: %w", assetDirErr)
+		}
+		if absoluteAssetDir == webRoot || strings.HasPrefix(absoluteAssetDir, webRoot+string(os.PathSeparator)) {
+			return nil, errors.New("ASSET_DIR must not be inside WEB_DIST_DIR")
+		}
+		assetService, assetErr := assets.New(options.Store.Pool(), application.audit, absoluteAssetDir)
+		if assetErr != nil {
+			return nil, assetErr
+		}
+		assetService.SetGenerator(assets.ProceduralGenerator{})
+		assetService.SweepTemp(time.Hour)
+		application.assets = assetService
 		application.derive = derive.NewService(options.Store.Pool(), application.objects, application.idem)
 		application.social = social.NewService(options.Store.Pool(), application.audit)
-		application.publication = publication.NewService(options.Store.Pool(), application.objects, application.audit, application.idem)
+		application.publication = publication.NewService(options.Store.Pool(), application.objects, application.assets, application.audit, application.idem)
 		// Event timelines use the publication-level source for public-derived
 		// children instead of exposing the private parent object id.
 		application.objects.SetPublicSourceResolver(application.publication.PublicSourceForChild)
@@ -320,7 +342,7 @@ func New(options Options) (*App, error) {
 		httpx.AccessLog(logger, options.Config.IPHashPepper, options.Config.TrustProxyHeaders),
 		httpx.Recover(logger),
 		httpx.CORS(options.Config.CORSAllowedOrigins),
-		httpx.BodyLimit(options.Config.MaxRequestBytes),
+		httpx.BodyLimitExcept(options.Config.MaxRequestBytes, isAssetUploadRequest),
 	)
 	return application, nil
 }
@@ -455,4 +477,16 @@ func (a *App) static(w http.ResponseWriter, r *http.Request) {
 func (a *App) serveIndex(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Cache-Control", "no-store")
 	http.ServeFile(w, r, filepath.Join(a.webRoot, "index.html"))
+}
+
+// isAssetUploadRequest exempts the raw media upload route from the JSON body
+// limit. The asset handler applies the per-kind ceiling and reads through a
+// bounded reader; every other route keeps the global JSON limit.
+func isAssetUploadRequest(r *http.Request) bool {
+	if r.Method != http.MethodPost {
+		return false
+	}
+	segments := strings.Split(strings.Trim(r.URL.Path, "/"), "/")
+	return len(segments) == 5 && segments[0] == "api" && segments[1] == "v1" &&
+		segments[2] == "objects" && segments[4] == "assets"
 }

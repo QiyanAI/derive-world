@@ -16,20 +16,22 @@ const (
 	// Version is the only experience protocol version this build interprets.
 	Version = 1
 
-	maxViewNodes        = 64
-	maxViewDepth        = 8
-	maxChildrenPerNode  = 24
-	maxExpandedViews    = 400
-	maxBehaviors        = 24
-	maxActionsPerAction = 8
-	maxPropsBytes       = 4 * 1024
-	maxExperienceBytes  = 32 * 1024
-	maxConditionDepth   = 4
-	maxConditionLeaves  = 16
-	maxBehaviorName     = 120
-	maxTemplateRunes    = 4000
-	maxConditionText    = 1200
-	maxLocalIDLength    = 64
+	maxViewNodes         = 64
+	maxViewDepth         = 8
+	maxChildrenPerNode   = 24
+	maxExpandedViews     = 400
+	maxBehaviors         = 24
+	maxActionsPerAction  = 8
+	maxPropsBytes        = 4 * 1024
+	maxScene3DPropsBytes = 12 * 1024
+	maxAudioPropsBytes   = 8 * 1024
+	maxExperienceBytes   = 48 * 1024
+	maxConditionDepth    = 4
+	maxConditionLeaves   = 16
+	maxBehaviorName      = 120
+	maxTemplateRunes     = 4000
+	maxConditionText     = 1200
+	maxLocalIDLength     = 64
 )
 
 // ValidLocalID reports whether a view or behavior id uses the bounded local
@@ -172,8 +174,13 @@ func validateNode(node *ViewNode, ctx ValidateContext, state *nodeValidationStat
 	}
 	descriptor := capability.Descriptor()
 	propsBudget := maxPropsBytes
-	if node.Capability == "core.custom" {
+	switch node.Capability {
+	case "core.custom":
 		propsBudget = maxCustomPropsBytes
+	case "core.scene3d":
+		propsBudget = maxScene3DPropsBytes
+	case "core.audio":
+		propsBudget = maxAudioPropsBytes
 	}
 	if len(bytes.TrimSpace(node.Props)) > propsBudget {
 		return fmt.Errorf("%w: node props size", ErrInvalid)
@@ -187,7 +194,7 @@ func validateNode(node *ViewNode, ctx ValidateContext, state *nodeValidationStat
 	}
 	node.Props = normalized
 	switch node.Capability {
-	case "core.space", "core.live":
+	case "core.space", "core.live", "core.scene3d":
 		// A space renders every entity that has a matching kind view. Charge
 		// that inner work for every instance of this node to the same budget.
 		state.expanded += instances * len(state.context.Entities)

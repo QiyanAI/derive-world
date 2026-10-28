@@ -355,6 +355,69 @@ paths:
           $ref: "#/components/responses/UnsupportedMediaType"
         "429":
           $ref: "#/components/responses/RateLimited"
+  /api/v1/objects/{id}/assets/{asset_id}:
+    parameters:
+      - $ref: "#/components/parameters/ObjectID"
+      - name: asset_id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+    get:
+      operationId: getObjectAsset
+      summary: Read one world media file
+      description: >
+        An asset id alone grants no access; the caller must be able to read the
+        world and the reference must still be active. Responses support ranges,
+        nosniff and a sandbox content policy.
+      security:
+        - cookieAuth: []
+        - bearerAuth: []
+      responses:
+        "200":
+          description: The media bytes.
+          content:
+            application/octet-stream:
+              schema:
+                type: string
+                format: binary
+        "206":
+          description: A byte range of the media bytes.
+          content:
+            application/octet-stream:
+              schema:
+                type: string
+                format: binary
+        "304":
+          description: The cached representation is unchanged.
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "429":
+          $ref: "#/components/responses/RateLimited"
+    delete:
+      operationId: removeObjectAsset
+      summary: Remove one file from this world
+      description: >
+        Revokes the reference only. Bytes and metadata remain so derived worlds
+        and immutable old versions are unaffected. Requires manage permission.
+      security:
+        - cookieAuth: []
+      parameters:
+        - $ref: "#/components/parameters/CSRFTokenOptional"
+      responses:
+        "204":
+          description: The reference was revoked.
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "429":
+          $ref: "#/components/responses/RateLimited"
   /api/v1/objects/{id}/members:
     parameters:
       - $ref: "#/components/parameters/ObjectID"
@@ -1270,6 +1333,137 @@ paths:
                       $ref: "#/components/schemas/WorldCapabilityDescriptor"
         "401":
           $ref: "#/components/responses/Unauthenticated"
+        "429":
+          $ref: "#/components/responses/RateLimited"
+  /api/v1/objects/{id}/asset-generation:
+    parameters:
+      - $ref: "#/components/parameters/ObjectID"
+    post:
+      operationId: generateObjectAsset
+      summary: Generate one bounded image through the configured provider
+      description: >
+        The provider returns bounded bytes that pass through the same
+        validation, quota, authorization and audit path as an upload. This
+        version ships a deterministic procedural image provider; the interface
+        is the extension point for future providers.
+      security:
+        - cookieAuth: []
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/CSRFTokenOptional"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [kind]
+              properties:
+                kind:
+                  type: string
+                  enum: [image, video, audio, model]
+                provider:
+                  type: string
+                prompt:
+                  type: string
+                  maxLength: 2000
+                params:
+                  type: object
+                  additionalProperties: true
+      responses:
+        "201":
+          description: The generated asset metadata.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Asset"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "413":
+          $ref: "#/components/responses/PayloadTooLarge"
+        "415":
+          $ref: "#/components/responses/UnsupportedMediaType"
+        "429":
+          $ref: "#/components/responses/RateLimited"
+  /api/v1/objects/{id}/assets:
+    parameters:
+      - $ref: "#/components/parameters/ObjectID"
+    get:
+      operationId: listObjectAssets
+      summary: List media files visible to this world
+      security:
+        - cookieAuth: []
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Active files referenced by this world.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AssetList"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "429":
+          $ref: "#/components/responses/RateLimited"
+    post:
+      operationId: uploadObjectAsset
+      summary: Upload one image, video, audio file or GLB model
+      description: >
+        The raw request body is validated by content, not by the client
+        Content-Type. The query names the media kind and an optional display
+        name. Upload requires contribute permission.
+      security:
+        - cookieAuth: []
+        - bearerAuth: []
+      parameters:
+        - name: kind
+          in: query
+          required: true
+          schema:
+            type: string
+            enum: [image, video, audio, model]
+        - name: name
+          in: query
+          required: false
+          schema:
+            type: string
+            maxLength: 120
+        - $ref: "#/components/parameters/CSRFTokenOptional"
+      requestBody:
+        required: true
+        content:
+          application/octet-stream:
+            schema:
+              type: string
+              format: binary
+      responses:
+        "201":
+          description: The stored asset metadata.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Asset"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "413":
+          $ref: "#/components/responses/PayloadTooLarge"
+        "415":
+          $ref: "#/components/responses/UnsupportedMediaType"
         "429":
           $ref: "#/components/responses/RateLimited"
   /api/v1/capabilities:
@@ -2291,6 +2485,45 @@ paths:
           $ref: '#/components/responses/NotFound'
         '429':
           $ref: '#/components/responses/RateLimited'
+  /api/v1/public/worlds/{id}/assets/{asset_id}:
+    parameters:
+    - name: id
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+    - name: asset_id
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+    get:
+      operationId: getPublicWorldAsset
+      summary: Read one file frozen into an active public snapshot
+      security: []
+      responses:
+        '200':
+          description: The media bytes.
+          content:
+            application/octet-stream:
+              schema:
+                type: string
+                format: binary
+        '206':
+          description: A byte range of the media bytes.
+          content:
+            application/octet-stream:
+              schema:
+                type: string
+                format: binary
+        '304':
+          description: The cached representation is unchanged.
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '429':
+          $ref: '#/components/responses/RateLimited'
   /api/v1/public/worlds/{id}/derive:
     parameters:
     - name: id
@@ -2496,6 +2729,42 @@ components:
           type: string
         zh:
           type: string
+    Asset:
+      type: object
+      additionalProperties: false
+      required: [id, kind, mime, byte_size, name, created_at]
+      properties:
+        id:
+          type: string
+          format: uuid
+        kind:
+          type: string
+          enum: [image, video, audio, model]
+        mime:
+          type: string
+        byte_size:
+          type: integer
+          minimum: 1
+        width:
+          type: integer
+          minimum: 1
+        height:
+          type: integer
+          minimum: 1
+        name:
+          type: string
+        created_at:
+          type: string
+          format: date-time
+    AssetList:
+      type: object
+      additionalProperties: false
+      required: [items]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/Asset"
     WorldCapabilityDescriptor:
       type: object
       additionalProperties: false
