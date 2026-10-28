@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: Apache-2.0
 import { expect, test, type Browser, type Page } from "@playwright/test";
-import { register, uniqueActor } from "../support/actors";
+import { register, uniqueActor, fillStable } from "../support/actors";
 
 async function contextPage(browser: Browser): Promise<{ page: Page; close: () => Promise<void> }> {
   const context = await browser.newContext({ locale: "en-US" });
@@ -11,7 +11,7 @@ async function contextPage(browser: Browser): Promise<{ page: Page; close: () =>
 async function createWorld(page: Page, title: string) {
   await page.goto("/");
   await page.getByRole("button", { name: "Create a beginning" }).click();
-  await page.getByLabel("What do you want to begin?").fill(title);
+  await fillStable(page.getByLabel("What do you want to begin?"), title);
   await expect(page.getByLabel("What do you want to begin?")).toHaveValue(title);
   await page.getByRole("button", { name: "Let it grow" }).click();
   await expect(page.getByTestId("stage-inspector")).toBeVisible();
@@ -84,8 +84,10 @@ test("V2 acceptance: DM invitation, co-creation, consent, public discovery and p
     await expect(bob.page.locator(".dw-collab-center")).toContainText(worldTitle);
     await bob.page.getByRole("button", { name: "Give the world a new idea" }).click();
     const contributeDialog = bob.page.getByRole("dialog");
-    await contributeDialog.locator("#dw-contribution").fill(contribution);
-    await contributeDialog.getByRole("button", { name: "Leave my contribution" }).click();
+    await fillStable(contributeDialog.locator("#dw-contribution"), contribution);
+    const leaveContribution = contributeDialog.getByRole("button", { name: "Leave my contribution" });
+    await expect(leaveContribution).toBeEnabled();
+    await leaveContribution.click();
     await expect(bob.page.getByText("written into the shared world")).toBeVisible({ timeout: 15_000 });
 
     // Alice sees the contribution in the same spatial world.

@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: Apache-2.0
 import { expect, test, type Browser, type Page } from "@playwright/test";
-import { register, uniqueActor } from "../support/actors";
+import { register, uniqueActor, fillStable } from "../support/actors";
 
 async function newContextPage(browser: Browser): Promise<{ page: Page; close: () => Promise<void> }> {
   const context = await browser.newContext({ locale: "en-US" });
@@ -12,7 +12,7 @@ async function createWorld(page: Page, title: string) {
   await page.goto("/");
   await expect(page.getByTestId("world-stage")).toBeVisible();
   await page.getByRole("button", { name: "Create a beginning" }).click();
-  await page.getByLabel("What do you want to begin?").fill(title);
+  await fillStable(page.getByLabel("What do you want to begin?"), title);
   await expect(page.getByLabel("What do you want to begin?")).toHaveValue(title);
   await page.getByRole("button", { name: "Let it grow" }).click();
   await expect(page.getByTestId("dw-stage-node")).toHaveCount(1);
@@ -194,7 +194,7 @@ test("V2 narrow screen: bottom navigation, canvas and inspector stay usable", as
   await page.goto("/");
   await expect(page.getByRole("navigation", { name: "Primary navigation" })).toBeVisible();
   await page.getByRole("button", { name: "Create a beginning" }).click();
-  await page.getByLabel("What do you want to begin?").fill("A small mobile world");
+  await fillStable(page.getByLabel("What do you want to begin?"), "A small mobile world");
   await expect(page.getByLabel("What do you want to begin?")).toHaveValue("A small mobile world");
   await page.getByRole("button", { name: "Let it grow" }).click();
   await expect(page.getByTestId("stage-inspector")).toBeVisible();

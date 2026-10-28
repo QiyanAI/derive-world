@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: Apache-2.0
 import { expect, test } from "@playwright/test";
-import { register, uniqueActor } from "../support/actors";
+import { register, uniqueActor, fillStable } from "../support/actors";
 
 test("V2 mobile: bottom navigation, canvas, inspector and discovery fit the viewport", async ({
   page
@@ -13,7 +13,7 @@ test("V2 mobile: bottom navigation, canvas, inspector and discovery fit the view
   await page.goto("/");
   await expect(page.getByRole("navigation", { name: "Primary navigation" })).toBeVisible();
   await page.getByRole("button", { name: "Create a beginning" }).click();
-  await page.getByLabel("What do you want to begin?").fill("A world that fits in one hand");
+  await fillStable(page.getByLabel("What do you want to begin?"), "A world that fits in one hand");
   await expect(page.getByLabel("What do you want to begin?")).toHaveValue("A world that fits in one hand");
   await page.getByRole("button", { name: "Let it grow" }).click();
   await expect(page.getByTestId("dw-stage-node")).toHaveCount(1);

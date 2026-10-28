@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: Apache-2.0
 import { expect, test, type Page } from "@playwright/test";
-import { register, uniqueActor } from "../support/actors";
+import { register, uniqueActor, fillStable } from "../support/actors";
 
 async function stageCount(page: Page): Promise<number> {
   return page.evaluate(async () => {
@@ -68,7 +68,7 @@ test("Phase 2 AI: world context is explicit and switching back to general keeps 
   // Create a living scene through the ordinary V2 flow.
   await page.goto("/");
   await page.getByRole("button", { name: "Create a beginning" }).click();
-  await page.getByLabel("What do you want to begin?").fill("A context world");
+  await fillStable(page.getByLabel("What do you want to begin?"), "A context world");
   await page.getByRole("button", { name: "Let it grow" }).click();
   const inspector = page.getByTestId("stage-inspector");
   await expect(inspector).toBeVisible();

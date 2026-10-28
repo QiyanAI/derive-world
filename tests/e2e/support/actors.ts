@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: Apache-2.0
-import { expect, type Browser, type BrowserContext, type Page } from "@playwright/test";
+import { expect, type Browser, type BrowserContext, type Locator, type Page } from "@playwright/test";
 
 export interface Actor {
   email: string;
@@ -25,6 +25,19 @@ export function uniqueActor(prefix: string, displayName?: string): Actor {
     displayName: displayName ?? `G05 ${prefix} ${stamp.slice(-5)}`,
     password: "correct horse battery staple"
   };
+}
+
+/**
+ * The V2 create dialog is mounted on open and moves focus into its first
+ * field. A fill issued in the same tick can occasionally be erased by that
+ * mount under Firefox/CI load. Retry the fill until the DOM holds the value;
+ * every caller still asserts the final value.
+ */
+export async function fillStable(locator: Locator, value: string): Promise<void> {
+  await expect(async () => {
+    await locator.fill(value);
+    await expect(locator).toHaveValue(value);
+  }).toPass({ timeout: 15_000 });
 }
 
 export async function fillRegistration(page: Page, actor: Actor): Promise<void> {

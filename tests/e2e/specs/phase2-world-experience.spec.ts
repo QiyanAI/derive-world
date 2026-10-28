@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: Apache-2.0
 import { expect, test, type Locator, type Page } from "@playwright/test";
-import { register, uniqueActor } from "../support/actors";
+import { register, uniqueActor, fillStable } from "../support/actors";
 
 async function ensureOpen(details: Locator): Promise<void> {
   await details.evaluate((element) => {
@@ -11,7 +11,7 @@ async function ensureOpen(details: Locator): Promise<void> {
 async function createFreeWorld(page: Page, title: string): Promise<string> {
   await page.goto("/");
   await page.getByRole("button", { name: "Create a beginning" }).click();
-  await page.getByLabel("What do you want to begin?").fill(title);
+  await fillStable(page.getByLabel("What do you want to begin?"), title);
   await page.getByRole("button", { name: "Define a free world" }).click();
   await page.getByRole("button", { name: "Let it grow" }).click();
   await expect(page.getByTestId("open-world-page")).toBeVisible();

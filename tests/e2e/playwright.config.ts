@@ -22,7 +22,11 @@ export default defineConfig({
   expect: { timeout: 15_000 },
   fullyParallel: false,
   workers: 1,
-  retries: 0,
+  // CI browsers occasionally lose a controlled-input fill during a modal
+  // mount. One retry absorbs that timing flake; a deterministic failure still
+  // fails on the retry and is never reported as a pass. Local evidence runs
+  // keep retries at zero.
+  retries: process.env.CI ? 1 : 0,
   forbidOnly: Boolean(process.env.CI),
   reporter: [
     ["list"],

@@ -1,11 +1,11 @@
 // SPDX-License-Identifier: Apache-2.0
 import { expect, test, type Page } from "@playwright/test";
-import { register, uniqueActor } from "../support/actors";
+import { register, uniqueActor, fillStable } from "../support/actors";
 
 async function createScrollableWorld(page: Page, title: string) {
   await page.goto("/");
   await page.getByRole("button", { name: "Create a beginning" }).click();
-  await page.getByLabel("What do you want to begin?").fill(title);
+  await fillStable(page.getByLabel("What do you want to begin?"), title);
   await expect(page.getByLabel("What do you want to begin?")).toHaveValue(title);
   await page.getByRole("button", { name: "Let it grow" }).click();
   const inspector = page.getByTestId("stage-inspector");
@@ -91,7 +91,7 @@ test("V2 touch: the inspector opts into native vertical scrolling", async ({ pag
   await register(page, actor);
   await page.goto("/");
   await page.getByRole("button", { name: "Create a beginning" }).click();
-  await page.getByLabel("What do you want to begin?").fill("A touch scroll world");
+  await fillStable(page.getByLabel("What do you want to begin?"), "A touch scroll world");
   await page.getByRole("button", { name: "Let it grow" }).click();
   const inspector = page.getByTestId("stage-inspector");
   await expect(inspector).toBeVisible();
