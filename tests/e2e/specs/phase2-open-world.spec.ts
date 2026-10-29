@@ -22,7 +22,7 @@ test("Phase 2 free world: define kinds, place things, run a rule, persist and de
   await register(page, actor);
   const worldTitle = "A world made of tides";
   const worldID = await createFreeWorld(page, worldTitle);
-  await expect(page.getByTestId("open-world-page")).toContainText("0 kinds · 0 things · 0 rules");
+  await expect(page.getByTestId("open-world-page")).toContainText("0 types · 0 things");
 
   const structure = page.getByTestId("open-world-structure");
 
