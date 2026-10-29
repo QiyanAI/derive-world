@@ -1192,6 +1192,13 @@ paths:
           - pending
           - all
           default: pending
+      - name: conversation_id
+        in: query
+        required: false
+        description: Scope the list to one private conversation.
+        schema:
+          type: string
+          format: uuid
       responses:
         '401':
           $ref: '#/components/responses/Unauthenticated'
@@ -4107,7 +4114,9 @@ components:
           format: uuid
         capability_id:
           type: string
-          const: object.propose_change
+          enum:
+          - object.propose_change
+          - world.reimagine
         action:
           type: string
         input:
@@ -4126,6 +4135,10 @@ components:
         created_at:
           type: string
           format: date-time
+        expires_at:
+          type: string
+          format: date-time
+          description: Server-defined 24-hour proposal lifetime.
         decided_at:
           type:
           - string
@@ -4136,6 +4149,14 @@ components:
           - string
           - 'null'
           format: uuid
+        conversation_id:
+          type: string
+          format: uuid
+          description: The conversation whose assistant reply produced this proposal.
+        source_message_id:
+          type: string
+          format: uuid
+          description: The assistant message the proposal appears under.
     ProposalList:
       type: object
       additionalProperties: false
@@ -4767,6 +4788,22 @@ components:
           $ref: '#/components/schemas/ConfirmationEffect'
         permission_summary:
           type: string
+        conversation_id:
+          type: string
+          format: uuid
+          description: The conversation whose assistant reply produced this approval. Absent outside a Personal AI turn.
+        message_id:
+          type: string
+          format: uuid
+          description: The exact assistant message the approval must appear under, including after a refresh.
+        result_object_id:
+          type: string
+          format: uuid
+          description: The object an approved confirmation created, present only while the caller can still read it.
+        result_object_title:
+          type: string
+        result_object_type:
+          type: string
     ConfirmationEffect:
       type: object
       additionalProperties: false
@@ -4793,6 +4830,23 @@ components:
         rule_count:
           type: integer
           minimum: 0
+        kind_names:
+          type: array
+          items:
+            type: string
+        thing_names:
+          type: array
+          items:
+            type: string
+        interaction_count:
+          type: integer
+          minimum: 0
+        primary_surface:
+          type: string
+        surfaces:
+          type: array
+          items:
+            type: string
     ConfirmationList:
       type: object
       additionalProperties: false

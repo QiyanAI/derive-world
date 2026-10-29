@@ -32,6 +32,15 @@ function collectLineages(items: ObjectListItem[]): string[] {
   return items.slice(0, SIGNAL_OBJECT_LIMIT).map((item) => item.id);
 }
 
+function approvalTarget(item: Confirmation): string {
+  if (!item.target_object_id) {
+    return "";
+  }
+  return item.target_object_type === "open_world"
+    ? `/worlds/${item.target_object_id}?ai=1`
+    : `/objects/${item.target_object_id}?tab=ai`;
+}
+
 export default function WorldPage() {
   const { t } = useI18n();
   const { user } = useAuth();
@@ -293,16 +302,56 @@ export default function WorldPage() {
               <p className="muted">{t("world.approvals.none")}</p>
             ) : (
               <ul className="approval-mini-list">
-                {confirmations.slice(0, 3).map((item) => (
-                  <li key={item.id}>
-                    <strong>{item.target_object_title || item.action}</strong>
-                    <small>{item.permission_summary}</small>
-                  </li>
-                ))}
+                {confirmations.slice(0, 3).map((item) => {
+                  const target = approvalTarget(item);
+                  return (
+                    <li key={item.id}>
+                      <div>
+                        <strong>
+                          {item.effect?.title ||
+                            item.target_object_title ||
+                            t(`confirmation.action.${item.action}`)}
+                        </strong>
+                        <small>
+                          {item.action === "derive.create"
+                            ? t("confirmation.deriveSummary")
+                            : item.action === "capability.invoke"
+                              ? t("confirmation.capabilitySummary")
+                              : item.action === "world.create"
+                                ? t("confirmation.worldSummary")
+                                : t("confirmation.invitationSummary")}
+                        </small>
+                      </div>
+                      {item.action === "world.create" && item.conversation_id ? (
+                        <button
+                          className="text-link"
+                          type="button"
+                          onClick={() =>
+                            window.dispatchEvent(
+                              new CustomEvent("dw:open-general-ai", {
+                                detail: { conversationId: item.conversation_id }
+                              })
+                            )
+                          }
+                        >
+                          {t("world.approvals.confirm")}
+                        </button>
+                      ) : target ? (
+                        <Link className="text-link" to={target}>
+                          {t("world.approvals.confirm")}
+                        </Link>
+                      ) : (
+                        <Link className="text-link" to="/self">
+                          {t("world.approvals.open")}
+                        </Link>
+                      )}
+                    </li>
+                  );
+                })}
               </ul>
             )}
             <Link className="text-link" to="/self">
-              {t("world.approvals.open")}
+              {t("world.approvals.ledger")}
             </Link>
           </section>
 

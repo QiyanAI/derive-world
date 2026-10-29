@@ -124,6 +124,16 @@ func rejectionExplanation(stage string, zh bool) string {
 			return "这个方案现在无法确认，可能已过期或需要更高权限。请重新准备。"
 		}
 		return "The plan cannot be confirmed now — it may have expired or need higher permission. Please prepare a new one."
+	case "world_pending":
+		if zh {
+			return "这个对话里已经有一个等待你确认的世界方案。请先确认或取消它，再准备新的方案。"
+		}
+		return "A world plan is already waiting for your confirmation in this conversation. Confirm or dismiss it before preparing another."
+	case "duplicate_action":
+		if zh {
+			return "一次回复里只能准备一个世界方案，所以只保留了第一个。"
+		}
+		return "Only one world plan can be prepared per reply, so only the first one was kept."
 	case "action_budget":
 		if zh {
 			return "本次 AI 操作次数已达上限，请稍后再试。"

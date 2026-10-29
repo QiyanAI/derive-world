@@ -33,7 +33,7 @@ test("Phase 2 AI: a zero-world user creates a real free world through human appr
   // The proposal is not a creation: the real backend still has zero worlds.
   expect(await stageCount(page)).toBe(0);
 
-  await proposal.getByRole("button", { name: "Create this world" }).click();
+  await proposal.getByRole("button", { name: "Confirm and create world" }).click();
   await expect(page).toHaveURL(/\/worlds\/[0-9a-f-]{36}/, { timeout: 30_000 });
   await expect(page.getByTestId("open-world-page")).toBeVisible();
   await expect(page.getByTestId("open-world-node")).toHaveCount(3);

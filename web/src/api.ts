@@ -191,8 +191,12 @@ export interface Proposal {
   base_version: number;
   status: ProposalStatus;
   created_at: string;
+  /** Server-defined 24-hour proposal lifetime. */
+  expires_at: string;
   decided_at: string | null;
   applied_event_id: string | null;
+  conversation_id?: string;
+  source_message_id?: string;
 }
 
 export interface ConfirmationEffect {
@@ -228,6 +232,14 @@ export interface Confirmation {
   bound_version?: number;
   effect?: ConfirmationEffect;
   permission_summary: string;
+  /** The conversation whose assistant reply produced this approval. */
+  conversation_id?: string;
+  /** The exact assistant message the approval is rendered under. */
+  message_id?: string;
+  /** The object an approved confirmation created, if the caller can still read it. */
+  result_object_id?: string;
+  result_object_title?: string;
+  result_object_type?: string;
 }
 
 export interface PersonalAIUsage {
@@ -822,9 +834,14 @@ export async function revokeToken(id: string): Promise<void> {
 
 export async function listConfirmations(
   status: "pending" | "all" = "pending",
-  signal?: AbortSignal
+  signal?: AbortSignal,
+  conversationID?: string
 ): Promise<{ items: Confirmation[] }> {
-  return request(`/api/v1/confirmations?status=${status}`, { signal });
+  const params = new URLSearchParams({ status });
+  if (conversationID) {
+    params.set("conversation_id", conversationID);
+  }
+  return request(`/api/v1/confirmations?${params.toString()}`, { signal });
 }
 
 export async function getConfirmation(id: string, signal?: AbortSignal): Promise<Confirmation> {

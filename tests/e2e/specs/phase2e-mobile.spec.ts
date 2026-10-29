@@ -14,10 +14,10 @@ test("Phase 2E mobile: the 3D surface, sound gate and media slot fit a phone", a
   await page.getByTestId("create-world-ai").click();
   const dialog = page.getByTestId("personal-ai-dialog");
   await expect(dialog).toBeVisible();
-  const proposal = dialog.getByTestId("world-proposal").first();
+  const proposal = dialog.locator('[data-testid="world-proposal"][data-state="pending"]').first();
   await expect(proposal).toBeVisible({ timeout: 30_000 });
   await expect(dialog).toContainText("Fixture");
-  await proposal.getByRole("button", { name: "Create this world" }).click();
+  await proposal.getByRole("button", { name: "Confirm and create world" }).click();
   await expect(page).toHaveURL(/\/worlds\/[0-9a-f-]{36}/, { timeout: 30_000 });
   await expect(page.getByTestId("world-3d")).toBeVisible({ timeout: 30_000 });
   await expect(page.getByTestId("world-3d-touch")).toBeVisible();

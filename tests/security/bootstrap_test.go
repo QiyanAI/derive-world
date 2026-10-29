@@ -49,8 +49,8 @@ func TestMigrationIdempotent(t *testing.T) {
 		"SELECT value FROM app_meta WHERE key = 'schema_version'").Scan(&schemaVersion); err != nil {
 		t.Fatalf("read app_meta: %v", err)
 	}
-	if schemaVersion != "10" {
-		t.Fatalf("schema_version = %q, want 10", schemaVersion)
+	if schemaVersion != "11" {
+		t.Fatalf("schema_version = %q, want 11", schemaVersion)
 	}
 
 	var migrationTableExists bool
@@ -119,6 +119,51 @@ func TestFrozenSchemaShape(t *testing.T) {
 		if !exists {
 			t.Errorf("business table %s is missing", table)
 		}
+	}
+
+	var approvalLinkColumns int
+	if err := database.Pool().QueryRow(ctx, `
+SELECT count(*) FROM information_schema.columns
+ WHERE table_schema='public'
+   AND (
+        (table_name='confirmations' AND column_name IN ('conversation_id','message_id','result_object_id'))
+     OR (table_name='object_proposals' AND column_name IN ('conversation_id','source_message_id'))
+   )
+`).Scan(&approvalLinkColumns); err != nil {
+		t.Fatalf("check approval link columns: %v", err)
+	}
+	if approvalLinkColumns != 5 {
+		t.Fatalf("approval link columns = %d, want 5", approvalLinkColumns)
+	}
+	var approvalLinkNullable int
+	if err := database.Pool().QueryRow(ctx, `
+SELECT count(*) FROM information_schema.columns
+ WHERE table_schema='public' AND is_nullable='NO'
+   AND (
+        (table_name='confirmations' AND column_name IN ('conversation_id','message_id','result_object_id'))
+     OR (table_name='object_proposals' AND column_name IN ('conversation_id','source_message_id'))
+   )
+`).Scan(&approvalLinkNullable); err != nil {
+		t.Fatalf("check approval link nullability: %v", err)
+	}
+	if approvalLinkNullable != 0 {
+		t.Fatal("approval link columns must stay nullable for legacy rows")
+	}
+	var approvalLinkConstraints int
+	if err := database.Pool().QueryRow(ctx, `
+SELECT count(*) FROM pg_constraint
+ WHERE conname IN (
+   'confirmations_approval_link_pair',
+   'object_proposals_approval_link_pair',
+   'confirmations_message_conversation_fk',
+   'confirmations_result_object_fk',
+   'object_proposals_source_message_conversation_fk'
+ )
+`).Scan(&approvalLinkConstraints); err != nil {
+		t.Fatalf("check approval link constraints: %v", err)
+	}
+	if approvalLinkConstraints != 5 {
+		t.Fatalf("approval link constraints = %d, want 5", approvalLinkConstraints)
 	}
 
 	var auditActions int

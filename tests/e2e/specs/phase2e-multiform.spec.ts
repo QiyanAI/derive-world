@@ -428,10 +428,10 @@ test("Phase 2E: a described 3D world reserves a real media slot a human can fill
   await page.getByTestId("create-world-ai").click();
   const dialog = page.getByTestId("personal-ai-dialog");
   await expect(dialog).toBeVisible();
-  const proposal = dialog.getByTestId("world-proposal").first();
+  const proposal = dialog.locator('[data-testid="world-proposal"][data-state="pending"]').first();
   await expect(proposal).toBeVisible({ timeout: 30_000 });
   await expect(dialog).toContainText("Fixture");
-  await proposal.getByRole("button", { name: "Create this world" }).click();
+  await proposal.getByRole("button", { name: "Confirm and create world" }).click();
   await expect(page).toHaveURL(/\/worlds\/[0-9a-f-]{36}/, { timeout: 30_000 });
   await expect(page.getByTestId("world-3d")).toBeVisible({ timeout: 30_000 });
   const audio = page.getByTestId("world-audio");

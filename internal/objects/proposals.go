@@ -25,19 +25,28 @@ const (
 
 // Proposal is the owner-only projection of an AI state-change proposal.
 type Proposal struct {
-	ID             uuid.UUID       `json:"id"`
-	ObjectID       uuid.UUID       `json:"object_id"`
-	ActorUserID    uuid.UUID       `json:"actor_user_id"`
-	AIProfileID    uuid.UUID       `json:"ai_profile_id"`
-	DelegationID   uuid.UUID       `json:"delegation_id"`
-	CapabilityID   string          `json:"capability_id"`
-	Action         string          `json:"action"`
-	Input          json.RawMessage `json:"input"`
-	BaseVersion    int             `json:"base_version"`
-	Status         string          `json:"status"`
-	CreatedAt      time.Time       `json:"created_at"`
-	DecidedAt      *time.Time      `json:"decided_at"`
-	AppliedEventID *uuid.UUID      `json:"applied_event_id"`
+	ID           uuid.UUID       `json:"id"`
+	ObjectID     uuid.UUID       `json:"object_id"`
+	ActorUserID  uuid.UUID       `json:"actor_user_id"`
+	AIProfileID  uuid.UUID       `json:"ai_profile_id"`
+	DelegationID uuid.UUID       `json:"delegation_id"`
+	CapabilityID string          `json:"capability_id"`
+	Action       string          `json:"action"`
+	Input        json.RawMessage `json:"input"`
+	BaseVersion  int             `json:"base_version"`
+	Status       string          `json:"status"`
+	CreatedAt    time.Time       `json:"created_at"`
+	// ExpiresAt is the server-defined 24-hour proposal lifetime, exposed so the
+	// browser never has to duplicate the constant or trust its own clock.
+	ExpiresAt      time.Time  `json:"expires_at"`
+	DecidedAt      *time.Time `json:"decided_at"`
+	AppliedEventID *uuid.UUID `json:"applied_event_id"`
+	// ConversationID and SourceMessageID place the proposal directly under the
+	// assistant reply that produced it. They are display-only and never
+	// participate in authorization; proposals that did not originate in a
+	// Personal AI turn leave them null.
+	ConversationID  *uuid.UUID `json:"conversation_id,omitempty"`
+	SourceMessageID *uuid.UUID `json:"source_message_id,omitempty"`
 }
 
 // CreateProposalTx writes a pending object_proposals row and the
@@ -158,6 +167,37 @@ RETURNING created_at`,
 	return proposalID, true, nil
 }
 
+// LinkProposalsToMessageTx records the conversation turn behind each accepted
+// proposal. It is called inside the AI turn's transaction and is the only
+// writer of the display-only provenance columns. A zero-row update fails the
+// turn: an unlinked proposal would be invisible under its reply after reload.
+func (s *Service) LinkProposalsToMessageTx(ctx context.Context, tx pgx.Tx,
+	actorID, conversationID, messageID uuid.UUID, ids []uuid.UUID) error {
+	seen := make(map[uuid.UUID]struct{}, len(ids))
+	for _, id := range ids {
+		if id == uuid.Nil {
+			continue
+		}
+		if _, duplicate := seen[id]; duplicate {
+			continue
+		}
+		seen[id] = struct{}{}
+		tag, err := tx.Exec(ctx, `
+UPDATE object_proposals
+   SET conversation_id = $1, source_message_id = $2
+ WHERE id = $3 AND actor_user_id = $4
+   AND (source_message_id IS NULL OR source_message_id = $2)`,
+			conversationID.String(), messageID.String(), id.String(), actorID.String())
+		if err != nil {
+			return err
+		}
+		if tag.RowsAffected() != 1 {
+			return ErrConflict
+		}
+	}
+	return nil
+}
+
 // ProposalForValidation returns one proposal row for the Capability Broker's
 // post-execution semantic check. It is not an authorization entry point; the
 // caller has already authorized the invocation and verifies the row against
@@ -166,7 +206,7 @@ func (s *Service) ProposalForValidation(ctx context.Context, proposalID uuid.UUI
 	row := s.db.QueryRow(ctx, `
 SELECT id, object_id, actor_user_id, ai_profile_id, delegation_id,
        capability_id, action, input, base_version, status, created_at,
-       decided_at, applied_event_id
+       decided_at, applied_event_id, conversation_id, source_message_id
   FROM object_proposals
  WHERE id = $1`, proposalID.String())
 	proposal, err := scanProposal(row)
@@ -185,7 +225,7 @@ func (s *Service) ListProposals(ctx context.Context, actorID, objectID uuid.UUID
 	rows, err := s.db.Query(ctx, `
 SELECT id, object_id, actor_user_id, ai_profile_id, delegation_id,
        capability_id, action, input, base_version, status, created_at,
-       decided_at, applied_event_id
+       decided_at, applied_event_id, conversation_id, source_message_id
   FROM object_proposals
  WHERE object_id = $1 AND actor_user_id = $2
  ORDER BY created_at DESC, id DESC
@@ -462,7 +502,7 @@ func loadProposalForUpdate(ctx context.Context, tx pgx.Tx, objectID, actorID, pr
 	row := tx.QueryRow(ctx, `
 SELECT id, object_id, actor_user_id, ai_profile_id, delegation_id,
        capability_id, action, input, base_version, status, created_at,
-       decided_at, applied_event_id
+       decided_at, applied_event_id, conversation_id, source_message_id
   FROM object_proposals
  WHERE id = $1 AND object_id = $2 AND actor_user_id = $3
    FOR UPDATE`, proposalID.String(), objectID.String(), actorID.String())
@@ -482,18 +522,21 @@ type scanRow interface {
 
 func scanProposal(row scanRow) (Proposal, error) {
 	var (
-		item           Proposal
-		id             string
-		objectID       string
-		actorID        string
-		aiProfileID    string
-		delegationID   string
-		input          []byte
-		appliedEventID *string
+		item            Proposal
+		id              string
+		objectID        string
+		actorID         string
+		aiProfileID     string
+		delegationID    string
+		input           []byte
+		appliedEventID  *string
+		conversationID  *string
+		sourceMessageID *string
 	)
 	err := row.Scan(&id, &objectID, &actorID, &aiProfileID, &delegationID,
 		&item.CapabilityID, &item.Action, &input, &item.BaseVersion,
-		&item.Status, &item.CreatedAt, &item.DecidedAt, &appliedEventID)
+		&item.Status, &item.CreatedAt, &item.DecidedAt, &appliedEventID,
+		&conversationID, &sourceMessageID)
 	if err != nil {
 		return Proposal{}, err
 	}
@@ -503,9 +546,20 @@ func scanProposal(row scanRow) (Proposal, error) {
 	item.AIProfileID = uuid.MustParse(aiProfileID)
 	item.DelegationID = uuid.MustParse(delegationID)
 	item.Input = input
+	item.ExpiresAt = item.CreatedAt.Add(proposalTTL)
 	if appliedEventID != nil {
 		parsed := uuid.MustParse(*appliedEventID)
 		item.AppliedEventID = &parsed
+	}
+	if conversationID != nil {
+		if parsed, err := uuid.Parse(*conversationID); err == nil {
+			item.ConversationID = &parsed
+		}
+	}
+	if sourceMessageID != nil {
+		if parsed, err := uuid.Parse(*sourceMessageID); err == nil {
+			item.SourceMessageID = &parsed
+		}
 	}
 	return item, nil
 }

@@ -7,9 +7,9 @@ async function createViaAI(page: Page, prompt: string, surface: string): Promise
   await page.getByRole("button", { name: "Create a world" }).first().click();
   await fillStable(page.getByLabel("What do you want to begin?"), prompt);
   await page.getByTestId("create-world-ai").click();
-  const proposal = page.getByTestId("personal-ai-dialog").getByTestId("world-proposal").first();
+  const proposal = page.getByTestId("personal-ai-dialog").locator('[data-testid="world-proposal"][data-state="pending"]').first();
   await expect(proposal).toBeVisible({ timeout: 30_000 });
-  await proposal.getByRole("button", { name: "Create this world" }).click();
+  await proposal.getByRole("button", { name: "Confirm and create world" }).click();
   await expect(page.getByTestId(surface)).toBeVisible({ timeout: 30_000 });
 }
 

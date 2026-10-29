@@ -105,7 +105,9 @@ func buildPromptWithin(
 		system.WriteString("Give a derived world a distinct, human-meaningful title; never append a mechanical branch suffix. ")
 		system.WriteString("Do not propose invitations, member changes, deletions, shared_context changes, or capability invocations. ")
 		system.WriteString("Never say a change was approved, applied or created unless the server already did it; you cannot approve or execute. ")
-		system.WriteString("If the user says they approve in text, tell them to use the approval button in the proposal card. ")
+		system.WriteString("The accepted plan's preview and confirm button appear directly under this reply. ")
+		system.WriteString("Never tell the user to look for a card, panel, sidebar, other page or the bottom of the page. ")
+		system.WriteString("If the user says they approve in text, tell them to press the button directly under the plan. ")
 		system.WriteString("If no action is appropriate, return an empty proposed_actions array.\n")
 	} else {
 		system.WriteString("<world_creation_mode>\n")
@@ -121,7 +123,10 @@ func buildPromptWithin(
 		}
 		system.WriteString("When using scene3d, include at least one kind and one thing, and make every views[].kind and player reference an existing index. ")
 		system.WriteString(" If the user asks for something Derive World cannot run (network access, arbitrary code, live multiplayer sync, or arbitrary video generation), say exactly what is missing and offer the closest runnable form; never pretend it was created. 3D scenes, gravity, collisions, procedural audio and human-uploaded media are supported by the brief and capability runtime. ")
-		system.WriteString("Never say a world was approved or created; you cannot approve or execute. If the user says they approve in text, tell them to use the approval button in the proposal card; do not repeat the same proposal unless they ask for a change. ")
+		system.WriteString("Never say a world was approved or created; you cannot approve or execute. ")
+		system.WriteString("When the server accepts a world plan, its preview and confirm button appear directly under this reply. ")
+		system.WriteString("Never tell the user to look for a card, panel, sidebar, other page or the bottom of the page. ")
+		system.WriteString("If the user says they approve in text, tell them to press the button directly under the plan; do not repeat the same proposal unless they ask for a change. ")
 		system.WriteString("Use empty actions when no world creation is appropriate.\n")
 		system.WriteString("</world_creation_mode>\n")
 	}

@@ -9,10 +9,10 @@ async function createViaAI(page: Page, prompt: string, surface: string): Promise
   await page.getByTestId("create-world-ai").click();
   const dialog = page.getByTestId("personal-ai-dialog");
   await expect(dialog).toBeVisible();
-  const proposal = dialog.getByTestId("world-proposal").first();
+  const proposal = dialog.locator('[data-testid="world-proposal"][data-state="pending"]').first();
   await expect(proposal).toBeVisible({ timeout: 30_000 });
   await expect(dialog).toContainText("Fixture");
-  await proposal.getByRole("button", { name: "Create this world" }).click();
+  await proposal.getByRole("button", { name: "Confirm and create world" }).click();
   await expect(page).toHaveURL(/\/worlds\/[0-9a-f-]{36}/, { timeout: 30_000 });
   await expect(page.getByTestId(surface)).toBeVisible({ timeout: 30_000 });
   return page.url();
@@ -122,7 +122,7 @@ test("Phase 2D: animation plays, a custom surface persists, and reshape/derive s
   await page.getByRole("button", { name: "Send", exact: true }).click();
   const proposal = page.getByTestId("proposal-card").first();
   await expect(proposal).toBeVisible({ timeout: 30_000 });
-  await proposal.getByRole("button", { name: "Apply proposal" }).click();
+  await proposal.getByRole("button", { name: "Confirm and apply" }).click();
   await expect(page.getByTestId("world-custom")).toBeVisible({ timeout: 30_000 });
   await page.getByTestId("custom-node-pad_a").click({ force: true });
   await expect

@@ -396,3 +396,435 @@
     max-height: min(78vh, 720px);
   }
 }
+
+/* --- Inline approval -------------------------------------------------------
+   The approval lives inside the transcript, immediately after the assistant
+   message that produced it. It is never rendered in a separate bottom section
+   or a second page. */
+.dw-ai-turn {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 9px;
+  width: 100%;
+}
+
+.dw-ai-turn.is-user {
+  align-items: flex-end;
+}
+
+.dw-personal-ai-messages .dw-ai-turn {
+  width: 100%;
+}
+
+.dw-personal-ai-messages {
+  max-height: min(46vh, 420px);
+}
+
+.dw-approval {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  width: min(100%, 640px);
+  padding: 14px;
+  border: 1px solid rgba(178, 245, 204, 0.32);
+  border-radius: 16px;
+  background:
+    radial-gradient(circle at 8% 0%, rgba(122, 235, 177, 0.12), transparent 58%),
+    rgba(255, 255, 255, 0.035);
+}
+
+.dw-approval.is-created,
+.dw-approval.is-applied {
+  border-color: rgba(122, 235, 177, 0.42);
+  background: rgba(122, 235, 177, 0.08);
+}
+
+.dw-approval.is-failed {
+  border-color: rgba(255, 130, 110, 0.45);
+  background: rgba(255, 100, 80, 0.07);
+}
+
+.dw-approval.is-expired {
+  border-color: rgba(255, 196, 120, 0.38);
+  background: rgba(255, 176, 76, 0.06);
+}
+
+.dw-approval-head {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.dw-approval-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  align-self: flex-start;
+  padding: 3px 8px;
+  border: 1px solid rgba(178, 245, 204, 0.3);
+  border-radius: 999px;
+  color: #c7ffe1;
+  font-size: 10px;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+
+.dw-approval.is-created .dw-approval-status,
+.dw-approval.is-applied .dw-approval-status {
+  border-color: rgba(122, 235, 177, 0.5);
+  color: #d9ffe9;
+}
+
+.dw-approval.is-failed .dw-approval-status {
+  border-color: rgba(255, 130, 110, 0.5);
+  color: #ffd4cc;
+}
+
+.dw-approval.is-expired .dw-approval-status {
+  border-color: rgba(255, 196, 120, 0.5);
+  color: #ffe0b5;
+}
+
+.dw-approval-head h4 {
+  margin: 2px 0 0;
+  font-size: 17px;
+  line-height: 1.3;
+  color: #f1f7ff;
+}
+
+.dw-approval-summary {
+  margin: 2px 0 0;
+  color: #cfdae7;
+  font-size: 13px;
+  line-height: 1.55;
+  overflow-wrap: anywhere;
+}
+
+.dw-approval-version {
+  margin: 4px 0 0;
+  color: #9fb0c4;
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+}
+
+.dw-approval-section {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+
+.dw-approval-section small {
+  color: #8fa0b4;
+  font-size: 11px;
+  letter-spacing: 0.04em;
+}
+
+.dw-approval-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.dw-approval-chip {
+  padding: 4px 9px;
+  border: 1px solid rgba(178, 245, 204, 0.22);
+  border-radius: 999px;
+  background: rgba(178, 245, 204, 0.06);
+  color: #d9f7e6;
+  font-size: 12px;
+}
+
+.dw-approval-chip.is-kind {
+  border-color: rgba(160, 200, 255, 0.24);
+  background: rgba(140, 190, 255, 0.07);
+  color: #dbe9ff;
+}
+
+.dw-approval-things {
+  margin: 0;
+  color: #cfdae7;
+  font-size: 13px;
+  overflow-wrap: anywhere;
+}
+
+.dw-approval-fields {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin: 0;
+}
+
+.dw-approval-fields > div {
+  display: grid;
+  grid-template-columns: minmax(70px, 0.35fr) minmax(0, 1fr);
+  gap: 8px;
+}
+
+.dw-approval-fields dt {
+  color: #8fa0b4;
+  font-size: 11px;
+}
+
+.dw-approval-fields dd {
+  margin: 0;
+  color: #e4ecf6;
+  font-size: 13px;
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+}
+
+.dw-approval-meta {
+  margin: 0;
+  color: #9daabb;
+  font-size: 11px;
+}
+
+.dw-approval-permission {
+  display: flex;
+  align-items: flex-start;
+  gap: 6px;
+  margin: 0;
+  color: #9fb8aa;
+  font-size: 11px;
+  line-height: 1.5;
+}
+
+.dw-approval-permission svg {
+  flex: none;
+  margin-top: 1px;
+}
+
+.dw-approval-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  scroll-margin-bottom: 150px;
+}
+
+.dw-approval-error {
+  margin: 0;
+  padding: 9px 11px;
+  border: 1px solid rgba(255, 130, 110, 0.4);
+  border-radius: 12px;
+  background: rgba(255, 90, 70, 0.09);
+  color: #ffd4cc;
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.dw-approval-result {
+  display: flex;
+  align-items: flex-start;
+  gap: 6px;
+  margin: 0;
+  color: #c7ffe1;
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.dw-approval-result svg {
+  flex: none;
+  margin-top: 2px;
+}
+
+.dw-approval-note {
+  display: flex;
+  align-items: flex-start;
+  gap: 6px;
+  margin: 0;
+  padding: 8px 11px;
+  border: 1px solid rgba(255, 196, 120, 0.32);
+  border-radius: 12px;
+  background: rgba(255, 176, 76, 0.08);
+  color: #ffd9a8;
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.dw-approval-note svg {
+  flex: none;
+  margin-top: 2px;
+}
+
+.dw-ai-unprepared {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  width: min(100%, 640px);
+  padding: 12px 14px;
+  border: 1px solid rgba(255, 196, 120, 0.34);
+  border-radius: 14px;
+  background: rgba(255, 176, 76, 0.07);
+}
+
+.dw-ai-unprepared strong {
+  color: #ffe0b5;
+  font-size: 13px;
+}
+
+.dw-ai-unprepared p {
+  margin: 0;
+  color: #d8c9b8;
+  font-size: 12px;
+  line-height: 1.55;
+}
+
+.dw-ai-unprepared .dw-button {
+  align-self: flex-start;
+}
+
+.dw-approval-elsewhere {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 9px 12px;
+  border: 1px solid rgba(160, 200, 255, 0.28);
+  border-radius: 13px;
+  background: rgba(140, 190, 255, 0.07);
+  color: #dbe9ff;
+  font-size: 12px;
+}
+
+.dw-approval-elsewhere span {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.dw-approval-fallback-label {
+  margin: 4px 0 0;
+  color: #b8f6d1;
+  font-size: 10px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
+.dw-approval-count {
+  display: inline-flex;
+  align-items: center;
+  padding: 3px 9px;
+  border: 1px solid rgba(178, 245, 204, 0.3);
+  border-radius: 999px;
+  color: #c7ffe1;
+}
+
+@media (max-width: 720px) {
+  .dw-approval {
+    width: 100%;
+    padding: 12px;
+  }
+
+  .dw-approval-fields > div {
+    grid-template-columns: 1fr;
+    gap: 2px;
+  }
+
+  .dw-approval-actions .dw-button {
+    flex: 1 1 auto;
+    min-height: 44px;
+  }
+}
+
+/* --- One scrollport in the creation dialog --------------------------------
+   The owner's bug was a confirmation that existed but could not be found. A
+   card inside a 300px transcript, itself inside a scrolling modal body, under
+   a sticky composer, can still be clipped. The modal now has one scroller: the
+   transcript. The identity header and the composer stay fixed. */
+.dw-personal-ai-modal {
+  display: flex;
+  flex-direction: column;
+  max-height: 94vh;
+  overflow: hidden;
+}
+
+.dw-personal-ai-modal .dw-modal-body {
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 auto;
+  min-height: 0;
+  height: auto;
+  max-height: none;
+  overflow: hidden;
+}
+
+.dw-personal-ai-modal .dw-personal-ai {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  flex: 1;
+  min-height: 0;
+}
+
+.dw-personal-ai-modal .dw-personal-ai-identity,
+.dw-personal-ai-modal .dw-personal-ai-context,
+.dw-personal-ai-modal .dw-form-success,
+.dw-personal-ai-modal .dw-approval-elsewhere,
+.dw-personal-ai-modal .dw-personal-ai-suggestions,
+.dw-personal-ai-modal .dw-fineprint {
+  flex: none;
+}
+
+.dw-personal-ai-modal .dw-personal-ai-messages {
+  flex: 1 1 auto;
+  min-height: 160px;
+  max-height: none;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+.dw-personal-ai-modal .dw-personal-ai-compose {
+  position: static;
+  flex: none;
+  padding-top: 4px;
+  background: none;
+}
+
+@media (max-width: 720px) {
+  .dw-personal-ai-modal .dw-personal-ai-identity p,
+  .dw-personal-ai-modal .dw-personal-ai-identity small {
+    display: none;
+  }
+}
+
+/* A 768px-tall laptop cannot show every explanatory block and the composer at
+   once. Keep the decision surface and the composer; hide only secondary prose. */
+@media (max-height: 820px) {
+  .dw-personal-ai-modal .dw-personal-ai-identity p,
+  .dw-personal-ai-modal .dw-personal-ai-identity small,
+  .dw-personal-ai-modal .dw-ai-limits {
+    display: none;
+  }
+
+  .dw-personal-ai-modal .dw-personal-ai {
+    gap: 8px;
+  }
+
+  .dw-personal-ai-modal .dw-personal-ai-messages {
+    min-height: 110px;
+  }
+}
+
+/* While a real plan waits, collapse the identity/marketing blocks so the plan
+   and its confirm button fit a 768px laptop instead of being clipped. */
+.dw-personal-ai.has-approval .dw-personal-ai-identity,
+.dw-personal-ai.has-approval .dw-personal-ai-context,
+.dw-personal-ai.has-approval > .dw-fineprint {
+  display: none;
+}
+
+@media (max-height: 820px) {
+  /* Keep the title, summary, surfaces, kinds and the button; the concrete
+     things line is the least important preview and costs the button its place. */
+  .dw-personal-ai.has-approval .dw-approval-section.is-things {
+    display: none;
+  }
+}
+
+/* Keep the real action off the transcript's bottom edge, not flush against
+   the composer. scrollIntoView honours these margins. */
+[data-approval-primary] {
+  scroll-margin-block: 14px;
+}

@@ -93,7 +93,11 @@ export default function OpenWorldPage() {
   // A world opens on its experience, not on the technical structure editor.
   // Panels are opened deliberately from the header; none is open by default.
   const [panel, setPanel] = useState<ViewMode | null>(
-    searchParams.get("build") === "1" ? "experience" : null
+    searchParams.get("build") === "1"
+      ? "experience"
+      : searchParams.get("ai") === "1"
+        ? "ai"
+        : null
   );
   const [experienceOpened, setExperienceOpened] = useState(searchParams.get("build") === "1");
   const [titleEditing, setTitleEditing] = useState(false);
@@ -141,9 +145,23 @@ export default function OpenWorldPage() {
     setPremiseEditing(false);
     setTitleEditing(false);
     setBranchOpen(false);
-    setPanel(searchParams.get("build") === "1" ? "experience" : null);
+    setPanel(
+      searchParams.get("build") === "1"
+        ? "experience"
+        : searchParams.get("ai") === "1"
+          ? "ai"
+          : null
+    );
     setExperienceOpened(searchParams.get("build") === "1");
   }, [id]);
+
+  // A link from the approval ledger opens the world's own AI panel, where the
+  // pending action is rendered under its reply.
+  useEffect(() => {
+    if (searchParams.get("ai") === "1") {
+      setPanel("ai");
+    }
+  }, [searchParams]);
 
   useEffect(() => {
     void load();

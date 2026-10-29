@@ -19,6 +19,8 @@ export function surfaceLabel(surface: string, zh: boolean): string {
       return zh ? "图像 / 视频" : "image or video";
     case "custom":
       return zh ? "自定义交互表面" : "custom interactive surface";
+    case "audio":
+      return zh ? "程序化声音层" : "procedural sound layer";
     default:
       return zh ? "未知形式" : "unknown surface";
   }

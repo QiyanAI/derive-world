@@ -28,17 +28,25 @@ export default function AppShell() {
   const [aiOpen, setAIOpen] = useState(false);
   const [personalAIOpen, setPersonalAIOpen] = useState(false);
   const [personalAIPrompt, setPersonalAIPrompt] = useState("");
+  const [personalAIConversationID, setPersonalAIConversationID] = useState("");
   const [helpOpen, setHelpOpen] = useState(false);
   const profileRef = useRef<HTMLDetailsElement>(null);
 
   useEffect(() => {
-    const openGeneralAI = () => {
+    const openGeneralAI = (event: Event) => {
+      const detail = (event as CustomEvent<{ conversationId?: string }>).detail;
       setPersonalAIPrompt("");
+      setPersonalAIConversationID(
+        typeof detail?.conversationId === "string" ? detail.conversationId : ""
+      );
       setPersonalAIOpen(true);
     };
     const askPersonalAI = (event: Event) => {
-      const detail = (event as CustomEvent<{ prompt?: string }>).detail;
+      const detail = (event as CustomEvent<{ prompt?: string; conversationId?: string }>).detail;
       setPersonalAIPrompt(typeof detail?.prompt === "string" ? detail.prompt : "");
+      setPersonalAIConversationID(
+        typeof detail?.conversationId === "string" ? detail.conversationId : ""
+      );
       setPersonalAIOpen(true);
     };
     window.addEventListener("dw:open-general-ai", openGeneralAI);
@@ -248,13 +256,16 @@ export default function AppShell() {
       <PersonalAIDialog
         open={personalAIOpen}
         initialPrompt={personalAIPrompt}
+        initialConversationID={personalAIConversationID || undefined}
         onClose={() => {
           setPersonalAIOpen(false);
           setPersonalAIPrompt("");
+          setPersonalAIConversationID("");
         }}
         onWorldCreated={(object) => {
           setPersonalAIOpen(false);
           setPersonalAIPrompt("");
+          setPersonalAIConversationID("");
           navigate(`/worlds/${object.id}`, { state: { created: true } });
         }}
       />

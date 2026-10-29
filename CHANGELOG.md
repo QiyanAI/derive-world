@@ -7,6 +7,29 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- Human approvals now live directly under the assistant reply that produced
+  them, in both the general Personal AI dialog and the in-world Personal AI.
+  The card shows the real plan preview and one button, plus honest preparing,
+  pending, creating, created, failed and expired states. A created world links
+  to its real entry after a refresh; a failed or expired plan never offers a
+  fake approval and instead explains the outcome and names the recovery action.
+  A derive confirmation still names the source version it is bound to. While a
+  world plan waits, a duplicate-plan rejection is explained instead of offering
+  a retry that cannot succeed.
+- The server links every AI-originated confirmation and proposal to its
+  conversation and exact assistant message (migration 11), records the object an
+  approval created, backfills that link for already-approved worlds, and rejects
+  a second pending world plan in one conversation. Chat replies that claim an
+  execution happened, or that point at a card somewhere else, are replaced by
+  truthful server-authored text before they become history; saved legacy rows
+  are corrected at display time.
+- A short textual approval such as "批准通过" is routed to the real confirm
+  button instead of spending a model turn or preparing a duplicate plan. The
+  approval ledger on Digital Self and the home dashboard link to the
+  originating conversation or world panel instead of rendering a second button.
+
 ### Added
 
 - Real world media for `open_world_v1`: permission-scoped uploads of images,

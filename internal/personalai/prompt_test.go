@@ -65,6 +65,42 @@ func TestBuildPromptWrapsUntrustedObjectContentAndPrivateContext(t *testing.T) {
 	}
 }
 
+func TestPromptPointsAtTheInlineConfirmButton(t *testing.T) {
+	check := func(label, system string) {
+		t.Helper()
+		if !strings.Contains(system, "directly under this reply") &&
+			!strings.Contains(system, "directly under the plan") &&
+			!strings.Contains(system, "directly under this reply") {
+			t.Fatalf("%s prompt does not point at the inline button", label)
+		}
+		if strings.Contains(system, "proposal card") || strings.Contains(system, "approval card") {
+			t.Fatalf("%s prompt names a card", label)
+		}
+	}
+	global, _, _, err := buildPrompt(nil, nil, nil, nil, "create a world", "create")
+	if err != nil {
+		t.Fatalf("global prompt: %v", err)
+	}
+	check("global", global)
+	projection := &handoff.Projection{
+		ObjectID:      uuid.MustParse("018f0000-0000-7000-8000-000000000002"),
+		ObjectVersion: 2,
+		ObjectType:    "collaborative",
+		PermittedObjectContext: handoff.ObjectContext{
+			State:         json.RawMessage(`{"title":"T","body":"b"}`),
+			SharedContext: json.RawMessage(`{}`),
+			RecentEvents:  []handoff.RecentEvent{},
+		},
+		PermittedActions:     []string{"read", "contribute"},
+		ContextSchemaVersion: 1,
+	}
+	bound, _, _, err := buildPrompt(nil, nil, projection, nil, "change it", "change")
+	if err != nil {
+		t.Fatalf("bound prompt: %v", err)
+	}
+	check("bound", bound)
+}
+
 func TestBuildPromptTrimsOldestHistory(t *testing.T) {
 	history := make([]Message, 0, 30)
 	for index := 0; index < 30; index++ {

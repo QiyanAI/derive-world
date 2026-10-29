@@ -37,6 +37,10 @@ type ProposalWriter interface {
 		capabilityID, action string, input json.RawMessage, baseVersion int,
 		requestID string, ipHash []byte,
 	) (uuid.UUID, bool, error)
+	LinkProposalsToMessageTx(
+		ctx context.Context, tx pgx.Tx,
+		actorID, conversationID, messageID uuid.UUID, ids []uuid.UUID,
+	) error
 }
 
 // CapabilityWriter routes Personal AI actions through the single Capability

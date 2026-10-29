@@ -99,6 +99,8 @@ export const en = {
   "world.checklist.action": "Open",
   "world.approvals.title": "Waiting for you",
   "world.approvals.none": "No approvals are waiting.",
+  "world.approvals.confirm": "Confirm it",
+  "world.approvals.ledger": "All approvals",
   "world.approvals.open": "Review in Digital Self",
   "world.quick.title": "Shortcuts",
   "world.quick.objects": "Browse objects",
@@ -591,6 +593,8 @@ export const en = {
   "self.noApprovals": "No pending approvals.",
   "self.approvalExpires": "Expires {time}",
   "self.approvalObject": "Object",
+  "self.approvalOpenConversation": "Confirm in the conversation",
+  "self.approvalOpenObject": "Confirm in the world",
   "self.approvalApprove": "Approve and execute",
   "self.approvalDeny": "Deny",
   "self.approved": "Approved and executed on the server.",
@@ -660,6 +664,10 @@ export const en = {
   "ai.generalHint":
     "A general conversation has no object Handoff. It cannot propose object changes; object-bound AI lives in each object's AI tab.",
   "ai.generalEmpty": "Say hello to your Personal AI. In fixture mode it replies deterministically.",
+  "ai.generalBody":
+    "Your Personal AI lives in one place: the creation dialog. Its plan and confirm button appear directly under the reply, so you never have to hunt for an approval.",
+  "ai.generalPlacesNote":
+    "Conversation history stays here for reference. Open one to continue it with the same identity.",
   "ai.generalPlaceholder": "Message your Personal AI…",
   "ai.send": "Send",
   "ai.sending": "Thinking…",
@@ -1143,6 +1151,28 @@ export const en = {
   "ai.universal.history": "Recent conversations",
   "ai.universal.newConversation": "New general conversation",
   "ai.universal.pending": "Waiting for your approval",
+
+  // Inline approvals: one card directly under the reply that produced it.
+  "ai.approval.dismiss": "Not now",
+  "ai.approval.retry": "Try again",
+  "ai.approval.prepareAgain": "Ask the AI to prepare again",
+  "ai.approval.enter": "Enter world",
+  "ai.approval.enterBranch": "Enter the new world",
+  "ai.approval.useButton":
+    "The plan is directly under your reply. Press the confirm button there.",
+  "ai.approval.nonePending":
+    "There is no plan waiting for your confirmation right now. Tell me what you want to create first.",
+  "ai.approval.notPrepared": "A runnable plan was not prepared this time.",
+  "ai.approval.notPreparedBody":
+    "Nothing was created or changed. You can retry with the same idea.",
+  "ai.approval.legacyGuidance":
+    "An older confirmation instruction is hidden. The confirm button now appears directly under the plan.",
+  "ai.approval.pendingElsewhere":
+    "Another {count} plan(s) wait for you in a different conversation.",
+  "ai.approval.openElsewhere": "Open it",
+  "ai.approval.createdNotice": "Your world is ready.",
+  "ai.approval.createdWorlds": "Created worlds",
+  "ai.approval.pendingShort": "Waiting for you",
 
   // Phase 2: free worlds.
   "openWorld.kicker": "A WORLD YOU DEFINE",

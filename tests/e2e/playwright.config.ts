@@ -46,11 +46,13 @@ export default defineConfig({
   projects: [
     {
       name: "chromium",
-      use: { ...devices["Desktop Chrome"], baseURL, ...chromeChannel }
+      use: { ...devices["Desktop Chrome"], baseURL, ...chromeChannel },
+      testIgnore: /p0-inline-approval-mobile\.spec\.ts/
     },
     {
       name: "firefox",
-      use: { ...devices["Desktop Firefox"], baseURL, ...firefoxChannel }
+      use: { ...devices["Desktop Firefox"], baseURL, ...firefoxChannel },
+      testIgnore: /p0-inline-approval-mobile\.spec\.ts/
     },
     {
       // The owner's acceptance videos were recorded on an ordinary laptop.
@@ -75,7 +77,7 @@ export default defineConfig({
         hasTouch: true,
         ...chromeChannel
       },
-      testMatch: /(responsive-i18n|v2-mobile|phase2d-mobile|phase2e-mobile)\.spec\.ts/
+      testMatch: /(responsive-i18n|v2-mobile|phase2d-mobile|phase2e-mobile|p0-inline-approval-mobile)\.spec\.ts/
     }
   ]
 });

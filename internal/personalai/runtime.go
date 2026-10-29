@@ -88,17 +88,19 @@ type ActionRejection struct {
 }
 
 type aiTurn struct {
-	inputChars   int
-	prompt       string
-	messages     []model.Message
-	reply        string
-	actions      []rawAction
-	parseStatus  string
-	rawOutput    string
-	mode         string
-	response     model.Response
-	durationMS   int
-	invocationID uuid.UUID
+	inputChars        int
+	prompt            string
+	messages          []model.Message
+	reply             string
+	actions           []rawAction
+	parseStatus       string
+	rawOutput         string
+	mode              string
+	response          model.Response
+	durationMS        int
+	invocationID      uuid.UUID
+	requestedCreation bool
+	requestedChange   bool
 }
 
 // SendMessage performs exactly one provider call, persists the private
@@ -223,6 +225,8 @@ func (s *Service) SendMessage(ctx context.Context, input SendMessageInput) (*Sen
 		reply: reply, actions: actions, parseStatus: parseStatus,
 		rawOutput: response.Text, mode: mode, response: response,
 		durationMS: duration, invocationID: invocationID,
+		requestedCreation: input.Object == nil && input.Intent == "create",
+		requestedChange:   input.Object != nil && input.Intent == "change",
 	}
 	return s.persistTurn(ctx, input, conversation, profile, turn)
 }
@@ -338,7 +342,16 @@ UPDATE ai_conversations SET updated_at = GREATEST(now(), updated_at) WHERE id = 
 		if err != nil {
 			return nil, err
 		}
+		acceptedWorldCreate := false
 		for _, action := range turn.actions {
+			// One assistant reply may prepare at most one world. A second
+			// world.create would render a duplicate confirm button with the same
+			// meaning, so it is rejected before any confirmation row exists.
+			if input.Object == nil && action.CapabilityID == "world.create" && acceptedWorldCreate {
+				s.logActionRejection(action.CapabilityID, "duplicate_action", "")
+				addRejection(action.CapabilityID, "duplicate_action")
+				continue
+			}
 			if remaining <= 0 {
 				s.logActionRejection(action.CapabilityID, "action_budget", "")
 				addRejection(action.CapabilityID, "action_budget")
@@ -359,6 +372,9 @@ UPDATE ai_conversations SET updated_at = GREATEST(now(), updated_at) WHERE id = 
 				return nil, err
 			}
 			if result != nil {
+				if input.Object == nil && action.CapabilityID == "world.create" {
+					acceptedWorldCreate = true
+				}
 				accepted = append(accepted, *result)
 				remaining--
 			}
@@ -370,6 +386,12 @@ UPDATE ai_conversations SET updated_at = GREATEST(now(), updated_at) WHERE id = 
 	if fallbackReason != "" {
 		notices = append(notices, fallbackNotice(zh, fallbackReason))
 	}
+	// The model never executes anything. Its reply must therefore never claim
+	// that a world or change is already live, and it must never send the user
+	// looking for an approval card elsewhere. Any such sentence is replaced by
+	// a plain, accurate sentence before it becomes chat history.
+	turn.reply = guardAssistantReply(turn.reply, zh, accepted,
+		len(turn.actions) > 0, turn.requestedCreation, turn.requestedChange)
 	parseStatus := turn.parseStatus
 	var notice *string
 	if text := joinNoticeText(notices); text != "" {
@@ -378,6 +400,12 @@ UPDATE ai_conversations SET updated_at = GREATEST(now(), updated_at) WHERE id = 
 	assistantMessage, err := insertMessageTx(ctx, tx, input.ConversationID, "assistant",
 		turn.reply, turn.mode, &parseStatus, notice)
 	if err != nil {
+		return nil, err
+	}
+	// Link each persisted proposal/confirmation to this exact turn so the UI
+	// can render its approval directly under this reply, including after a
+	// refresh or a reopen. A linking failure rolls the whole turn back.
+	if err := s.linkTurnApprovalsTx(ctx, tx, input.UserID, input.ConversationID, assistantMessage.ID, accepted); err != nil {
 		return nil, err
 	}
 	if err := s.audit.Write(ctx, tx, audit.Event{
@@ -610,6 +638,14 @@ func (s *Service) applyGlobalModelAction(
 	if err := decodeSingleJSON(string(action.Input), &create); err != nil {
 		return nil, &actionRejection{Stage: "input_json", Detail: truncateActionDetail(err.Error())}, nil
 	}
+	if pending, err := s.trust.HasPendingWorldCreateTx(ctx, tx,
+		input.UserID, input.ConversationID); err != nil {
+		return nil, nil, err
+	} else if pending {
+		// One conversation keeps one live plan and therefore one confirm
+		// button. The human can deny it before asking for a new one.
+		return nil, &actionRejection{Stage: "world_pending"}, nil
+	}
 	content, rejection := buildWorldCreateContent(create)
 	if rejection != nil {
 		return nil, rejection, nil
@@ -718,6 +754,39 @@ SELECT id, conversation_id, role, content, model_mode, parse_status, notice, cre
 		items[left], items[right] = items[right], items[left]
 	}
 	return items, nil
+}
+
+// linkTurnApprovalsTx records which conversation turn produced each accepted
+// proposal or confirmation. The write itself belongs to the owning package
+// (objects owns object_proposals, trust owns confirmations); personal AI only
+// passes the ids and the exact assistant message. The columns are display-only;
+// authorization still revalidates the actor, delegation, version and payload
+// hash at execution time.
+func (s *Service) linkTurnApprovalsTx(ctx context.Context, tx pgx.Tx,
+	userID, conversationID, messageID uuid.UUID, accepted []AcceptedAction) error {
+	proposalIDs := make([]uuid.UUID, 0, len(accepted))
+	confirmationIDs := make([]uuid.UUID, 0, len(accepted))
+	for _, action := range accepted {
+		switch {
+		case action.Kind == "proposal" && action.ProposalID != nil:
+			proposalIDs = append(proposalIDs, *action.ProposalID)
+		case action.Kind == "confirmation" && action.ConfirmationID != nil:
+			confirmationIDs = append(confirmationIDs, *action.ConfirmationID)
+		}
+	}
+	if len(proposalIDs) > 0 {
+		if err := s.proposals.LinkProposalsToMessageTx(ctx, tx,
+			userID, conversationID, messageID, proposalIDs); err != nil {
+			return err
+		}
+	}
+	if len(confirmationIDs) > 0 {
+		if err := s.trust.LinkConfirmationsToMessageTx(ctx, tx,
+			userID, conversationID, messageID, confirmationIDs); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 func insertMessageTx(ctx context.Context, tx pgx.Tx, conversationID uuid.UUID, role, content, mode string, parseStatus, notice *string) (Message, error) {

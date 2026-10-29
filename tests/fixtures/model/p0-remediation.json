@@ -27,6 +27,10 @@
     {
       "match": "Make a street with evening sound",
       "reply": "{\"reply\":\"I prepared a small 3D street with an evening audio layer.\",\"proposed_actions\":[{\"capability_id\":\"world.create\",\"input\":{\"title\":\"Evening Street\",\"brief\":{\"premise\":\"A short 3D street at dusk with a lamp and evening sound.\",\"kinds\":[{\"name\":\"Lamp\"}],\"things\":[{\"kind\":0,\"name\":\"One lamp\"}],\"experience\":{\"surfaces\":[\"scene3d\",\"media\",\"audio\"],\"primary\":\"scene3d\",\"scene3d\":{\"player\":0,\"views\":[{\"kind\":0,\"primitive\":\"sphere\"}]},\"audio\":{\"title\":\"Evening\",\"volume\":0.3}}}}}]}"
+    },
+    {
+      "match": "Claim the world already exists",
+      "reply": "{\"reply\":\"I have created the world and it is live now. Click the approve button in the proposal card.\",\"proposed_actions\":[{\"capability_id\":\"world.create\",\"input\":{\"title\":\"Claimed World\",\"brief\":{\"premise\":\"A small world that tests a truthful reply.\",\"kinds\":[{\"name\":\"Thing\"}],\"things\":[{\"kind\":0,\"name\":\"One thing\"}],\"experience\":{\"surfaces\":[\"live\"],\"primary\":\"live\",\"live\":{\"avatar\":0,\"speed\":1.8}}}}}]}"
     }
   ]
 }
