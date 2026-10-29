@@ -305,13 +305,18 @@ UPDATE ai_conversations SET updated_at = GREATEST(now(), updated_at) WHERE id = 
 		}
 		for _, action := range turn.actions {
 			if remaining <= 0 {
+				s.logActionRejection(action.CapabilityID, "action_budget", "")
 				break
 			}
 			var result *AcceptedAction
 			if input.Object != nil {
 				result, err = s.applyModelAction(ctx, tx, input, effective, action)
 			} else {
-				result, err = s.applyGlobalModelAction(ctx, tx, input, effective, action)
+				var rejection *actionRejection
+				result, rejection, err = s.applyGlobalModelAction(ctx, tx, input, effective, action)
+				if rejection != nil {
+					s.logActionRejection(action.CapabilityID, rejection.Stage, rejection.Detail)
+				}
 			}
 			if err != nil {
 				return nil, err
@@ -482,41 +487,73 @@ func (s *Service) applyModelAction(
 // applyGlobalModelAction accepts only a world.create proposal from an unbound
 // conversation. Object-bound actions remain impossible here, so one world's
 // private context can never be smuggled into a global turn.
+type actionRejection struct {
+	Stage  string
+	Detail string
+}
+
+// buildWorldCreateContent validates the model's world.create input before any
+// confirmation row is written. The rejection stage lets the server record a
+// redacted diagnostic without persisting the raw model output.
+func buildWorldCreateContent(create worldCreateActionInput) (json.RawMessage, *actionRejection) {
+	title := strings.TrimSpace(create.Title)
+	if title == "" || (len(create.Content) == 0 && len(create.Brief) == 0) {
+		return nil, &actionRejection{Stage: "title_or_body"}
+	}
+	if len(create.Brief) == 0 {
+		return create.Content, nil
+	}
+	seed, err := worldseed.Decode(create.Brief)
+	if err != nil {
+		return nil, &actionRejection{Stage: "seed_decode", Detail: truncateActionDetail(err.Error())}
+	}
+	composition, err := worldseed.Compose(seed, title)
+	if err != nil {
+		return nil, &actionRejection{Stage: "seed_compose", Detail: truncateActionDetail(err.Error())}
+	}
+	encoded, err := json.Marshal(composition.Content)
+	if err != nil {
+		return nil, &actionRejection{Stage: "content_encode", Detail: truncateActionDetail(err.Error())}
+	}
+	return encoded, nil
+}
+
+func truncateActionDetail(value string) string {
+	const limit = 200
+	if len(value) <= limit {
+		return value
+	}
+	return value[:limit]
+}
+
+func (s *Service) logActionRejection(capabilityID, stage, detail string) {
+	if s.logger == nil {
+		return
+	}
+	s.logger.Error("personal_ai_action_rejected",
+		"capability_id", capabilityID, "stage", stage, "detail", detail)
+}
+
 func (s *Service) applyGlobalModelAction(
 	ctx context.Context,
 	tx pgx.Tx,
 	input SendMessageInput,
 	effective *trust.Effective,
 	action rawAction,
-) (*AcceptedAction, error) {
+) (*AcceptedAction, *actionRejection, error) {
 	if action.CapabilityID != "world.create" {
-		return nil, nil
+		return nil, &actionRejection{Stage: "capability_id"}, nil
 	}
 	if !effective.Can("contribute") {
-		return nil, nil
+		return nil, &actionRejection{Stage: "permission"}, nil
 	}
 	var create worldCreateActionInput
 	if err := decodeSingleJSON(string(action.Input), &create); err != nil {
-		return nil, nil
+		return nil, &actionRejection{Stage: "input_json", Detail: truncateActionDetail(err.Error())}, nil
 	}
-	if strings.TrimSpace(create.Title) == "" || (len(create.Content) == 0 && len(create.Brief) == 0) {
-		return nil, nil
-	}
-	content := create.Content
-	if len(create.Brief) > 0 {
-		seed, err := worldseed.Decode(create.Brief)
-		if err != nil {
-			return nil, nil
-		}
-		composition, err := worldseed.Compose(seed, strings.TrimSpace(create.Title))
-		if err != nil {
-			return nil, nil
-		}
-		encoded, err := json.Marshal(composition.Content)
-		if err != nil {
-			return nil, nil
-		}
-		content = encoded
+	content, rejection := buildWorldCreateContent(create)
+	if rejection != nil {
+		return nil, rejection, nil
 	}
 	confirmation, accepted, err := s.trust.CreateWorldCreateConfirmationTx(ctx, tx,
 		trust.WorldCreateConfirmationParams{
@@ -526,17 +563,17 @@ func (s *Service) applyGlobalModelAction(
 		})
 	if err != nil {
 		if errors.Is(err, trust.ErrInvalidRequest) || errors.Is(err, trust.ErrPayloadTooLarge) {
-			return nil, nil
+			return nil, &actionRejection{Stage: "confirmation_invalid", Detail: truncateActionDetail(err.Error())}, nil
 		}
-		return nil, err
+		return nil, nil, err
 	}
 	if !accepted {
-		return nil, nil
+		return nil, &actionRejection{Stage: "confirmation_not_accepted"}, nil
 	}
 	return &AcceptedAction{
 		Kind: "confirmation", ConfirmationID: &confirmation.ID,
 		Action: trust.ConfirmationWorldCreate,
-	}, nil
+	}, nil, nil
 }
 
 func (s *Service) recordProposalAction(ctx context.Context, tx pgx.Tx, input SendMessageInput,
