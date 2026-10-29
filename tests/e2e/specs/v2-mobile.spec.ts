@@ -12,10 +12,12 @@ test("V2 mobile: bottom navigation, canvas, inspector and discovery fit the view
 
   await page.goto("/");
   await expect(page.getByRole("navigation", { name: "Primary navigation" })).toBeVisible();
-  await page.getByRole("button", { name: "Create a beginning" }).click();
+  await page.getByRole("button", { name: "Create a world" }).click();
   await fillStable(page.getByLabel("What do you want to begin?"), "A world that fits in one hand");
   await expect(page.getByLabel("What do you want to begin?")).toHaveValue("A world that fits in one hand");
-  await page.getByRole("button", { name: "Let it grow" }).click();
+  await page.getByText("Advanced: start from a blank world").click();
+  await page.getByRole("button", { name: "Idea scene" }).click();
+  await page.getByRole("button", { name: "Create blank world" }).click();
   await expect(page.getByTestId("dw-stage-node")).toHaveCount(1);
   await expect(page.getByTestId("stage-inspector")).toBeVisible();
   await page.getByTestId("stage-inspector").getByRole("tab", { name: "Branch", exact: true }).click();

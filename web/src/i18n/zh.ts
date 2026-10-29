@@ -136,7 +136,8 @@ export const zh: Messages = {
 
   "objects.title": "活对象",
   "objects.lead": "每个对象都有权威版本、你的角色，以及事件历史。",
-  "objects.create": "创建对象",
+  "objects.create": "创造一个世界",
+  "objects.createOther": "其他对象类型（高级）",
   "objects.tab.owned": "我拥有",
   "objects.tab.shared": "与我共享",
   "objects.tab.all": "全部",
@@ -1325,7 +1326,7 @@ export const zh: Messages = {
   "openWorld.deriveQuick": "衍生一个新世界",
   "openWorld.deriveOptions": "更多衍生选项",
   "derive.working": "正在衍生…",
-  "openWorld.ai": "让我的 AI 参与",
+  "openWorld.ai": "和我的 AI 一起创造",
   "openWorld.structure": "世界结构",
   "openWorld.createFirstKind": "定义第一种存在",
   "openWorld.createFirstThing": "放入第一个存在",

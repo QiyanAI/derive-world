@@ -11,10 +11,12 @@ async function newContextPage(browser: Browser): Promise<{ page: Page; close: ()
 async function createWorld(page: Page, title: string) {
   await page.goto("/");
   await expect(page.getByTestId("world-stage")).toBeVisible();
-  await page.getByRole("button", { name: "Create a beginning" }).click();
+  await page.getByRole("button", { name: "Create a world" }).click();
   await fillStable(page.getByLabel("What do you want to begin?"), title);
   await expect(page.getByLabel("What do you want to begin?")).toHaveValue(title);
-  await page.getByRole("button", { name: "Let it grow" }).click();
+  await page.getByText("Advanced: start from a blank world").click();
+  await page.getByRole("button", { name: "Idea scene" }).click();
+  await page.getByRole("button", { name: "Create blank world" }).click();
   await expect(page.getByTestId("dw-stage-node")).toHaveCount(1);
   await expect(page.getByTestId("stage-inspector")).toBeVisible();
 }
@@ -86,8 +88,11 @@ test("V2 world: real create, in-place edit, drag persisted, branch, zoom and AI 
   await expect(page.getByTestId("dw-stage-node")).toHaveCount(2);
   await expect(page.getByTestId("dw-stage-node").filter({ hasText: "A different rain" })).toBeVisible();
 
-  // AI settings are server-managed and never a browser key form.
-  await page.locator(".dw-ai-entry").click();
+  // AI settings are server-managed and never a browser key form. They live in
+  // the account menu rather than competing with the creation action in the
+  // top bar.
+  await page.locator(".dw-profile summary").click();
+  await page.getByRole("button", { name: "Model settings" }).click();
   const dialog = page.getByRole("dialog");
   await expect(dialog).toContainText("Connect your Personal AI");
   await expect(dialog).toContainText("never reads, echoes, or stores deployment API keys");
@@ -177,7 +182,7 @@ test("V2 explore: a deliberate public version can be discovered and derived priv
     await deriveDialog.getByRole("button", { name: "Create my branch" }).click();
     await expect(visitor.page).toHaveURL(/\/$/);
     await expect(visitor.page.getByTestId("dw-stage-node")).toHaveCount(1);
-    await expect(visitor.page.locator(".dw-world-node").first()).toContainText("my branch");
+    await expect(visitor.page.locator(".dw-world-node").first()).toContainText("new branch");
     await expect(visitor.page.locator(".dw-privacy-chip")).toContainText("Only me");
     await visitor.page.screenshot({ path: testInfo.outputPath("v2-derived-private.png"), fullPage: true });
   } finally {
@@ -193,10 +198,12 @@ test("V2 narrow screen: bottom navigation, canvas and inspector stay usable", as
   await register(page, actor);
   await page.goto("/");
   await expect(page.getByRole("navigation", { name: "Primary navigation" })).toBeVisible();
-  await page.getByRole("button", { name: "Create a beginning" }).click();
+  await page.getByRole("button", { name: "Create a world" }).click();
   await fillStable(page.getByLabel("What do you want to begin?"), "A small mobile world");
   await expect(page.getByLabel("What do you want to begin?")).toHaveValue("A small mobile world");
-  await page.getByRole("button", { name: "Let it grow" }).click();
+  await page.getByText("Advanced: start from a blank world").click();
+  await page.getByRole("button", { name: "Idea scene" }).click();
+  await page.getByRole("button", { name: "Create blank world" }).click();
   await expect(page.getByTestId("stage-inspector")).toBeVisible();
   await expect(page.getByTestId("dw-stage-node")).toHaveCount(1);
   const overflow = await page.evaluate(

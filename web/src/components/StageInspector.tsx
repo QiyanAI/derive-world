@@ -10,6 +10,7 @@ import {
 } from "../api";
 import { ErrorNotice, StatusNotice } from "../errors";
 import { useI18n } from "../i18n";
+import { branchTitle } from "../worldLabels";
 import AIPanel from "./AIPanel";
 import LensPanel from "./LensPanel";
 import ObjectWorkTab from "./ObjectWorkTab";
@@ -56,7 +57,8 @@ function BranchComposer({
   onDerived: (child: ObjectView) => void;
   onRefresh: () => Promise<void> | void;
 }) {
-  const { t } = useI18n();
+  const { t, lang } = useI18n();
+  const zh = lang === "zh";
   const [lens, setLens] = useState<DeriveLens | null>(null);
   const [title, setTitle] = useState("");
   const [fields, setFields] = useState<string[]>([]);
@@ -69,8 +71,8 @@ function BranchComposer({
   const canDerive = object.permissions.includes("derive");
   const defaultTitle = useMemo(() => {
     const name = objectTitle(object) || t("common.untitled");
-    return t("branch.defaultTitle", { title: name });
-  }, [object, t]);
+    return branchTitle(name, zh);
+  }, [object, t, zh]);
 
   useEffect(() => {
     let cancelled = false;

@@ -71,6 +71,27 @@ func TestOpenAICompatibleRequestPath(t *testing.T) {
 	}
 }
 
+// A provider that stops on its output limit returns a partial document. The
+// adapter must surface that fact so the Personal AI runtime can substitute a
+// safe explanation instead of displaying the fragment.
+func TestOpenAICompatibleReportsFinishReason(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		fmt.Fprint(w, `{"model":"test-model","choices":[{"message":{"content":"{\"reply\":\"part"},"finish_reason":"length"}],"usage":{"prompt_tokens":3,"completion_tokens":4}}`)
+	}))
+	defer server.Close()
+	provider := mustProvider(t, server.URL, time.Second)
+	response, err := provider.Complete(context.Background(), Request{
+		Messages: []Message{{Role: "user", Content: "hello"}},
+	})
+	if err != nil {
+		t.Fatalf("complete: %v", err)
+	}
+	if response.FinishReason != "length" {
+		t.Fatalf("finish reason = %q, want length", response.FinishReason)
+	}
+}
+
 func TestOpenAICompatibleErrorMapping(t *testing.T) {
 	t.Run("server error", func(t *testing.T) {
 		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {

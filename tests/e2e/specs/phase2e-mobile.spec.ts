@@ -6,12 +6,12 @@ test("Phase 2E mobile: the 3D surface, sound gate and media slot fit a phone", a
   test.setTimeout(120_000);
   await register(page, uniqueActor("p2emobile", "Phase 2E Mobile"));
   await page.goto("/");
-  await page.getByRole("button", { name: "Create a beginning" }).first().click();
+  await page.getByRole("button", { name: "Create a world" }).first().click();
   await fillStable(
     page.getByLabel("What do you want to begin?"),
     "Create a world that is a three-dimensional planet I can walk on and hear"
   );
-  await page.getByRole("button", { name: "Let my Personal AI create it" }).click();
+  await page.getByTestId("create-world-ai").click();
   const dialog = page.getByTestId("personal-ai-dialog");
   await expect(dialog).toBeVisible();
   const proposal = dialog.getByTestId("world-proposal").first();

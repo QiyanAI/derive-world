@@ -204,6 +204,10 @@ export interface ConfirmationEffect {
   kind_count?: number;
   node_count?: number;
   rule_count?: number;
+  kind_names?: string[];
+  thing_names?: string[];
+  interaction_count?: number;
+  primary_surface?: string;
   surfaces?: string[];
 }
 
@@ -266,7 +270,15 @@ export interface AIMessage {
   content: string;
   model_mode: "fixture" | "real";
   parse_status: "structured" | "fallback" | null;
+  /** Server-authored explanation of a rejected or unreadable turn. Never provider text. */
+  notice?: string | null;
   created_at: string;
+}
+
+export interface AIActionRejection {
+  capability_id: string;
+  stage: string;
+  message: string;
 }
 
 export interface ConversationDetail {
@@ -288,6 +300,7 @@ export interface SendMessageResult {
   parse_status: "structured" | "fallback";
   proposed_actions: AcceptedAIAction[];
   rejected_actions?: number;
+  rejections?: AIActionRejection[];
   context_stale?: boolean;
   usage: { input_tokens: number; output_tokens: number };
 }

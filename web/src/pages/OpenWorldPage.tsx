@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: Apache-2.0
 import { useCallback, useEffect, useRef, useState, type FormEvent, type PointerEvent as ReactPointerEvent } from "react";
-import { Link, useNavigate, useParams, useSearchParams } from "react-router";
+import { Link, useLocation, useNavigate, useParams, useSearchParams } from "react-router";
 import {
   applyAction,
   deriveObject,
@@ -26,11 +26,13 @@ import {
 } from "../api";
 import AIPanel from "../components/AIPanel";
 import Icon from "../components/v2/Icon";
+import Modal from "../components/v2/Modal";
 import WorldExperience from "../components/v2/WorldExperience";
 import WorldExperienceEditor from "../components/v2/WorldExperienceEditor";
 import WorldLookEditor from "../components/v2/WorldLookEditor";
 import WorldScene from "../components/v2/WorldScene";
 import { useI18n } from "../i18n";
+import { branchTitle } from "../worldLabels";
 
 const WORLD_WIDTH = 1600;
 const WORLD_HEIGHT = 1000;
@@ -85,13 +87,20 @@ export default function OpenWorldPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<unknown>(null);
   const [notice, setNotice] = useState("");
+  const location = useLocation();
   const [busy, setBusy] = useState("");
-  const [deriving, setDeriving] = useState(false);
   const [view, setView] = useState<WorldViewMode | "">("");
-  const [panel, setPanel] = useState<ViewMode>(
-    searchParams.get("build") === "1" ? "experience" : "structure"
+  // A world opens on its experience, not on the technical structure editor.
+  // Panels are opened deliberately from the header; none is open by default.
+  const [panel, setPanel] = useState<ViewMode | null>(
+    searchParams.get("build") === "1" ? "experience" : null
   );
   const [experienceOpened, setExperienceOpened] = useState(searchParams.get("build") === "1");
+  const [titleEditing, setTitleEditing] = useState(false);
+  const [titleDraft, setTitleDraft] = useState("");
+  const [branchOpen, setBranchOpen] = useState(false);
+  const [branchDraft, setBranchDraft] = useState("");
+  const [branchBusy, setBranchBusy] = useState(false);
   const [capabilities, setCapabilities] = useState<WorldCapabilityDescriptor[]>([]);
   const [capabilityError, setCapabilityError] = useState("");
   const [assets, setAssets] = useState<WorldAsset[]>([]);
@@ -109,6 +118,7 @@ export default function OpenWorldPage() {
       const value = await getObject(id);
       setObject(value);
       setPremiseDraft(typeof value.state.premise === "string" ? value.state.premise : "");
+      setTitleDraft(typeof value.state.title === "string" ? value.state.title : "");
     } catch (failure) {
       setError(failure);
     } finally {
@@ -126,17 +136,33 @@ export default function OpenWorldPage() {
     setError(null);
     setNotice("");
     setBusy("");
-    setDeriving(false);
     setDrag(null);
     setDragging(false);
     setPremiseEditing(false);
-    setPanel(searchParams.get("build") === "1" ? "experience" : "structure");
+    setTitleEditing(false);
+    setBranchOpen(false);
+    setPanel(searchParams.get("build") === "1" ? "experience" : null);
     setExperienceOpened(searchParams.get("build") === "1");
   }, [id]);
 
   useEffect(() => {
     void load();
   }, [load]);
+
+  useEffect(() => {
+    if (!panel) {
+      return;
+    }
+    if (!window.matchMedia("(max-width: 900px)").matches) {
+      return;
+    }
+    // On a narrow screen the panel renders below the world; opening it must
+    // bring the panel itself into view instead of changing something offscreen.
+    const timer = window.setTimeout(() => {
+      document.querySelector(".dw-open-panel")?.scrollIntoView({ behavior: "smooth", block: "start" });
+    }, 80);
+    return () => window.clearTimeout(timer);
+  }, [panel]);
 
   useEffect(() => {
     // `build=1` is a one-time entry into the experience builder. Removing it
@@ -196,6 +222,7 @@ export default function OpenWorldPage() {
       : preferredView;
   const canContribute = object?.permissions.includes("contribute") ?? false;
   const hasExperience = Boolean(world?.experience);
+  const navState = (location.state ?? {}) as { created?: boolean; derivedFrom?: string };
 
   useEffect(() => {
     if (!world) {
@@ -275,23 +302,54 @@ export default function OpenWorldPage() {
     };
   }, [drag]);
 
-  async function deriveQuick() {
-    if (!object || deriving || busy !== "") {
+  function openBranchDialog() {
+    if (!object) {
       return;
     }
-    setDeriving(true);
+    const source = String(openWorldState(object).title || t("common.untitled"));
+    setBranchDraft(branchTitle(source, zh).slice(0, 200));
+    setBranchOpen(true);
+    setError(null);
+  }
+
+  async function deriveBranch() {
+    if (!object || branchBusy || busy !== "") {
+      return;
+    }
+    const title = branchDraft.trim();
+    if (!title) {
+      return;
+    }
+    setBranchBusy(true);
     setError(null);
     try {
+      const sourceTitle = String(openWorldState(object).title || t("common.untitled"));
       const child = await deriveObject(object.id, {
-        title: `${String(openWorldState(object).title || t("common.untitled"))} ${t("derive.defaultSuffix")}`.trim().slice(0, 200),
+        title: title.slice(0, 200),
         source_version: object.version,
         inheritance_fields: ["premise", "structure", "views"]
       });
-      navigate(`/worlds/${child.id}?derived=1`);
+      setBranchOpen(false);
+      navigate(`/worlds/${child.id}`, { state: { derivedFrom: sourceTitle } });
     } catch (failure) {
       setError(failure);
     } finally {
-      setDeriving(false);
+      setBranchBusy(false);
+    }
+  }
+
+  async function saveTitle() {
+    if (!object || busy !== "") {
+      return;
+    }
+    const title = titleDraft.trim();
+    if (!title || title === String(openWorldState(object).title || "")) {
+      setTitleEditing(false);
+      return;
+    }
+    const updated = await run("set_title", { title: title.slice(0, 200) });
+    if (updated) {
+      setTitleEditing(false);
     }
   }
 
@@ -481,7 +539,50 @@ export default function OpenWorldPage() {
             <span className="dw-eyebrow-line" />
             {t("openWorld.kicker")}
           </p>
-          <h1>{world.title || t("common.untitled")}</h1>
+          {titleEditing ? (
+            <div className="dw-open-title-edit">
+              <input
+                className="dw-input"
+                value={titleDraft}
+                maxLength={200}
+                autoFocus
+                aria-label={zh ? "世界名称" : "World title"}
+                onChange={(event) => setTitleDraft(event.target.value)}
+                onKeyDown={(event) => {
+                  if (event.key === "Enter") {
+                    event.preventDefault();
+                    void saveTitle();
+                  } else if (event.key === "Escape") {
+                    setTitleEditing(false);
+                  }
+                }}
+              />
+              <button className="dw-button dw-button-small dw-button-primary" type="button" onClick={() => void saveTitle()} disabled={busy !== ""}>
+                {zh ? "保存" : "Save"}
+              </button>
+              <button className="dw-button dw-button-small dw-button-ghost" type="button" onClick={() => setTitleEditing(false)}>
+                {zh ? "取消" : "Cancel"}
+              </button>
+            </div>
+          ) : (
+            <h1 className="dw-open-title">
+              {world.title || t("common.untitled")}
+              {canContribute ? (
+                <button
+                  className="dw-open-title-edit-button"
+                  type="button"
+                  aria-label={zh ? "重命名这个世界" : "Rename this world"}
+                  title={zh ? "重命名这个世界" : "Rename this world"}
+                  onClick={() => {
+                    setTitleDraft(String(world.title || ""));
+                    setTitleEditing(true);
+                  }}
+                >
+                  <Icon name="edit" size={15} />
+                </button>
+              ) : null}
+            </h1>
+          )}
           <p className="dw-open-summary">
             {t("openWorld.summary", {
               kinds: world.kinds.length,
@@ -491,70 +592,90 @@ export default function OpenWorldPage() {
           </p>
         </div>
         <div className="dw-open-head-actions">
-          <button
-            className={`dw-button dw-button-small ${panel === "structure" ? "dw-button-primary" : "dw-button-ghost"}`}
-            type="button"
-            aria-pressed={panel === "structure"}
-            onClick={() => setPanel("structure")}
-          >
-            <Icon name="layers" size={15} />
-            {t("openWorld.structure")}
-          </button>
-          <button
-            className={`dw-button dw-button-small ${panel === "experience" ? "dw-button-primary" : "dw-button-ghost"}`}
-            type="button"
-            aria-pressed={panel === "experience"}
-            aria-label={t("openWorld.experiencePanel")}
-            onClick={() => {
-              setExperienceOpened(true);
-              setPanel("experience");
-            }}
-          >
-            <Icon name="layers" size={15} />
-            {t("openWorld.experience")}
-          </button>
-          <button
-            className={`dw-button dw-button-small ${panel === "ai" ? "dw-button-primary" : "dw-button-ghost"}`}
-            type="button"
-            aria-pressed={panel === "ai"}
-            onClick={() => setPanel("ai")}
-          >
-            <Icon name="spark" size={15} />
-            {t("openWorld.ai")}
-          </button>
-          <button
-            className="dw-button dw-button-small dw-button-ghost"
-            type="button"
-            onClick={() => {
-              setPanel("ai");
-              window.setTimeout(() => document.getElementById("dw-ai-compose")?.focus(), 60);
-            }}
-          >
-            <Icon name="spark" size={15} />
-            {t("openWorld.changeWithAI")}
-          </button>
-          {object.permissions.includes("derive") ? (
-            <div className="dw-open-derive">
-              <button
-                className="dw-button dw-button-small dw-button-ghost"
-                type="button"
-                disabled={deriving || busy !== ""}
-                onClick={() => void deriveQuick()}
-              >
-                <Icon name="branch" size={15} />
-                {deriving ? t("derive.working") : t("openWorld.deriveQuick")}
-              </button>
-              <Link
-                className="dw-open-derive-more"
-                aria-label="Branch"
-                to={`/objects/${object.id}/derive`}
-              >
-                {t("openWorld.deriveOptions")}
-              </Link>
-            </div>
+          {canContribute ? (
+            <button
+              className="dw-button dw-button-small dw-button-primary"
+              type="button"
+              aria-pressed={panel === "ai"}
+              data-testid="ai-entry"
+              onClick={() => {
+                setPanel("ai");
+                window.setTimeout(() => {
+                  document.getElementById("dw-ai-compose")?.focus();
+                }, 60);
+              }}
+            >
+              <Icon name="spark" size={15} />
+              {zh ? "和我的 AI 一起创造" : "Create with my AI"}
+            </button>
           ) : null}
+          <details className="dw-open-advanced">
+            <summary className="dw-button dw-button-small dw-button-ghost">
+              {zh ? "高级" : "Advanced"}
+              <Icon name="chevron" size={13} />
+            </summary>
+            <div className="dw-open-advanced-menu">
+              <button type="button" onClick={() => setPanel("structure")}>
+                {zh ? "世界结构" : "World structure"}
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setExperienceOpened(true);
+                  setPanel("experience");
+                }}
+              >
+                {zh ? "体验编辑" : "Experience editor"}
+              </button>
+              {canContribute ? (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setTitleDraft(String(world.title || ""));
+                    setTitleEditing(true);
+                  }}
+                >
+                  {zh ? "重命名世界" : "Rename world"}
+                </button>
+              ) : null}
+              {object.permissions.includes("derive") ? (
+                <button type="button" onClick={openBranchDialog}>
+                  {zh ? "衍生一个新世界" : "Derive a new world"}
+                </button>
+              ) : null}
+            </div>
+          </details>
         </div>
       </header>
+
+      {navState.derivedFrom ? (
+        <div className="dw-open-origin-banner" role="status">
+          <Icon name="branch" size={15} />
+          <span>
+            {zh
+              ? `这是从《${navState.derivedFrom}》衍生的独立世界；原世界没有被修改。`
+              : `This is an independent world derived from “${navState.derivedFrom}”; the original was not modified.`}
+          </span>
+          <Link to={`/objects/${object.id}/lineage`}>{zh ? "查看来源与分支" : "View origin and branches"}</Link>
+        </div>
+      ) : null}
+      {navState.created ? (
+        <div className="dw-open-origin-banner is-success" role="status">
+          <Icon name="check" size={15} />
+          <span>{zh ? "世界已创建。你可以直接开始体验，也可以继续和 AI 一起改变它。" : "Your world is ready. Start experiencing it, or keep changing it with your AI."}</span>
+        </div>
+      ) : null}
+
+      {panel ? (
+        <button
+          className="dw-open-panel-close"
+          type="button"
+          onClick={() => setPanel(null)}
+        >
+          <Icon name="close" size={14} />
+          {zh ? "关闭面板" : "Close panel"}
+        </button>
+      ) : null}
 
       {error ? (
         <p className="dw-form-error" role="alert">
@@ -567,7 +688,7 @@ export default function OpenWorldPage() {
         </p>
       ) : null}
 
-      <div className="dw-open-layout">
+      <div className={`dw-open-layout${panel ? " has-panel" : ""}`}>
         <main className="dw-open-main">
           <section className="dw-open-premise-card">
             {premiseEditing ? (
@@ -660,9 +781,26 @@ export default function OpenWorldPage() {
               <Icon name="world" size={26} />
               <p>{t("openWorld.empty")}</p>
               {canContribute ? (
-                <button className="dw-button dw-button-primary dw-button-small" type="button" onClick={() => setPanel("structure")}>
-                  {world.kinds.length === 0 ? t("openWorld.createFirstKind") : t("openWorld.createFirstThing")}
-                </button>
+                <div className="dw-open-empty-actions">
+                  <button
+                    className="dw-button dw-button-primary dw-button-small"
+                    type="button"
+                    onClick={() => {
+                      setPanel("ai");
+                      window.setTimeout(() => document.getElementById("dw-ai-compose")?.focus(), 60);
+                    }}
+                  >
+                    <Icon name="spark" size={15} />
+                    {zh ? "和我的 AI 一起创造" : "Create with my AI"}
+                  </button>
+                  <button
+                    className="dw-button dw-button-ghost dw-button-small"
+                    type="button"
+                    onClick={() => setPanel("structure")}
+                  >
+                    {zh ? "手动定义（高级）" : "Define manually (advanced)"}
+                  </button>
+                </div>
               ) : null}
             </div>
           ) : activeView === "scene" ? (
@@ -795,6 +933,7 @@ export default function OpenWorldPage() {
           )}
         </main>
 
+        {panel ? (
         <aside className="dw-open-panel">
           {panel === "ai" ? (
             <AIPanel object={object} canContribute={canContribute} onChanged={() => void load()} />
@@ -834,7 +973,7 @@ export default function OpenWorldPage() {
                 </p>
               ) : (
                 <WorldExperienceEditor
-                  key={object.id}
+                  key={`${object.id}:${object.version}`}
                   world={world}
                   objectID={object.id}
                   assets={assets}
@@ -851,7 +990,64 @@ export default function OpenWorldPage() {
             </div>
           ) : null}
         </aside>
+        ) : null}
       </div>
+
+      <Modal
+        open={branchOpen}
+        onClose={() => setBranchOpen(false)}
+        title={zh ? "衍生一个新世界" : "Derive a new world"}
+        kicker={zh ? "独立分支" : "INDEPENDENT BRANCH"}
+        actions={
+          <>
+            <button className="dw-button dw-button-ghost" type="button" onClick={() => setBranchOpen(false)} disabled={branchBusy}>
+              {zh ? "取消" : "Cancel"}
+            </button>
+            <button
+              className="dw-button dw-button-primary"
+              type="button"
+              onClick={() => void deriveBranch()}
+              disabled={branchBusy || !branchDraft.trim() || busy !== ""}
+            >
+              <Icon name="branch" size={15} />
+              {branchBusy ? (zh ? "正在衍生…" : "Deriving…") : zh ? "创建这个分支" : "Create this branch"}
+            </button>
+          </>
+        }
+      >
+        <div className="dw-form">
+          <p className="dw-modal-lead">
+            {zh
+              ? `会从《${String(world.title || t("common.untitled"))}》的当前版本创建一个独立的新世界。原世界不会被修改。`
+              : `This creates an independent new world from the current version of “${String(world.title || t("common.untitled"))}”. The original is not modified.`}
+          </p>
+          <label className="dw-field-label" htmlFor="dw-branch-title">
+            {zh ? "新世界的名字" : "Name of the new world"}
+          </label>
+          <input
+            id="dw-branch-title"
+            className="dw-input"
+            value={branchDraft}
+            maxLength={200}
+            onChange={(event) => setBranchDraft(event.target.value)}
+            onKeyDown={(event) => {
+              if (event.key === "Enter") {
+                event.preventDefault();
+                void deriveBranch();
+              }
+            }}
+          />
+          <p className="dw-fineprint">
+            <Icon name="branch" size={13} />
+            {zh
+              ? "它会继承当前的前提、结构与视图；之后两者各自独立演化。"
+              : "It inherits the current premise, structure and views; from then on both worlds evolve independently."}
+          </p>
+          <Link className="dw-text-button" to={`/objects/${object.id}/derive`} onClick={() => setBranchOpen(false)}>
+            {zh ? "需要更多选项？打开完整衍生页" : "Need more options? Open the full derive page"}
+          </Link>
+        </div>
+      </Modal>
     </div>
   );
 }

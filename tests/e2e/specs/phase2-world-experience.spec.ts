@@ -10,14 +10,14 @@ async function ensureOpen(details: Locator): Promise<void> {
 
 async function createFreeWorld(page: Page, title: string): Promise<string> {
   await page.goto("/");
-  await page.getByRole("button", { name: "Create a beginning" }).click();
+  await page.getByRole("button", { name: "Create a world" }).click();
   await fillStable(page.getByLabel("What do you want to begin?"), title);
-  await page.getByText("Advanced: start blank").click();
-  await page.getByRole("button", { name: "Define a free world" }).click();
-  await page.getByRole("button", { name: "Let it grow" }).click();
+  await page.getByText("Advanced: start from a blank world").click();
+  await page.getByRole("button", { name: "Create blank world" }).click();
   await expect(page.getByTestId("open-world-page")).toBeVisible();
   await expect(page).toHaveURL(/\/worlds\/[0-9a-f-]{36}/);
-  await page.getByRole("button", { name: "Structure", exact: true }).click();
+  await page.getByText("Advanced", { exact: true }).click();
+  await page.getByRole("button", { name: "World structure" }).click();
   return page.url().split("/worlds/")[1].split("?")[0];
 }
 
@@ -182,6 +182,10 @@ test("Phase 2 world experience: data-driven scene, appearance, interaction, pers
   // The state is the server's, not a browser-only effect.
   await page.reload();
   await expect(page.getByTestId("open-world-scene")).toBeVisible();
+  // Panels are no longer open by default after a reload; a user who wants the
+  // advanced look editor opens it deliberately.
+  await page.getByText("Advanced", { exact: true }).click();
+  await page.getByRole("button", { name: "World structure" }).click();
   await page.getByRole("button", { name: "Cards", exact: true }).click();
   const tideCard = page.getByTestId("open-world-card").filter({ hasText: "Tide" });
   await expect(tideCard.locator('input[type="number"]')).toHaveValue("2");
@@ -196,7 +200,9 @@ test("Phase 2 world experience: data-driven scene, appearance, interaction, pers
   await expect(page.getByTestId("open-world-scene")).toHaveAttribute("data-backdrop", "void");
 
   // Derive the whole experience through the real derive path.
-  await page.getByRole("link", { name: "Branch", exact: true }).click();
+  await page.getByText("Advanced", { exact: true }).click();
+  await page.getByRole("button", { name: "Derive a new world" }).click();
+  await page.getByRole("link", { name: "Need more options? Open the full derive page" }).click();
   await expect(page).toHaveURL(new RegExp(`/objects/${worldID}/derive`));
   await page.getByLabel("Title of the new branch").fill("A coast with another answer");
   await page.getByRole("button", { name: "Create derived object" }).click();
@@ -205,6 +211,8 @@ test("Phase 2 world experience: data-driven scene, appearance, interaction, pers
   expect(childID).not.toBe(worldID);
 
   await page.goto(`/worlds/${childID}`);
+  await page.getByText("Advanced", { exact: true }).click();
+  await page.getByRole("button", { name: "World structure" }).click();
   await expect(page.getByTestId("open-world-scene")).toHaveAttribute("data-backdrop", "void");
   await expect(page.getByTestId("world-scene-node").filter({ hasText: "North lamp" })).toHaveAttribute(
     "data-shape",

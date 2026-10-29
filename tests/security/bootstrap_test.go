@@ -49,8 +49,8 @@ func TestMigrationIdempotent(t *testing.T) {
 		"SELECT value FROM app_meta WHERE key = 'schema_version'").Scan(&schemaVersion); err != nil {
 		t.Fatalf("read app_meta: %v", err)
 	}
-	if schemaVersion != "9" {
-		t.Fatalf("schema_version = %q, want 9", schemaVersion)
+	if schemaVersion != "10" {
+		t.Fatalf("schema_version = %q, want 10", schemaVersion)
 	}
 
 	var migrationTableExists bool

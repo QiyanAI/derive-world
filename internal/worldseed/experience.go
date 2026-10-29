@@ -37,6 +37,7 @@ type preservedExperience struct {
 	customRaw     json.RawMessage
 	audioRaw      json.RawMessage
 	mediaRaw      json.RawMessage
+	scene3dRaw    json.RawMessage
 }
 
 type surfaceBuilder struct {
@@ -69,7 +70,11 @@ func buildExperience(world *authoredWorld, brief *Brief,
 	if brief.Experience != nil {
 		built.surfaces = surfacesOf(brief.Experience)
 		built.primary = brief.Experience.Primary
-		if preserved != nil && len(brief.Experience.Surfaces) == 0 {
+		if preserved != nil {
+			// A reshape never has an explicit "remove this surface" syntax. If
+			// the merged brief names only some surfaces, keep the world's
+			// existing ones instead of silently deleting uploaded media, an
+			// audio layer or a 3D scene the user already has.
 			built.surfaces = unionSurfaces(preserved.surfaces, built.surfaces)
 		}
 	} else if preserved != nil {
@@ -503,6 +508,15 @@ func (builder *surfaceBuilder) buildScene3D() *worldcap.ViewNode {
 	if builder.brief.Experience != nil {
 		spec = builder.brief.Experience.Scene3D
 	}
+	if spec == nil && builder.preserved != nil && len(builder.preserved.scene3dRaw) > 0 {
+		// The brief did not touch the 3D scene. Keep the existing props so a
+		// small content change cannot drop uploaded models, materials, camera
+		// or collision settings.
+		return &worldcap.ViewNode{
+			ID: "scene3d", Capability: "core.scene3d",
+			Props: append(json.RawMessage(nil), builder.preserved.scene3dRaw...),
+		}
+	}
 	_, _, entityActions, _ := builder.scene(nil)
 	specViews := map[int]Scene3DViewSpec{}
 	if spec != nil {
@@ -935,6 +949,11 @@ func (builder *surfaceBuilder) attachGoalActions(goal *GoalSpec, entityActions *
 			return
 		}
 		for _, node := range builder.world.nodesOfKind(kind.ID) {
+			if actionByEntity[node.ID] {
+				// An explicit interaction already owns this entity's action.
+				// Two actions for one entity violate the state contract.
+				continue
+			}
 			*entityActions = append(*entityActions, map[string]any{
 				"entity_id": node.ID, "behavior_id": behaviorID, "label": "collect",
 			})
@@ -1391,27 +1410,42 @@ func (builder *surfaceBuilder) nodeIDForSeedThing(index int) string {
 
 func experienceBindingsFromKind(kind *authoredKind) []map[string]any {
 	bindings := make([]map[string]any, 0, 4)
+	used := make(map[string]bool, 4)
+	add := func(fieldKey, target string, inMax, outMin, outMax float64) {
+		if used[target] || len(bindings) >= 4 {
+			return
+		}
+		used[target] = true
+		bindings = append(bindings, map[string]any{
+			"field": fieldKey, "target": target,
+			"in_min": 0, "in_max": inMax, "out_min": outMin, "out_max": outMax,
+		})
+	}
+	// The space surface rejects two bindings that write the same visual target.
+	// Pick the next unused target instead of always mapping the second number
+	// field (and every flag) onto opacity.
+	numberTargets := []struct {
+		name           string
+		outMin, outMax float64
+	}{
+		{"size", 0.65, 1.65},
+		{"hue", -40, 40},
+		{"opacity", 0.35, 1},
+	}
 	for _, field := range kind.Fields {
 		if len(bindings) >= 4 {
 			break
 		}
 		switch field.Type {
 		case objects.OpenWorldFieldNumber:
-			target := "size"
-			outMin, outMax := 0.65, 1.65
-			if len(bindings) == 1 {
-				target = "opacity"
-				outMin, outMax = 0.35, 1
+			for _, target := range numberTargets {
+				if !used[target.name] {
+					add(field.Key, target.name, 10, target.outMin, target.outMax)
+					break
+				}
 			}
-			bindings = append(bindings, map[string]any{
-				"field": field.Key, "target": target,
-				"in_min": 0, "in_max": 10, "out_min": outMin, "out_max": outMax,
-			})
 		case objects.OpenWorldFieldFlag:
-			bindings = append(bindings, map[string]any{
-				"field": field.Key, "target": "opacity",
-				"in_min": 0, "in_max": 1, "out_min": 0.45, "out_max": 1,
-			})
+			add(field.Key, "opacity", 1, 0.45, 1)
 		}
 	}
 	return bindings

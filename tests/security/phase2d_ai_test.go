@@ -77,6 +77,10 @@ func TestPhase2DAICreateBriefReimagineAndCustomAction(t *testing.T) {
 		Experience struct {
 			Root struct {
 				Capability string `json:"capability"`
+				Children   []struct {
+					ID         string `json:"id"`
+					Capability string `json:"capability"`
+				} `json:"children"`
 			} `json:"root"`
 		} `json:"experience"`
 	}
@@ -84,8 +88,20 @@ func TestPhase2DAICreateBriefReimagineAndCustomAction(t *testing.T) {
 	if err := json.Unmarshal(reshapedRaw, &reshapedState); err != nil {
 		t.Fatalf("decode reshaped state: %v", err)
 	}
-	if reshapedState.Experience.Root.Capability != "core.custom" {
-		t.Fatalf("reshaped root = %q", reshapedState.Experience.Root.Capability)
+	// A reshape preserves the world's existing surfaces. The new custom
+	// surface is primary but may share a tabs root with the original live
+	// surface; find the real custom node id instead of assuming it is root.
+	customSurfaceID := ""
+	if reshapedState.Experience.Root.Capability == "core.custom" {
+		customSurfaceID = "root"
+	}
+	for _, child := range reshapedState.Experience.Root.Children {
+		if child.Capability == "core.custom" {
+			customSurfaceID = child.ID
+		}
+	}
+	if customSurfaceID == "" {
+		t.Fatalf("reshaped experience has no custom surface: %#v", reshapedState.Experience.Root)
 	}
 	if reshapedState.Variables["notes"] != float64(0) {
 		t.Fatalf("custom vars = %#v", reshapedState.Variables)
@@ -97,7 +113,7 @@ func TestPhase2DAICreateBriefReimagineAndCustomAction(t *testing.T) {
 			Body: map[string]any{
 				"action": "custom_action",
 				"input": map[string]any{
-					"surface_id": "root", "event": "click", "node_id": "pad_a",
+					"surface_id": customSurfaceID, "event": "click", "node_id": "pad_a",
 				},
 				"expected_version": reshaped.Version,
 			},

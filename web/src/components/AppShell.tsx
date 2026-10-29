@@ -6,7 +6,6 @@ import { useI18n } from "../i18n";
 import { useMeta } from "../meta";
 import { ErrorNotice } from "../errors";
 import LanguageToggle from "./LanguageToggle";
-import ModeBadge from "./ModeBadge";
 import AISettingsDialog from "./v2/AISettingsDialog";
 import HelpDialog from "./v2/HelpDialog";
 import Icon from "./v2/Icon";
@@ -23,6 +22,9 @@ export default function AppShell() {
   const navigate = useNavigate();
   const authenticated = status === "authenticated";
   const zh = lang === "zh";
+  // Inside a world the only AI entry is the world-scoped composer; the global
+  // creation entry would otherwise open a context-free conversation.
+  const worldRoute = /^\/worlds\/[^/]+/.test(location.pathname);
   const [aiOpen, setAIOpen] = useState(false);
   const [personalAIOpen, setPersonalAIOpen] = useState(false);
   const [personalAIPrompt, setPersonalAIPrompt] = useState("");
@@ -118,15 +120,6 @@ export default function AppShell() {
             </NavLink>
           </nav>
           <div className="dw-rail-bottom">
-            <button
-              className="dw-round-button"
-              type="button"
-              onClick={() => setHelpOpen(true)}
-              aria-label={zh ? "体验指南" : "Guide"}
-              title={zh ? "体验指南" : "Guide"}
-            >
-              <Icon name="help" size={18} />
-            </button>
             {user ? (
               <Link to="/self" className="dw-rail-avatar" aria-label={zh ? "你的个人空间" : "Your profile"}>
                 {user.display_name.slice(0, 1).toUpperCase()}
@@ -152,36 +145,18 @@ export default function AppShell() {
             </span>
           </div>
           <div className="dw-top-actions">
-            {authenticated ? (
-              <>
-                <button
-                  className="dw-top-button dw-personal-ai-entry"
-                  type="button"
-                  onClick={() => setPersonalAIOpen(true)}
-                  aria-label={t("ai.universal.entry")}
-                  data-testid="personal-ai-entry"
-                >
-                  <Icon name="spark" size={16} />
-                  <span>{t("ai.universal.entry")}</span>
-                </button>
-                <button
-                  className="dw-top-button dw-ai-entry"
-                  type="button"
-                  onClick={() => setAIOpen(true)}
-                  aria-label={zh ? "设置 AI 模型" : "AI settings"}
-                >
-                  <Icon name="gear" size={16} />
-                  <span>{zh ? "设置 AI" : "AI setup"}</span>
-                </button>
-              </>
+            {authenticated && !worldRoute ? (
+              <button
+                className="dw-top-button dw-personal-ai-entry"
+                type="button"
+                onClick={() => setPersonalAIOpen(true)}
+                aria-label={zh ? "和我的 AI 一起创造" : "Create with my AI"}
+                data-testid="personal-ai-entry"
+              >
+                <Icon name="spark" size={16} />
+                <span>{zh ? "和我的 AI 一起创造" : "Create with my AI"}</span>
+              </button>
             ) : null}
-            <button className="dw-top-button" type="button" onClick={() => setHelpOpen(true)}>
-              <Icon name="help" size={16} />
-              <span>{zh ? "如何体验" : "How it works"}</span>
-            </button>
-            <span className="dw-mode-wrap" title={mode === "fixture" ? (zh ? "Fixture 模式：AI 输出为确定性演示，不是真实模型" : "Fixture mode: AI output is deterministic demo output, not a real model") : (zh ? "真实模型模式" : "Real model mode")}>
-              <ModeBadge mode={mode} />
-            </span>
             <LanguageToggle />
             {authenticated && user ? (
               <details className="dw-profile" ref={profileRef}>
@@ -206,9 +181,17 @@ export default function AppShell() {
                     <Icon name="gear" size={15} />
                     {t("nav.settings")}
                   </Link>
-                  <button type="button" onClick={() => setAIOpen(true)}>
+                  <Link to="/ai">
                     <Icon name="spark" size={15} />
-                    {zh ? "设置 AI" : "AI setup"}
+                    {zh ? "Personal AI 设置" : "Personal AI settings"}
+                  </Link>
+                  <button type="button" onClick={() => { profileRef.current?.removeAttribute("open"); setHelpOpen(true); }}>
+                    <Icon name="help" size={15} />
+                    {zh ? "如何体验" : "How it works"}
+                  </button>
+                  <button type="button" onClick={() => setAIOpen(true)}>
+                    <Icon name="gear" size={15} />
+                    {zh ? "模型设置" : "Model settings"}
                   </button>
                   <button type="button" onClick={() => void logout()}>
                     <Icon name="logout" size={15} />
@@ -272,7 +255,7 @@ export default function AppShell() {
         onWorldCreated={(object) => {
           setPersonalAIOpen(false);
           setPersonalAIPrompt("");
-          navigate(`/worlds/${object.id}`);
+          navigate(`/worlds/${object.id}`, { state: { created: true } });
         }}
       />
       <AISettingsDialog open={aiOpen} onClose={() => setAIOpen(false)} />

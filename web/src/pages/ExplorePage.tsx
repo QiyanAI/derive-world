@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: Apache-2.0
 import { useCallback, useEffect, useMemo, useState, type FormEvent } from "react";
-import { Link, useNavigate, useParams } from "react-router";
+import { Link, useNavigate, useParams, useSearchParams } from "react-router";
 import {
   derivePublicWorld,
   errorMessage,
@@ -17,6 +17,7 @@ import { useI18n } from "../i18n";
 import Icon from "../components/v2/Icon";
 import Modal from "../components/v2/Modal";
 import { useToast } from "../components/v2/Toast";
+import { branchTitle } from "../worldLabels";
 
 type Tone = "mint" | "violet" | "peach" | "blue";
 
@@ -94,6 +95,7 @@ function typeLabel(world: PublicWorld, zh: boolean): string {
 
 export default function ExplorePage() {
   const { id } = useParams();
+  const [searchParams] = useSearchParams();
   const { t, lang } = useI18n();
   const { status } = useAuth();
   const navigate = useNavigate();
@@ -174,8 +176,11 @@ export default function ExplorePage() {
         setSelected(world);
         setLineage(family);
         const preview = publicPreview(world);
-        setDeriveTitle(`${preview.title} · ${zh ? "我的分支" : "my branch"}`.slice(0, 200));
+        setDeriveTitle(branchTitle(preview.title, zh).slice(0, 200));
         setDeriveFields(fieldsFor(world));
+        if (searchParams.get("derive") === "1" && world.derive_allowed) {
+          setDeriveOpen(true);
+        }
       })
       .catch((failure) => {
         if (!controller.signal.aborted) {
@@ -234,7 +239,15 @@ export default function ExplorePage() {
       } catch {
         // The world still loads without the focus hint.
       }
-      navigate("/");
+      // Only an open world has a world-page experience. Other published forms
+      // keep the accepted V2 landing on the stage with the child focused.
+      if (child.object_type === "open_world") {
+        navigate(`/worlds/${child.id}`, {
+          state: { derivedFrom: publicPreview(selected).title }
+        });
+      } else {
+        navigate("/");
+      }
     } catch (failure) {
       setDeriveError(errorMessage(failure));
     } finally {
@@ -532,7 +545,7 @@ export default function ExplorePage() {
                   <Icon name="arrow" size={15} />
                 </Link>
                 {featured.derive_allowed && status === "authenticated" ? (
-                  <Link className="dw-button dw-button-ghost" to={`/explore/${featured.id}`}>
+                  <Link className="dw-button dw-button-ghost" to={`/explore/${featured.id}?derive=1`}>
                     <Icon name="branch" size={15} />
                     {zh ? "创造我的分支" : "Create my branch"}
                   </Link>

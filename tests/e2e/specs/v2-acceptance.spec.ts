@@ -10,10 +10,12 @@ async function contextPage(browser: Browser): Promise<{ page: Page; close: () =>
 
 async function createWorld(page: Page, title: string) {
   await page.goto("/");
-  await page.getByRole("button", { name: "Create a beginning" }).click();
+  await page.getByRole("button", { name: "Create a world" }).click();
   await fillStable(page.getByLabel("What do you want to begin?"), title);
   await expect(page.getByLabel("What do you want to begin?")).toHaveValue(title);
-  await page.getByRole("button", { name: "Let it grow" }).click();
+  await page.getByText("Advanced: start from a blank world").click();
+  await page.getByRole("button", { name: "Idea scene" }).click();
+  await page.getByRole("button", { name: "Create blank world" }).click();
   await expect(page.getByTestId("stage-inspector")).toBeVisible();
   await page.locator(".dw-inspector-close").click();
 }
@@ -126,7 +128,7 @@ test("V2 acceptance: DM invitation, co-creation, consent, public discovery and p
     await derive.getByRole("button", { name: "Create my branch" }).click();
     await expect(visitor.page).toHaveURL(/\/$/);
     await expect(visitor.page.getByTestId("dw-stage-node")).toHaveCount(1);
-    await expect(visitor.page.locator(".dw-world-node").first()).toContainText("my branch");
+    await expect(visitor.page.locator(".dw-world-node").first()).toContainText("new branch");
     await expect(visitor.page.locator(".dw-privacy-chip")).toContainText("Only me");
 
     // The original world keeps its owner, members, and co-created content.

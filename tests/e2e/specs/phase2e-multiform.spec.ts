@@ -399,7 +399,9 @@ test("Phase 2E: image, video, audio, GLB 3D and physics in one world survive ref
     .toBeGreaterThan(0);
 
   // A derived world receives its own copy of the same media references.
-  await page.getByRole("button", { name: "Branch a new world" }).click();
+  await page.getByText("Advanced", { exact: true }).click();
+  await page.getByRole("button", { name: "Derive a new world" }).click();
+  await page.getByRole("dialog").getByRole("button", { name: "Create this branch" }).click();
   await expect(page).toHaveURL(/\/worlds\/[0-9a-f-]{36}/, { timeout: 30_000 });
   await expect(page.getByTestId("world-3d")).toBeVisible({ timeout: 30_000 });
   await page.getByRole("tab", { name: "Photo" }).click();
@@ -418,12 +420,12 @@ test("Phase 2E: a described 3D world reserves a real media slot a human can fill
   test.setTimeout(180_000);
   await register(page, uniqueActor("p2eai3d", "Phase 2E AI 3D"));
   await page.goto("/");
-  await page.getByRole("button", { name: "Create a beginning" }).first().click();
+  await page.getByRole("button", { name: "Create a world" }).first().click();
   await fillStable(
     page.getByLabel("What do you want to begin?"),
     "Create a world that is a three-dimensional planet I can walk on and hear"
   );
-  await page.getByRole("button", { name: "Let my Personal AI create it" }).click();
+  await page.getByTestId("create-world-ai").click();
   const dialog = page.getByTestId("personal-ai-dialog");
   await expect(dialog).toBeVisible();
   const proposal = dialog.getByTestId("world-proposal").first();
@@ -442,6 +444,7 @@ test("Phase 2E: a described 3D world reserves a real media slot a human can fill
   await photoTab.click();
   await expect(page.getByTestId("world-media-empty")).toBeVisible();
 
+  await page.getByText("Advanced", { exact: true }).click();
   await page.getByRole("button", { name: "Experience editor" }).click();
   await expect(page.getByTestId("world-assets-panel")).toBeVisible();
   await page.getByTestId("world-asset-file").setInputFiles(PHOTO);

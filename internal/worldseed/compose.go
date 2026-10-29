@@ -228,9 +228,19 @@ func mergeBrief(world *authoredWorld, brief *Brief) error {
 		if kind == nil {
 			return fmt.Errorf("%w: thing kind", ErrInvalid)
 		}
+		// Map values by the existing kind's field label, never by the position
+		// in the brief. A brief may re-declare fields in a different order (or
+		// only a subset), and a positional write would land in the wrong field.
+		fieldKeys := make(map[string]string, len(kind.Fields))
+		for _, existingField := range kind.Fields {
+			fieldKeys[existingField.Label] = existingField.Key
+		}
 		values := map[string]any{}
 		for fieldIndex, field := range brief.Kinds[seed.Kind].Fields {
-			key := fmt.Sprintf("f%d", fieldIndex)
+			key, exists := fieldKeys[field.Label]
+			if !exists {
+				continue
+			}
 			if value, ok := seed.Values[field.Label]; ok {
 				values[key] = value
 			} else if field.Initial != nil {
@@ -417,6 +427,9 @@ func inspectPreserved(experience *worldcap.Experience) *preservedExperience {
 	}
 	if mediaNode := findCapabilityNode(experience.Root, "core.media"); mediaNode != nil {
 		preserved.mediaRaw = append(json.RawMessage(nil), mediaNode.Props...)
+	}
+	if scene3dNode := findCapabilityNode(experience.Root, "core.scene3d"); scene3dNode != nil {
+		preserved.scene3dRaw = append(json.RawMessage(nil), scene3dNode.Props...)
 	}
 	storyNode := findCapabilityNode(experience.Root, "core.story")
 	if storyNode != nil {

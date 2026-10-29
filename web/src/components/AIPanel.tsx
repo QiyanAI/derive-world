@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: Apache-2.0
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Link } from "react-router";
 import {
   applyProposal,
@@ -21,6 +21,8 @@ import { describeError, ErrorNotice, StatusNotice } from "../errors";
 import { actionKey, proposalPreview } from "../humanize";
 import { useI18n } from "../i18n";
 import { useMeta } from "../meta";
+import { looksLikeJSONContent } from "../worldLabels";
+import Icon from "./v2/Icon";
 
 interface Props {
   object: ObjectView;
@@ -28,12 +30,16 @@ interface Props {
   onChanged: () => void;
 }
 
+// AIPanel is the single world-scoped Personal AI surface. It is always bound
+// to the current world and its version; there is no "switch to general AI"
+// escape that would silently abandon the world context.
 export default function AIPanel({ object, canContribute, onChanged }: Props) {
   const objectID = object.id;
   const objectTitle = typeof object.state.title === "string" ? object.state.title : "";
   const objectVersion = object.version;
   const { t, lang } = useI18n();
   const { mode } = useMeta();
+  const zh = lang === "zh";
   const [conversationID, setConversationID] = useState<string | null>(null);
   const [messages, setMessages] = useState<AIMessage[]>([]);
   const [proposals, setProposals] = useState<Proposal[]>([]);
@@ -43,6 +49,7 @@ export default function AIPanel({ object, canContribute, onChanged }: Props) {
   const [notice, setNotice] = useState("");
   const [error, setError] = useState<unknown>(null);
   const [createdChild, setCreatedChild] = useState<ObjectView | null>(null);
+  const transcriptRef = useRef<HTMLDivElement | null>(null);
 
   const draftBytes = useMemo(() => new TextEncoder().encode(draft).length, [draft]);
   const timeFormatter = useMemo(
@@ -113,9 +120,17 @@ export default function AIPanel({ object, canContribute, onChanged }: Props) {
     };
   }, [objectID, refreshConfirmations, refreshProposals]);
 
+  useEffect(() => {
+    const node = transcriptRef.current;
+    if (!node) {
+      return;
+    }
+    node.scrollTop = node.scrollHeight;
+  }, [messages.length, proposals.length, confirmations.length, busy]);
+
   async function send(contentOverride?: string) {
     const content = (contentOverride ?? draft).trim();
-    if (!content || busy) {
+    if (!content || busy || !canContribute) {
       return;
     }
     setBusy("send");
@@ -144,8 +159,6 @@ export default function AIPanel({ object, canContribute, onChanged }: Props) {
       window.dispatchEvent(new CustomEvent("dw:ai-inference", { detail: trace }));
       if (result.context_stale) {
         setNotice(t("workspace.aiStale"));
-      } else if ((result.rejected_actions ?? 0) > 0) {
-        setNotice(t("ai.universal.rejected"));
       } else if (result.parse_status === "structured" && result.proposed_actions.length === 0) {
         setNotice(t("workspace.aiNoAction"));
       }
@@ -153,15 +166,15 @@ export default function AIPanel({ object, canContribute, onChanged }: Props) {
       await refreshConfirmations();
     } catch (failure) {
       setError(failure);
+      if (contentOverride) {
+        setDraft(content);
+      }
     } finally {
       setBusy("");
     }
   }
 
   async function apply(item: Proposal) {
-    if (!window.confirm(t("workspace.applyConfirm"))) {
-      return;
-    }
     setBusy(`apply:${item.id}`);
     setNotice("");
     setError(null);
@@ -193,9 +206,6 @@ export default function AIPanel({ object, canContribute, onChanged }: Props) {
   }
 
   async function approve(item: Confirmation) {
-    if (!window.confirm(t("workspace.confirmApprove"))) {
-      return;
-    }
     setBusy(`approve:${item.id}`);
     setNotice("");
     setError(null);
@@ -227,24 +237,17 @@ export default function AIPanel({ object, canContribute, onChanged }: Props) {
   }
 
   return (
-    <section className="card ai-panel" data-testid="ai-panel">
+    <section className="card ai-panel" data-testid="ai-panel" aria-busy={busy !== ""}>
       <div className="section-heading">
-        <h2>{t("workspace.ai")}</h2>
+        <h2>{zh ? "和我的 AI 一起创造" : "Create with my AI"}</h2>
         <small>{canContribute ? t("workspace.permission.contribute") : t("workspace.permission.read")}</small>
       </div>
       <p className="muted">{t("workspace.aiIntro")}</p>
       <div className="dw-ai-context-badge" data-testid="ai-world-context">
         <span>
           <strong>{t("ai.universal.context", { title: objectTitle || t("common.untitled") })}</strong>
-          <small>{t("ai.universal.identity")}</small>
+          <small>{zh ? "只作用于当前世界；每次修改都需要你确认。" : "Bound to this world only; every change needs your approval."}</small>
         </span>
-        <button
-          className="dw-text-button"
-          type="button"
-          onClick={() => window.dispatchEvent(new Event("dw:open-general-ai"))}
-        >
-          {t("ai.universal.switchGeneral")}
-        </button>
       </div>
       {mode === "fixture" ? <p className="fixture-inline">{t("workspace.aiFixture")}</p> : null}
       {notice ? <StatusNotice>{notice}</StatusNotice> : null}
@@ -267,20 +270,50 @@ export default function AIPanel({ object, canContribute, onChanged }: Props) {
         </p>
       ) : null}
 
-      <div className="ai-messages" aria-live="polite">
-        {messages.length === 0 ? <p className="muted">{t("workspace.aiEmpty")}</p> : null}
+      <div className="ai-messages" aria-live="polite" ref={transcriptRef}>
+        {messages.length === 0 && busy === "" ? <p className="muted">{t("workspace.aiEmpty")}</p> : null}
         {messages.map((message) => (
           <div key={message.id} className={`ai-message ai-${message.role}`}>
-            <small>
-              {message.role === "user" ? t("workspace.you") : t("workspace.ai")}
-              {message.model_mode === "fixture" ? ` · ${t("mode.fixture")}` : ""}
-              {message.parse_status ? ` · ${message.parse_status}` : ""}
-            </small>
-            <p>{message.content}</p>
+            <small>{message.role === "user" ? t("workspace.you") : t("workspace.ai")}</small>
+            {looksLikeJSONContent(message.content) ? (
+              <p className="dw-ai-unsafe">
+                {zh
+                  ? "这条旧回复不是可读的对话内容，已隐藏。请重新提出你的要求。"
+                  : "This old reply is not readable conversation; it has been hidden. Please ask again."}
+              </p>
+            ) : (
+              <p>{message.content}</p>
+            )}
+            {message.notice ? (
+              <p className="dw-ai-notice" role="status">
+                <Icon name="shield" size={13} />
+                {message.notice}
+              </p>
+            ) : null}
           </div>
         ))}
+        {busy === "send" ? (
+          <div className="ai-message ai-assistant is-pending" role="status">
+            <small>{t("workspace.ai")}</small>
+            <p>
+              <span className="dw-thinking-dots" aria-hidden="true">
+                <i />
+                <i />
+                <i />
+              </span>
+              {zh ? "正在准备修改方案…" : "Preparing a change…"}
+            </p>
+          </div>
+        ) : null}
       </div>
 
+      {!canContribute ? (
+        <p className="form-hint">
+          {zh
+            ? "你是这个世界的读者，可以体验内容，但不能让 AI 修改它。"
+            : "You can experience this world, but only members with contribute permission can ask the AI to change it."}
+        </p>
+      ) : null}
       <label className="ai-compose">
         <span className="visually-hidden">{t("workspace.aiPlaceholder")}</span>
         <textarea
@@ -288,15 +321,16 @@ export default function AIPanel({ object, canContribute, onChanged }: Props) {
           rows={3}
           maxLength={16384}
           value={draft}
-          placeholder={t("workspace.aiPlaceholder")}
+          placeholder={zh ? "例如：把这里变成下雨的夜晚；再加两栋建筑；给这个世界加上声音。" : "For example: make this a rainy night; add two more buildings; give this world sound."}
           onChange={(event) => setDraft(event.target.value)}
+          disabled={!canContribute}
         />
       </label>
       <div className="form-actions">
         <button
           className="button button-small"
           type="button"
-          disabled={!draft.trim() || busy !== "" || draftBytes > 16384}
+          disabled={!canContribute || !draft.trim() || busy !== "" || draftBytes > 16384}
           onClick={() => void send()}
         >
           {busy === "send" ? t("workspace.aiSending") : t("workspace.aiSend")}
@@ -304,7 +338,7 @@ export default function AIPanel({ object, canContribute, onChanged }: Props) {
         <small className={draftBytes > 16384 ? "form-error" : "muted"}>
           {t("ai.messageBytes", { bytes: draftBytes })}
         </small>
-        {mode === "fixture" ? (
+        {mode === "fixture" && canContribute ? (
           <>
             <button
               className="chip-button"
@@ -362,7 +396,7 @@ export default function AIPanel({ object, canContribute, onChanged }: Props) {
                       disabled={busy !== ""}
                       onClick={() => void apply(item)}
                     >
-                      {t("workspace.apply")}
+                      {busy === `apply:${item.id}` ? (zh ? "正在应用…" : "Applying…") : t("workspace.apply")}
                     </button>
                     <button
                       className="button button-small button-ghost"
@@ -394,6 +428,7 @@ export default function AIPanel({ object, canContribute, onChanged }: Props) {
           typeof item.bound_version === "number" &&
           item.target_object_version > 0 &&
           item.bound_version < item.target_object_version;
+        const expired = Date.parse(item.expires_at) <= Date.now();
         return (
           <article key={item.id} className="proposal-card confirmation-card" data-testid="confirmation-card">
             <strong>{t("workspace.confirmation")}</strong>
@@ -429,19 +464,27 @@ export default function AIPanel({ object, canContribute, onChanged }: Props) {
             {typeof item.bound_version === "number" ? (
               <small className="mono">{t("confirmation.boundVersion", { version: item.bound_version })}</small>
             ) : null}
-            {stale ? (
+            {stale || expired ? (
               <p className="form-error" role="alert">
-                {t("confirmation.stale")}
+                {expired
+                  ? zh
+                    ? "这份确认已过期，请让 AI 重新准备。"
+                    : "This confirmation expired; ask the AI to prepare a new one."
+                  : t("confirmation.stale")}
               </p>
             ) : null}
             <div className="form-actions">
               <button
                 className="button button-small"
                 type="button"
-                disabled={busy !== ""}
+                disabled={busy !== "" || expired || stale}
                 onClick={() => void approve(item)}
               >
-                {t("workspace.confirmApprove")}
+                {busy === `approve:${item.id}`
+                  ? zh
+                    ? "正在确认…"
+                    : "Confirming…"
+                  : t("workspace.confirmApprove")}
               </button>
               <button
                 className="button button-small button-ghost"

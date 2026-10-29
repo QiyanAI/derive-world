@@ -5,6 +5,7 @@ import { deriveObject, getObject, type ObjectView } from "../api";
 import { ErrorNotice } from "../errors";
 import { useAuth } from "../auth";
 import { useI18n } from "../i18n";
+import { branchTitle } from "../worldLabels";
 
 type Field =
   | "summary"
@@ -25,7 +26,8 @@ const openWorldFields: Field[] = ["premise", "structure", "views", "tags"];
 
 export default function DerivePage() {
   const { id } = useParams();
-  const { t } = useI18n();
+  const { t, lang } = useI18n();
+  const zh = lang === "zh";
   const { status } = useAuth();
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
@@ -50,7 +52,7 @@ export default function DerivePage() {
         }
         setObject(loaded);
         const baseTitle = String(loaded.state.title ?? "");
-        setTitle(`${baseTitle} ${t("derive.defaultSuffix")}`.trim().slice(0, 200));
+        setTitle(branchTitle(baseTitle, zh).slice(0, 200));
         setFields(
           loaded.object_type === "interactive"
             ? ["prompt", "options"]
@@ -228,6 +230,13 @@ export default function DerivePage() {
             );
           })}
           <small>{t("derive.fieldsHint")}</small>
+          {object.object_type === "open_world" && !fields.includes("structure") ? (
+            <p className="form-error" role="status">
+              {zh
+                ? "不继承“结构”会丢弃这个世界现有的存在、关系与规则；新世界只会保留你勾选的内容。"
+                : "Without “structure”, the new world drops this world's things, links and rules and keeps only the fields you selected."}
+            </p>
+          ) : null}
         </fieldset>
 
         <div className="preview-box">

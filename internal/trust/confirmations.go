@@ -106,6 +106,13 @@ type ConfirmationEffect struct {
 	KindCount  int    `json:"kind_count,omitempty"`
 	NodeCount  int    `json:"node_count,omitempty"`
 	RuleCount  int    `json:"rule_count,omitempty"`
+	// KindNames and ThingNames let a human preview the actual content they are
+	// about to create instead of approving a blind title. They are bounded and
+	// derived from the validated content, never from model prose.
+	KindNames        []string `json:"kind_names,omitempty"`
+	ThingNames       []string `json:"thing_names,omitempty"`
+	InteractionCount int      `json:"interaction_count,omitempty"`
+	PrimarySurface   string   `json:"primary_surface,omitempty"`
 	// Surfaces names the real universal runtimes the pending world will use.
 	// It is derived from the validated experience document, never from prose.
 	Surfaces []string `json:"surfaces,omitempty"`
@@ -594,11 +601,16 @@ func scanConfirmationView(row rowScanner) (ConfirmationView, error) {
 		var worldPayload WorldCreatePayload
 		if json.Unmarshal(payload, &worldPayload) == nil && strings.TrimSpace(worldPayload.Title) != "" {
 			var content struct {
-				Premise    string            `json:"premise"`
-				Kinds      []json.RawMessage `json:"kinds"`
-				Nodes      []json.RawMessage `json:"nodes"`
-				Rules      []json.RawMessage `json:"rules"`
-				Experience *struct {
+				Premise string `json:"premise"`
+				Kinds   []struct {
+					Name string `json:"name"`
+				} `json:"kinds"`
+				Nodes []struct {
+					Name string `json:"name"`
+				} `json:"nodes"`
+				Rules        []json.RawMessage `json:"rules"`
+				Interactions []json.RawMessage `json:"interactions"`
+				Experience   *struct {
 					Root struct {
 						Capability string `json:"capability"`
 						Children   []struct {
@@ -624,18 +636,57 @@ func scanConfirmationView(row rowScanner) (ConfirmationView, error) {
 					surfaces = append(surfaces, surface)
 				}
 			}
+			kindNames := make([]string, 0, len(content.Kinds))
+			for _, kind := range content.Kinds {
+				if name := boundedPreviewName(kind.Name, 60); name != "" {
+					kindNames = append(kindNames, name)
+				}
+				if len(kindNames) >= 8 {
+					break
+				}
+			}
+			thingNames := make([]string, 0, len(content.Nodes))
+			for _, node := range content.Nodes {
+				if name := boundedPreviewName(node.Name, 80); name != "" {
+					thingNames = append(thingNames, name)
+				}
+				if len(thingNames) >= 12 {
+					break
+				}
+			}
+			primary := ""
+			if len(surfaces) > 0 {
+				primary = surfaces[0]
+			}
 			view.Effect = &ConfirmationEffect{
-				Title:      strings.TrimSpace(worldPayload.Title),
-				ObjectType: objects.TypeOpenWorld,
-				Summary:    summary,
-				KindCount:  len(content.Kinds),
-				NodeCount:  len(content.Nodes),
-				RuleCount:  len(content.Rules),
-				Surfaces:   surfaces,
+				Title:            strings.TrimSpace(worldPayload.Title),
+				ObjectType:       objects.TypeOpenWorld,
+				Summary:          summary,
+				KindCount:        len(content.Kinds),
+				NodeCount:        len(content.Nodes),
+				RuleCount:        len(content.Rules),
+				KindNames:        kindNames,
+				ThingNames:       thingNames,
+				InteractionCount: len(content.Interactions),
+				PrimarySurface:   primary,
+				Surfaces:         surfaces,
 			}
 		}
 	}
 	return view, nil
+}
+
+// boundedPreviewName keeps a preview name short and single-line. It is display
+// text, not an identifier, so it never carries control characters.
+func boundedPreviewName(value string, max int) string {
+	trimmed := strings.TrimSpace(value)
+	trimmed = strings.ReplaceAll(trimmed, "\n", " ")
+	trimmed = strings.ReplaceAll(trimmed, "\r", " ")
+	runes := []rune(trimmed)
+	if len(runes) > max {
+		return string(runes[:max])
+	}
+	return trimmed
 }
 
 func permissionSummary(action string) string {

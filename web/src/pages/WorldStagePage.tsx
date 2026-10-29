@@ -390,7 +390,7 @@ export default function WorldStagePage() {
       <div className="dw-stage-onboarding-actions">
         <button className="dw-button dw-button-primary" type="button" onClick={createWorldButton}>
           <Icon name="plus" size={16} />
-          {zh ? "创造第一个世界" : "Create the first world"}
+          {zh ? "创造一个世界" : "Create a world"}
         </button>
         <Link className="dw-button dw-button-ghost" to="/explore">
           {zh ? "先看看公开世界" : "Explore public worlds first"}
@@ -433,10 +433,12 @@ export default function WorldStagePage() {
               <Icon name={privacyStatus === "private" || privacyStatus === "pending" ? "lock" : "globe"} size={15} />
               <span>{privacyLabel}</span>
             </button>
-            <button className="dw-button dw-button-primary" type="button" onClick={createWorldButton}>
-              <Icon name="plus" size={16} />
-              {zh ? "创造一个起点" : "Create a beginning"}
-            </button>
+            {stage && stage.objects.length > 0 ? (
+              <button className="dw-button dw-button-primary" type="button" onClick={createWorldButton}>
+                <Icon name="plus" size={16} />
+                {zh ? "创造一个世界" : "Create a world"}
+              </button>
+            ) : null}
           </div>
         </div>
       </header>
@@ -459,7 +461,7 @@ export default function WorldStagePage() {
             closeInspector();
           }
         }}
-        emptyState={emptyState}
+        emptyState={loading ? null : emptyState}
         pulse={
           <button className="dw-pulse-mini" type="button" onClick={() => setPulseOpen(true)}>
             <Icon name="spark" size={16} />

@@ -75,8 +75,8 @@ export default function HelpDialog({
       <p className="dw-fineprint">
         <Icon name="help" size={13} />
         {zh
-          ? "快捷键：N 创建世界 · ? 打开指南 · Esc 关闭面板 · 滚轮缩放舞台。所有节点都能用键盘选择。"
-          : "Shortcuts: N creates a world · ? opens this guide · Esc closes panels · wheel zooms the stage. Every node is keyboard selectable."}
+          ? "快捷键：在首页按 N 创建世界 · ? 打开指南 · Esc 关闭面板 · 滚轮缩放舞台。所有节点都能用键盘选择。"
+          : "Shortcuts: on Home, N creates a world · ? opens this guide · Esc closes panels · wheel zooms the stage. Every node is keyboard selectable."}
       </p>
     </Modal>
   );

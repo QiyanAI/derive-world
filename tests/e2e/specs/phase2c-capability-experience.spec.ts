@@ -4,18 +4,18 @@ import { fillStable, register, uniqueActor } from "../support/actors";
 
 async function createFreeWorld(page: Page, title: string): Promise<string> {
   await page.goto("/");
-  await page.getByRole("button", { name: "Create a beginning" }).click();
+  await page.getByRole("button", { name: "Create a world" }).click();
   await fillStable(page.getByLabel("What do you want to begin?"), title);
-  await page.getByText("Advanced: start blank").click();
-  await page.getByRole("button", { name: "Define a free world" }).click();
-  await page.getByRole("button", { name: "Let it grow" }).click();
+  await page.getByText("Advanced: start from a blank world").click();
+  await page.getByRole("button", { name: "Create blank world" }).click();
   await expect(page.getByTestId("open-world-page")).toBeVisible();
   await expect(page).toHaveURL(/\/worlds\/[0-9a-f-]{36}/);
   return page.url().split("/worlds/")[1].split("?")[0];
 }
 
 async function addTaskKindAndNode(page: Page): Promise<void> {
-  await page.getByRole("button", { name: "Structure", exact: true }).click();
+  await page.getByText("Advanced", { exact: true }).click();
+  await page.getByRole("button", { name: "World structure" }).click();
   const structure = page.getByTestId("open-world-structure");
   const kindDetails = structure.locator("details.dw-open-add").filter({ hasText: "Add a kind" }).first();
   await kindDetails.evaluate((element) => {
@@ -93,7 +93,9 @@ test("Phase 2C: compose a capability experience, run it, persist it and derive i
   await addTaskKindAndNode(page);
   await composeWorkspace(page);
 
-  await page.getByRole("link", { name: "Branch", exact: true }).click();
+  await page.getByText("Advanced", { exact: true }).click();
+  await page.getByRole("button", { name: "Derive a new world" }).click();
+  await page.getByRole("link", { name: "Need more options? Open the full derive page" }).click();
   await page.getByLabel("Title of the new branch").fill("A capability-composed branch");
   await page.getByRole("button", { name: "Create derived object" }).click();
   await expect(page).toHaveURL(/\/objects\/[0-9a-f-]{36}\?derived=1/);

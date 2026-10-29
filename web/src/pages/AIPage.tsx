@@ -23,6 +23,7 @@ import { ErrorNotice, StatusNotice } from "../errors";
 import { useAuth } from "../auth";
 import { useI18n } from "../i18n";
 import { useMeta } from "../meta";
+import { looksLikeJSONContent } from "../worldLabels";
 
 const CONTEXT_LIMIT = 8192;
 
@@ -290,7 +291,20 @@ export default function AIPage() {
                     {message.role === "user" ? t("workspace.you") : t("workspace.ai")}
                     {message.model_mode === "fixture" ? ` · ${t("mode.fixture")}` : ""}
                   </small>
-                  <p>{message.content}</p>
+                  {looksLikeJSONContent(message.content) ? (
+                    <p className="dw-ai-unsafe">
+                      {lang === "zh"
+                        ? "这条旧回复不是可读的对话内容，已隐藏。请到「和我的 AI 一起创造」重新提出。"
+                        : "This old reply is not readable conversation; it has been hidden. Use “Create with my AI” to ask again."}
+                    </p>
+                  ) : (
+                    <p>{message.content}</p>
+                  )}
+                  {message.notice ? (
+                    <p className="dw-ai-notice" role="status">
+                      {message.notice}
+                    </p>
+                  ) : null}
                 </div>
               ))}
             </div>

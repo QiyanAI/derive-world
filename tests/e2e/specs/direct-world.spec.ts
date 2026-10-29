@@ -5,9 +5,11 @@ import { login, register, uniqueActor, fillStable } from "../support/actors";
 async function createFirstWorld(page: import("@playwright/test").Page, title: string) {
   await page.goto("/");
   await expect(page.getByTestId("world-onboarding")).toBeVisible();
-  await page.getByRole("button", { name: "Create the first world" }).click();
+  await page.getByRole("button", { name: "Create a world" }).click();
   await fillStable(page.getByLabel("What do you want to begin?"), title);
-  await page.getByRole("button", { name: "Let it grow" }).click();
+  await page.getByText("Advanced: start from a blank world").click();
+  await page.getByRole("button", { name: "Idea scene" }).click();
+  await page.getByRole("button", { name: "Create blank world" }).click();
   await expect(page.getByTestId("stage-inspector")).toBeVisible();
   await expect(page.getByTestId("dw-stage-node")).toHaveCount(1);
 }

@@ -51,11 +51,17 @@ func (uuidSource) LinkID() string { return newID() }
 // ids are refs while composing a create body and UUIDs while reshaping an
 // existing world; nothing else differs.
 type authoredWorld struct {
-	Title        string
-	Premise      string
-	Kinds        []*authoredKind
-	Nodes        []*authoredNode
-	Links        []*authoredLink
+	Title   string
+	Premise string
+	Kinds   []*authoredKind
+	Nodes   []*authoredNode
+	Links   []*authoredLink
+	// Rules, Views and Tags belong to the world, not to any one surface. Reshape
+	// must carry them through untouched when a brief changes content or an
+	// experience block; dropping them silently would rewrite the user's world.
+	Rules        []objects.OpenWorldRule
+	Views        []string
+	Tags         []string
 	Variables    map[string]any
 	Presentation objects.OpenWorldPresentation
 	ids          idSource
@@ -183,6 +189,9 @@ func authoredFromState(state *objects.OpenWorldState) *authoredWorld {
 	world := &authoredWorld{
 		Title: state.Title, Premise: state.Premise,
 		Presentation: state.Presentation,
+		Rules:        append([]objects.OpenWorldRule(nil), state.Rules...),
+		Views:        append([]string(nil), state.Views...),
+		Tags:         append([]string(nil), state.Tags...),
 		Variables:    map[string]any{}, ids: uuidSource{},
 	}
 	for name, value := range state.Variables {
@@ -319,8 +328,13 @@ func (world *authoredWorld) addNode(kindID, name, text string, values map[string
 }
 
 func (world *authoredWorld) addLink(from, to, label string) *authoredLink {
+	// The state contract allows at most one link per ordered pair. Merge a
+	// repeated pair instead of emitting a second link that validation rejects.
 	for _, link := range world.Links {
-		if link.From == from && link.To == to && link.Label == label {
+		if link.From == from && link.To == to {
+			if strings.TrimSpace(label) != "" {
+				link.Label = label
+			}
 			return link
 		}
 	}
@@ -366,12 +380,18 @@ func (world *authoredWorld) toContent(experience *worldcap.Experience) objects.O
 }
 
 func (world *authoredWorld) toState(experience *worldcap.Experience) objects.OpenWorldState {
-	state := objects.OpenWorldState{
-		Title: world.Title, Premise: world.Premise,
-		Views: []string{
+	views := world.Views
+	if len(views) == 0 {
+		views = []string{
 			objects.OpenWorldViewScene, objects.OpenWorldViewStage,
 			objects.OpenWorldViewCards, objects.OpenWorldViewTimeline,
-		},
+		}
+	}
+	state := objects.OpenWorldState{
+		Title: world.Title, Premise: world.Premise,
+		Views:        append([]string(nil), views...),
+		Rules:        append([]objects.OpenWorldRule(nil), world.Rules...),
+		Tags:         append([]string(nil), world.Tags...),
 		Presentation: world.Presentation, Variables: world.Variables,
 		Experience: experience,
 	}

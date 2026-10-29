@@ -21,14 +21,14 @@ test("Phase 2 AI: a zero-world user creates a real free world through human appr
   await page.getByTestId("personal-ai-entry").click();
   const dialog = page.getByTestId("personal-ai-dialog");
   await expect(dialog).toBeVisible();
-  await expect(dialog).toContainText("General mode · no world context");
+  await expect(dialog).toContainText("Creation mode · you approve every world");
   await expect(dialog).toContainText("Fixture");
 
   await dialog.getByRole("button", { name: "Create my first world" }).click();
   const proposal = dialog.getByTestId("world-proposal");
   await expect(proposal).toBeVisible({ timeout: 30_000 });
   await expect(proposal).toContainText("A city that changes with every choice");
-  await expect(dialog).toContainText("Nothing is created yet");
+  await expect(proposal).toContainText("nothing is written until you confirm");
 
   // The proposal is not a creation: the real backend still has zero worlds.
   expect(await stageCount(page)).toBe(0);
@@ -56,7 +56,7 @@ test("Phase 2 AI: a zero-world user creates a real free world through human appr
   await expect(page.getByTestId("open-world-page")).toHaveCount(0);
   await expect(page.getByTestId("dw-stage-node")).toHaveCount(1);
   await page.getByTestId("personal-ai-entry").click();
-  await expect(page.getByTestId("personal-ai-dialog")).toContainText("General mode · no world context");
+  await expect(page.getByTestId("personal-ai-dialog")).toContainText("Creation mode · you approve every world");
 });
 
 test("Phase 2 AI: world context is explicit and switching back to general keeps identity", async ({
@@ -67,23 +67,32 @@ test("Phase 2 AI: world context is explicit and switching back to general keeps 
 
   // Create a living scene through the ordinary V2 flow.
   await page.goto("/");
-  await page.getByRole("button", { name: "Create a beginning" }).click();
+  await page.getByRole("button", { name: "Create a world" }).click();
   await fillStable(page.getByLabel("What do you want to begin?"), "A context world");
-  await page.getByRole("button", { name: "Let it grow" }).click();
+  await page.getByText("Advanced: start from a blank world").click();
+  await page.getByRole("button", { name: "Idea scene" }).click();
+  await page.getByRole("button", { name: "Create blank world" }).click();
   const inspector = page.getByTestId("stage-inspector");
   await expect(inspector).toBeVisible();
   await inspector.getByRole("tab", { name: "AI", exact: true }).click();
   await expect(inspector.getByTestId("ai-world-context")).toContainText("Using the context of “A context world”");
   await inspector.locator("textarea").fill("world-only hello");
   await inspector.getByRole("button", { name: "Send", exact: true }).click();
-  await expect(inspector.getByText("world-only hello")).toBeVisible();
+  // Wait for the persisted assistant turn, not just the composer text. The
+  // fixture provider answers immediately; navigating before the response would
+  // abort the request and leave a bound conversation with no messages.
+  await expect(
+    inspector.getByText("Fixture reply: no scripted response", { exact: false })
+  ).toBeVisible({ timeout: 30_000 });
 
-  // The world panel names the same user-level AI and offers a deliberate
-  // switch to the general conversation.
-  await inspector.getByRole("button", { name: "Switch to general AI" }).click();
+  // The world panel has no escape into a context-free conversation. The only
+  // general AI entry lives outside a world, on Home.
+  await expect(inspector.getByRole("button", { name: "Switch to general AI" })).toHaveCount(0);
+  await page.goto("/");
+  await page.getByTestId("personal-ai-entry").click();
   const dialog = page.getByTestId("personal-ai-dialog");
   await expect(dialog).toBeVisible();
-  await expect(dialog).toContainText("General mode · no world context");
+  await expect(dialog).toContainText("Creation mode · you approve every world");
   await dialog.locator("#dw-personal-ai-draft").fill("general-only hello");
   await dialog.getByRole("button", { name: "Send", exact: true }).click();
   await expect(dialog.getByText("general-only hello")).toBeVisible();
@@ -117,31 +126,42 @@ test("Phase 2 AI: world context is explicit and switching back to general keeps 
   expect(bound).toBeTruthy();
   expect(general).toBeTruthy();
 
-  // The conversation list can be visible before the final message row is
-  // readable under load. Poll the details until both private records have
-  // their own message; the negative assertions below still prove isolation.
-  const readDetails = async () =>
-    page.evaluate(async (ids) => {
-      const out: Record<string, string> = {};
-      for (const id of ids) {
-        const response = await fetch(`/api/v1/ai/conversations/${id}`, { credentials: "include" });
-        const data = (await response.json()) as { messages: Array<{ content: string }> };
-        out[id] = data.messages.map((message) => message.content).join("\n");
-      }
-      return out;
-    }, [bound?.id ?? "", general?.id ?? ""]);
+  // A delayed list read or a second conversation row must not hide the
+  // private record that actually holds the message. Read every conversation
+  // and assert both directions of isolation, rather than trusting the first
+  // row returned for each binding.
   await expect
     .poll(async () => {
-      const details = await readDetails();
-      return {
-        boundHasWorld: (details[bound?.id ?? ""] ?? "").includes("world-only hello"),
-        generalHasGeneral: (details[general?.id ?? ""] ?? "").includes("general-only hello")
-      };
+      return page.evaluate(async () => {
+        const listResponse = await fetch("/api/v1/ai/conversations", { credentials: "include" });
+        const list = (await listResponse.json()) as {
+          items: Array<{ id: string; object_id: string | null }>;
+        };
+        const details: Array<{ object_id: string | null; text: string }> = [];
+        for (const item of list.items) {
+          const response = await fetch(`/api/v1/ai/conversations/${item.id}`, {
+            credentials: "include"
+          });
+          const data = (await response.json()) as { messages: Array<{ content: string }> };
+          details.push({
+            object_id: item.object_id,
+            text: data.messages.map((message) => message.content).join("\n")
+          });
+        }
+        return {
+          boundHasWorld: details.some(
+            (entry) => entry.object_id !== null && entry.text.includes("world-only hello")
+          ),
+          generalHasGeneral: details.some(
+            (entry) => entry.object_id === null && entry.text.includes("general-only hello")
+          ),
+          crossRead: details.some(
+            (entry) =>
+              (entry.object_id !== null && entry.text.includes("general-only hello")) ||
+              (entry.object_id === null && entry.text.includes("world-only hello"))
+          )
+        };
+      });
     }, { timeout: 15_000 })
-    .toEqual({ boundHasWorld: true, generalHasGeneral: true });
-  const details = await readDetails();
-  expect(details[bound?.id ?? ""]).toContain("world-only hello");
-  expect(details[bound?.id ?? ""]).not.toContain("general-only hello");
-  expect(details[general?.id ?? ""]).toContain("general-only hello");
-  expect(details[general?.id ?? ""]).not.toContain("world-only hello");
+    .toEqual({ boundHasWorld: true, generalHasGeneral: true, crossRead: false });
 });

@@ -70,9 +70,21 @@ type SendMessageResult struct {
 	// RejectedActions counts model-proposed actions that the server refused to
 	// turn into a proposal or confirmation. It keeps "the model said nothing"
 	// distinguishable from "the model proposed something invalid".
-	RejectedActions int         `json:"rejected_actions,omitempty"`
-	ContextStale    bool        `json:"context_stale,omitempty"`
-	Usage           model.Usage `json:"usage"`
+	RejectedActions int `json:"rejected_actions,omitempty"`
+	// Rejections explains each refused action in user-facing language. The
+	// count remains for compatibility; the list is what the UI shows.
+	Rejections   []ActionRejection `json:"rejections,omitempty"`
+	ContextStale bool              `json:"context_stale,omitempty"`
+	Usage        model.Usage       `json:"usage"`
+}
+
+// ActionRejection is the bounded, non-secret reason one model action was not
+// turned into a proposal or confirmation. Stage is a stable diagnostic code;
+// Message is a localized sentence safe to render in chat.
+type ActionRejection struct {
+	CapabilityID string `json:"capability_id"`
+	Stage        string `json:"stage"`
+	Message      string `json:"message"`
 }
 
 type aiTurn struct {
@@ -148,7 +160,12 @@ func (s *Service) SendMessage(ctx context.Context, input SendMessageInput) (*Sen
 	if err != nil {
 		return nil, err
 	}
-	system, messages, inputChars, err := buildPrompt(profile, private, projection, history, input.Content, input.Intent)
+	inputBudget := model.MaxModelInputChars
+	if s.quota != nil {
+		inputBudget = s.quota.Config().MaxInputChars
+	}
+	system, messages, inputChars, err := buildPromptWithin(profile, private, projection, history,
+		input.Content, input.Intent, inputBudget)
 	if err != nil {
 		return nil, err
 	}
@@ -248,14 +265,32 @@ SELECT id, user_id, object_id, title, created_at, updated_at, deleted_at
 	}
 	contextStale := input.Object != nil && effective.ObjectVersion != input.Object.Version
 
-	userMessage, err := insertMessageTx(ctx, tx, input.ConversationID, "user", input.Content, turn.mode, nil)
+	userMessage, err := insertMessageTx(ctx, tx, input.ConversationID, "user", input.Content, turn.mode, nil, nil)
 	if err != nil {
 		return nil, err
 	}
-	parseStatus := turn.parseStatus
-	assistantMessage, err := insertMessageTx(ctx, tx, input.ConversationID, "assistant", turn.reply, turn.mode, &parseStatus)
-	if err != nil {
-		return nil, err
+
+	// A raw provider document must never become chat text. When parsing fell
+	// back and the output still looks like a JSON envelope, the assistant
+	// message is replaced by a short server-authored sentence and the detailed
+	// reason is stored as a bounded notice. Plain prose remains a normal reply:
+	// it is a legitimate refusal or answer, not an unreadable document.
+	zh := containsCJK(input.Content)
+	fallbackReason := ""
+	if turn.parseStatus == "fallback" && looksLikeModelJSON(turn.reply) {
+		turn.reply, fallbackReason = fallbackReply(zh, turn.response.FinishReason)
+	}
+	notices := make([]string, 0, 4)
+	rejections := make([]ActionRejection, 0, len(turn.actions))
+	addRejection := func(capabilityID, stage string) {
+		message := rejectionExplanation(stage, zh)
+		if message == "" {
+			return
+		}
+		rejections = append(rejections, ActionRejection{
+			CapabilityID: capabilityID, Stage: stage, Message: message,
+		})
+		notices = append(notices, message)
 	}
 	if _, err := tx.Exec(ctx, `
 UPDATE ai_conversations SET updated_at = GREATEST(now(), updated_at) WHERE id = $1`,
@@ -306,17 +341,19 @@ UPDATE ai_conversations SET updated_at = GREATEST(now(), updated_at) WHERE id = 
 		for _, action := range turn.actions {
 			if remaining <= 0 {
 				s.logActionRejection(action.CapabilityID, "action_budget", "")
+				addRejection(action.CapabilityID, "action_budget")
 				break
 			}
 			var result *AcceptedAction
+			var rejection *actionRejection
 			if input.Object != nil {
-				result, err = s.applyModelAction(ctx, tx, input, effective, action)
+				result, rejection, err = s.applyModelAction(ctx, tx, input, effective, action)
 			} else {
-				var rejection *actionRejection
 				result, rejection, err = s.applyGlobalModelAction(ctx, tx, input, effective, action)
-				if rejection != nil {
-					s.logActionRejection(action.CapabilityID, rejection.Stage, rejection.Detail)
-				}
+			}
+			if rejection != nil {
+				s.logActionRejection(action.CapabilityID, rejection.Stage, rejection.Detail)
+				addRejection(action.CapabilityID, rejection.Stage)
 			}
 			if err != nil {
 				return nil, err
@@ -326,6 +363,22 @@ UPDATE ai_conversations SET updated_at = GREATEST(now(), updated_at) WHERE id = 
 				remaining--
 			}
 		}
+	}
+	if contextStale {
+		addRejection("", "context_stale")
+	}
+	if fallbackReason != "" {
+		notices = append(notices, fallbackNotice(zh, fallbackReason))
+	}
+	parseStatus := turn.parseStatus
+	var notice *string
+	if text := joinNoticeText(notices); text != "" {
+		notice = &text
+	}
+	assistantMessage, err := insertMessageTx(ctx, tx, input.ConversationID, "assistant",
+		turn.reply, turn.mode, &parseStatus, notice)
+	if err != nil {
+		return nil, err
 	}
 	if err := s.audit.Write(ctx, tx, audit.Event{
 		Actor:        effective.Actor(),
@@ -352,7 +405,8 @@ UPDATE ai_conversations SET updated_at = GREATEST(now(), updated_at) WHERE id = 
 	result := &SendMessageResult{
 		UserMessage: userMessage, AssistantMessage: assistantMessage,
 		ModelMode: turn.mode, ParseStatus: turn.parseStatus,
-		ProposedActions: accepted, RejectedActions: rejected, ContextStale: contextStale,
+		ProposedActions: accepted, RejectedActions: rejected,
+		Rejections: rejections, ContextStale: contextStale,
 		Usage: turn.response.Usage,
 	}
 	encoded, err := json.Marshal(result)
@@ -375,86 +429,87 @@ func (s *Service) applyModelAction(
 	input SendMessageInput,
 	effective *trust.Effective,
 	action rawAction,
-) (*AcceptedAction, error) {
+) (*AcceptedAction, *actionRejection, error) {
 	switch action.CapabilityID {
 	case "object.propose_change":
 		var proposal proposalActionInput
 		if err := decodeSingleJSON(string(action.Input), &proposal); err != nil {
-			return nil, nil
+			return nil, &actionRejection{Stage: "input_json", Detail: truncateActionDetail(err.Error())}, nil
 		}
 		if proposal.Action == "" || len(proposal.Input) == 0 {
-			return nil, nil
+			return nil, &actionRejection{Stage: "empty_action"}, nil
 		}
 		if proposal.ObjectID != nil && *proposal.ObjectID != input.Object.ObjectID.String() {
-			return nil, nil
+			return nil, &actionRejection{Stage: "object_mismatch"}, nil
 		}
 		if proposal.ExpectedVersion != nil && *proposal.ExpectedVersion != effective.ObjectVersion {
-			return nil, nil
+			return nil, &actionRejection{Stage: "version_mismatch"}, nil
 		}
 		if !effective.Can("contribute") {
-			return nil, nil
+			return nil, &actionRejection{Stage: "permission"}, nil
 		}
 		proposalID, accepted, err := s.recordProposalAction(ctx, tx, input, effective,
 			proposal.Action, proposal.Input)
 		if err != nil {
-			return nil, err
+			return nil, nil, err
 		}
 		if !accepted {
-			return nil, nil
+			return nil, &actionRejection{Stage: "proposal_not_accepted"}, nil
 		}
 		return &AcceptedAction{
 			Kind: "proposal", ProposalID: &proposalID, Action: proposal.Action,
-		}, nil
+		}, nil, nil
 	case "object.derive":
 		var derive deriveActionInput
 		if err := decodeSingleJSON(string(action.Input), &derive); err != nil {
-			return nil, nil
+			return nil, &actionRejection{Stage: "input_json", Detail: truncateActionDetail(err.Error())}, nil
 		}
 		if derive.ObjectID != nil && *derive.ObjectID != input.Object.ObjectID.String() {
-			return nil, nil
+			return nil, &actionRejection{Stage: "object_mismatch"}, nil
 		}
 		if derive.ExpectedVersion != nil && *derive.ExpectedVersion != effective.ObjectVersion {
-			return nil, nil
+			return nil, &actionRejection{Stage: "derive_version"}, nil
 		}
 		if !effective.Can("derive") {
-			return nil, nil
+			return nil, &actionRejection{Stage: "derive_permission"}, nil
 		}
 		confirmationID, accepted, err := s.recordDeriveConfirmation(ctx, tx, input, effective, derive)
 		if err != nil {
-			return nil, err
+			return nil, nil, err
 		}
 		if !accepted {
-			return nil, nil
+			return nil, &actionRejection{Stage: "derive_not_accepted"}, nil
 		}
 		return &AcceptedAction{
 			Kind: "confirmation", ConfirmationID: &confirmationID,
 			Action: trust.ConfirmationDeriveCreate,
-		}, nil
+		}, nil, nil
 	case "world.reimagine":
 		if input.Object == nil || input.Object.ObjectType != "open_world" || s.proposals == nil {
-			return nil, nil
+			return nil, &actionRejection{Stage: "reimagine_unsupported"}, nil
 		}
 		if !effective.Can("contribute") {
-			return nil, nil
+			return nil, &actionRejection{Stage: "permission"}, nil
 		}
 		var reimagine worldReimagineInput
 		if err := decodeSingleJSON(string(action.Input), &reimagine); err != nil {
-			return nil, nil
+			return nil, &actionRejection{Stage: "reimagine_decode", Detail: truncateActionDetail(err.Error())}, nil
 		}
 		if len(reimagine.Brief) == 0 {
-			return nil, nil
+			return nil, &actionRejection{Stage: "reimagine_decode", Detail: "empty brief"}, nil
 		}
-		seed, err := worldseed.Decode(reimagine.Brief)
+		normalized, _ := normalizingSeedSurfaces(reimagine.Brief)
+		seed, err := worldseed.Decode(normalized)
 		if err != nil {
-			return nil, nil
+			return nil, &actionRejection{Stage: "reimagine_decode", Detail: truncateActionDetail(err.Error())}, nil
 		}
 		result, err := worldseed.Reshape(input.Object.State, seed)
 		if err != nil {
-			return nil, nil
+			return nil, &actionRejection{Stage: "reimagine_reshape", Detail: truncateActionDetail(err.Error())}, nil
 		}
 		encoded, err := json.Marshal(result.State)
 		if err != nil {
-			return nil, nil
+			return nil, &actionRejection{Stage: "reimagine_encode", Detail: truncateActionDetail(err.Error())}, nil
 		}
 		summary := strings.TrimSpace(reimagine.Summary)
 		if summary == "" || utf8.RuneCountInString(summary) > 500 {
@@ -464,23 +519,23 @@ func (s *Service) applyModelAction(
 			"note": summary, "content": json.RawMessage(encoded),
 		})
 		if err != nil {
-			return nil, nil
+			return nil, &actionRejection{Stage: "reimagine_encode", Detail: truncateActionDetail(err.Error())}, nil
 		}
 		proposalID, accepted, err := s.proposals.CreateProposalTx(ctx, tx,
 			input.Object.ObjectID, input.UserID, effective.AIProfileID,
 			effective.DelegationID, "world.reimagine", "reshape_world", payload,
 			effective.ObjectVersion, input.RequestID, input.IPHash)
 		if err != nil {
-			return nil, err
+			return nil, nil, err
 		}
 		if !accepted {
-			return nil, nil
+			return nil, &actionRejection{Stage: "proposal_not_accepted"}, nil
 		}
 		return &AcceptedAction{
 			Kind: "proposal", ProposalID: &proposalID, Action: "reshape_world",
-		}, nil
+		}, nil, nil
 	default:
-		return nil, nil
+		return nil, &actionRejection{Stage: "capability_id"}, nil
 	}
 }
 
@@ -503,7 +558,11 @@ func buildWorldCreateContent(create worldCreateActionInput) (json.RawMessage, *a
 	if len(create.Brief) == 0 {
 		return create.Content, nil
 	}
-	seed, err := worldseed.Decode(create.Brief)
+	// Benign provider shapes (audio listed as a tab) are normalized before the
+	// strict compiler sees them; the normalized brief still passes through the
+	// full Decode, Compose and ValidateCreate chain.
+	brief, _ := normalizingSeedSurfaces(create.Brief)
+	seed, err := worldseed.Decode(brief)
 	if err != nil {
 		return nil, &actionRejection{Stage: "seed_decode", Detail: truncateActionDetail(err.Error())}
 	}
@@ -633,7 +692,7 @@ func (s *Service) recordDeriveConfirmation(ctx context.Context, tx pgx.Tx, input
 
 func (s *Service) history(ctx context.Context, conversationID uuid.UUID) ([]Message, error) {
 	rows, err := s.db.Query(ctx, `
-SELECT id, conversation_id, role, content, model_mode, parse_status, created_at
+SELECT id, conversation_id, role, content, model_mode, parse_status, notice, created_at
   FROM ai_messages
  WHERE conversation_id = $1
  ORDER BY created_at DESC, id DESC
@@ -646,7 +705,8 @@ SELECT id, conversation_id, role, content, model_mode, parse_status, created_at
 	for rows.Next() {
 		var item Message
 		if err := rows.Scan(&item.ID, &item.ConversationID, &item.Role,
-			&item.Content, &item.ModelMode, &item.ParseStatus, &item.CreatedAt); err != nil {
+			&item.Content, &item.ModelMode, &item.ParseStatus, &item.Notice,
+			&item.CreatedAt); err != nil {
 			return nil, err
 		}
 		items = append(items, item)
@@ -660,7 +720,7 @@ SELECT id, conversation_id, role, content, model_mode, parse_status, created_at
 	return items, nil
 }
 
-func insertMessageTx(ctx context.Context, tx pgx.Tx, conversationID uuid.UUID, role, content, mode string, parseStatus *string) (Message, error) {
+func insertMessageTx(ctx context.Context, tx pgx.Tx, conversationID uuid.UUID, role, content, mode string, parseStatus, notice *string) (Message, error) {
 	messageID, err := uuid.NewV7()
 	if err != nil {
 		return Message{}, err
@@ -668,18 +728,20 @@ func insertMessageTx(ctx context.Context, tx pgx.Tx, conversationID uuid.UUID, r
 	var (
 		item         Message
 		statusResult *string
+		noticeResult *string
 	)
 	err = tx.QueryRow(ctx, `
-INSERT INTO ai_messages (id, conversation_id, role, content, model_mode, parse_status)
-VALUES ($1,$2,$3,$4,$5,$6)
-RETURNING id, conversation_id, role, content, model_mode, parse_status, created_at`,
-		messageID.String(), conversationID.String(), role, content, mode, parseStatus).Scan(
+INSERT INTO ai_messages (id, conversation_id, role, content, model_mode, parse_status, notice)
+VALUES ($1,$2,$3,$4,$5,$6,$7)
+RETURNING id, conversation_id, role, content, model_mode, parse_status, notice, created_at`,
+		messageID.String(), conversationID.String(), role, content, mode, parseStatus, notice).Scan(
 		&item.ID, &item.ConversationID, &item.Role, &item.Content,
-		&item.ModelMode, &statusResult, &item.CreatedAt)
+		&item.ModelMode, &statusResult, &noticeResult, &item.CreatedAt)
 	if err != nil {
 		return Message{}, err
 	}
 	item.ParseStatus = statusResult
+	item.Notice = noticeResult
 	return item, nil
 }
 

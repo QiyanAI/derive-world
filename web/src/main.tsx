@@ -12,6 +12,7 @@ import "./styles/v2.css";
 import "./styles/phase2.css";
 import "./styles/phase2c.css";
 import "./styles/phase2e.css";
+import "./styles/phase2-remediation.css";
 
 const rootElement = document.getElementById("root");
 if (!rootElement) {

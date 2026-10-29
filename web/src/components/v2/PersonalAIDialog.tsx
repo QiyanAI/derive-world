@@ -17,8 +17,10 @@ import {
 import { ErrorNotice } from "../../errors";
 import { useI18n } from "../../i18n";
 import { useMeta } from "../../meta";
+import { looksLikeJSONContent } from "../../worldLabels";
 import Icon from "./Icon";
 import Modal from "./Modal";
+import WorldProposalCard from "./WorldProposalCard";
 
 type Trace = { mode: "fixture" | "real"; at: string };
 
@@ -50,12 +52,29 @@ export default function PersonalAIDialog({
   const [notice, setNotice] = useState("");
   const [error, setError] = useState<unknown>(null);
   const [lastMode, setLastMode] = useState<"fixture" | "real" | null>(null);
+  const [ready, setReady] = useState(false);
+  const [lastPrompt, setLastPrompt] = useState("");
   const sentInitial = useRef("");
+  const transcriptRef = useRef<HTMLDivElement | null>(null);
 
   const worldProposals = useMemo(
     () => confirmations.filter((item) => item.action === "world.create"),
     [confirmations]
   );
+  const lastAssistant = useMemo(() => {
+    for (let index = messages.length - 1; index >= 0; index -= 1) {
+      const message = messages[index];
+      if (message?.role === "assistant") {
+        return message;
+      }
+    }
+    return null;
+  }, [messages]);
+  const canRetry =
+    busy === "" &&
+    lastPrompt !== "" &&
+    Boolean(lastAssistant) &&
+    (Boolean(lastAssistant?.notice) || lastAssistant?.parse_status === "fallback");
 
   const loadPending = useCallback(async () => {
     try {
@@ -88,6 +107,7 @@ export default function PersonalAIDialog({
     setNotice("");
     setBusy("");
     setLastMode(null);
+    setReady(false);
     try {
       const raw = window.sessionStorage.getItem("dw:last-ai-inference");
       if (raw) {
@@ -110,20 +130,27 @@ export default function PersonalAIDialog({
           setError(failure);
         }
       });
-    void loadConversation().catch((failure) => {
-      if (!cancelled) {
-        setError(failure);
-      }
-    });
+    void loadConversation()
+      .catch((failure) => {
+        if (!cancelled) {
+          setError(failure);
+        }
+      })
+      .finally(() => {
+        if (!cancelled) {
+          setReady(true);
+        }
+      });
     void loadPending();
     return () => {
       cancelled = true;
     };
   }, [open, loadConversation, loadPending]);
 
+  // Wait until the conversation list has loaded before auto-sending. Sending
+  // first creates a second conversation and can overwrite the newest turn.
   useEffect(() => {
-    if (!open) {
-      sentInitial.current = "";
+    if (!open || !ready) {
       return;
     }
     if (!initialPrompt || sentInitial.current === initialPrompt) {
@@ -132,7 +159,21 @@ export default function PersonalAIDialog({
     sentInitial.current = initialPrompt;
     void send(initialPrompt, "create");
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [open, initialPrompt]);
+  }, [open, ready, initialPrompt]);
+
+  useEffect(() => {
+    if (!open) {
+      sentInitial.current = "";
+    }
+  }, [open]);
+
+  useEffect(() => {
+    const node = transcriptRef.current;
+    if (!node) {
+      return;
+    }
+    node.scrollTop = node.scrollHeight;
+  }, [messages.length, worldProposals.length, busy]);
 
   async function send(contentOverride?: string, intent?: "create" | "change") {
     const content = (contentOverride ?? draft).trim();
@@ -142,6 +183,7 @@ export default function PersonalAIDialog({
     setBusy("send");
     setError(null);
     setNotice("");
+    setLastPrompt(content);
     try {
       let active = conversationID;
       if (!active) {
@@ -162,14 +204,16 @@ export default function PersonalAIDialog({
       window.dispatchEvent(new CustomEvent("dw:ai-inference", { detail: trace }));
       if (result.proposed_actions.some((action) => action.action === "world.create")) {
         setNotice(t("ai.universal.proposalHint"));
-      } else if ((result.rejected_actions ?? 0) > 0) {
-        setNotice(t("ai.universal.rejected"));
-      } else if (result.parse_status === "structured") {
+      } else if (result.parse_status === "structured" && result.proposed_actions.length === 0) {
         setNotice(t("ai.universal.noProposal"));
       }
       await loadPending();
     } catch (failure) {
       setError(failure);
+      // Keep the user's idea so a failure never costs them the sentence.
+      if (contentOverride) {
+        setDraft(content);
+      }
     } finally {
       setBusy("");
     }
@@ -212,6 +256,7 @@ export default function PersonalAIDialog({
     setBusy("new");
     setError(null);
     setNotice("");
+    setLastPrompt("");
     try {
       const created = await createConversation({ title: t("ai.universal.title").slice(0, 120) });
       setConversationID(created.id);
@@ -229,8 +274,8 @@ export default function PersonalAIDialog({
     <Modal
       open={open}
       onClose={onClose}
-      title={t("ai.universal.title")}
-      kicker={t("ai.universal.kicker")}
+      title={zh ? "和我的 AI 一起创造" : "Create with my AI"}
+      kicker={zh ? "世界创造" : "WORLD CREATION"}
       wide
       className="dw-personal-ai-modal"
       actions={
@@ -253,7 +298,7 @@ export default function PersonalAIDialog({
           </span>
           <div>
             <strong>{profileName(profile, t("ai.universal.title"))}</strong>
-            <p>{t("ai.universal.lead")}</p>
+            <p>{zh ? "说出你想创造的世界。我会准备一份可以真正运行的方案，由你决定是否创建。" : "Describe the world you want. I will prepare a plan that can really run; you decide whether to create it."}</p>
             <small>{t("ai.universal.identity")}</small>
           </div>
           <span className={`dw-personal-ai-mode is-${activeMode}`}>
@@ -265,7 +310,7 @@ export default function PersonalAIDialog({
         <div className="dw-personal-ai-context">
           <span className="dw-personal-ai-general">
             <Icon name="world" size={14} />
-            {t("ai.universal.general")}
+            {zh ? "创造模式 · 每次创建都由你确认" : "Creation mode · you approve every world"}
           </span>
           <span className="dw-personal-ai-note">
             {activeMode === "fixture" ? t("ai.universal.fixtureNote") : t("ai.universal.realNote")}
@@ -274,49 +319,16 @@ export default function PersonalAIDialog({
 
         {worldProposals.length > 0 ? (
           <section className="dw-personal-ai-proposals" aria-label={t("ai.universal.worldProposal")}>
-            <h3>{t("ai.universal.worldProposal")}</h3>
+            <h3>{zh ? "等待你确认的世界方案" : "World plans waiting for your approval"}</h3>
             {worldProposals.map((item) => (
-              <article key={item.id} className="dw-personal-ai-proposal" data-testid="world-proposal">
-                <div>
-                  <p className="dw-inspect-kicker">{t("ai.universal.pending")}</p>
-                  <strong>{item.effect?.title || item.target_object_title || t("ai.universal.worldProposal")}</strong>
-                  {item.effect?.summary ? <p>{item.effect.summary}</p> : null}
-                  {typeof item.effect?.node_count === "number" ? (
-                    <small>
-                      {t("openWorld.summary", {
-                        kinds: item.effect.kind_count ?? 0,
-                        nodes: item.effect.node_count ?? 0,
-                        rules: item.effect.rule_count ?? 0
-                      })}
-                    </small>
-                  ) : null}
-                  {item.effect?.surfaces && item.effect.surfaces.length > 0 ? (
-                    <small className="dw-world-proposal-surfaces" data-testid="world-proposal-surfaces">
-                      {(zh ? "它将真正以这些方式运行：" : "It will really run as: ") +
-                        item.effect.surfaces.map((surface) => surfaceLabel(surface, zh)).join(" · ")}
-                    </small>
-                  ) : null}
-                  <small>{item.permission_summary}</small>
-                </div>
-                <div className="dw-personal-ai-proposal-actions">
-                  <button
-                    className="dw-button dw-button-primary dw-button-small"
-                    type="button"
-                    disabled={busy !== ""}
-                    onClick={() => void createProposed(item)}
-                  >
-                    {busy === `approve:${item.id}` ? t("ai.universal.creating") : t("ai.universal.createWorld")}
-                  </button>
-                  <button
-                    className="dw-button dw-button-ghost dw-button-small"
-                    type="button"
-                    disabled={busy !== ""}
-                    onClick={() => void dismissProposal(item)}
-                  >
-                    {t("ai.universal.deny")}
-                  </button>
-                </div>
-              </article>
+              <WorldProposalCard
+                key={item.id}
+                item={item}
+                busy={busy}
+                zh={zh}
+                onCreate={(proposal) => void createProposed(proposal)}
+                onDismiss={(proposal) => void dismissProposal(proposal)}
+              />
             ))}
           </section>
         ) : null}
@@ -328,8 +340,8 @@ export default function PersonalAIDialog({
         ) : null}
         {error ? <ErrorNotice error={error} compact /> : null}
 
-        <div className="dw-personal-ai-messages" aria-live="polite" data-testid="personal-ai-messages">
-          {messages.length === 0 ? <p className="muted">{t("ai.universal.empty")}</p> : null}
+        <div className="dw-personal-ai-messages" aria-live="polite" ref={transcriptRef} data-testid="personal-ai-messages">
+          {messages.length === 0 && busy === "" ? <p className="muted">{t("ai.universal.empty")}</p> : null}
           {messages.map((message) => (
             <div
               key={message.id}
@@ -338,14 +350,47 @@ export default function PersonalAIDialog({
             >
               <small>
                 {message.role === "user" ? (zh ? "你" : "You") : profileName(profile, t("ai.universal.title"))}
-                {message.model_mode === "fixture" ? ` · ${t("mode.fixture")}` : ""}
               </small>
-              <p>{message.content}</p>
+              {looksLikeJSONContent(message.content) ? (
+                <p className="dw-ai-unsafe">
+                  {zh ? "这条旧消息不是可读的对话内容，已隐藏。请重新提出你的想法。" : "This old message is not readable conversation; it has been hidden. Please ask again."}
+                </p>
+              ) : (
+                <p>{message.content}</p>
+              )}
+              {message.notice ? (
+                <p className="dw-ai-notice" role="status">
+                  <Icon name="shield" size={13} />
+                  {message.notice}
+                </p>
+              ) : null}
             </div>
           ))}
+          {busy === "send" ? (
+            <div className="dw-personal-ai-message is-assistant is-pending" role="status">
+              <small>{profileName(profile, t("ai.universal.title"))}</small>
+              <p>
+                <span className="dw-thinking-dots" aria-hidden="true">
+                  <i />
+                  <i />
+                  <i />
+                </span>
+                {zh ? "正在准备方案…" : "Preparing a plan…"}
+              </p>
+            </div>
+          ) : null}
         </div>
 
-        {messages.length === 0 && worldProposals.length === 0 ? (
+        {canRetry ? (
+          <div className="dw-ai-retry">
+            <button className="dw-button dw-button-ghost dw-button-small" type="button" onClick={() => void send(lastPrompt, "create")}>
+              <Icon name="reset" size={14} />
+              {zh ? "用刚才的想法再试一次" : "Try that idea again"}
+            </button>
+          </div>
+        ) : null}
+
+        {messages.length === 0 && worldProposals.length === 0 && busy === "" ? (
           <div className="dw-personal-ai-suggestions">
             <button type="button" className="dw-chip" onClick={() => void send(t("ai.universal.quickFirst"))} disabled={busy !== ""}>
               <Icon name="spark" size={14} />
@@ -373,7 +418,7 @@ export default function PersonalAIDialog({
             rows={3}
             maxLength={16384}
             value={draft}
-            placeholder={t("ai.universal.placeholder")}
+            placeholder={zh ? "例如：一座会下雨、可以自由走动的城市。" : "For example: a city where it rains and I can walk freely."}
             onChange={(event) => setDraft(event.target.value)}
           />
           <button
@@ -398,20 +443,4 @@ export default function PersonalAIDialog({
       </div>
     </Modal>
   );
-}
-
-
-function surfaceLabel(surface: string, zh: boolean): string {
-  switch (surface) {
-    case "live":
-      return zh ? "可游玩/可观看的实时世界" : "playable or playing 2D world";
-    case "story":
-      return zh ? "可阅读的互动故事" : "readable interactive story";
-    case "workspace":
-      return zh ? "可使用的工作台" : "usable workbench";
-    case "custom":
-      return zh ? "自定义交互表面" : "custom interactive surface";
-    default:
-      return zh ? "可视空间" : "visual space";
-  }
 }

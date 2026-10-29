@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: Apache-2.0
 import { useCallback, useEffect, useState } from "react";
-import { Link } from "react-router";
+import { Link, useNavigate } from "react-router";
 import { listObjects, type ObjectListItem } from "../api";
 import ObjectCard from "../components/ObjectCard";
 import { ErrorNotice } from "../errors";
@@ -10,6 +10,7 @@ import { useI18n } from "../i18n";
 type Scope = "owned" | "shared" | "all";
 
 export default function ObjectsPage() {
+  const navigate = useNavigate();
   const { t } = useI18n();
   const { status: authStatus } = useAuth();
   const [scope, setScope] = useState<Scope>("all");
@@ -77,9 +78,21 @@ export default function ObjectsPage() {
           <h1>{t("objects.title")}</h1>
           <p className="lead">{t("objects.lead")}</p>
         </div>
-        <Link className="button" to="/objects/new">
-          {t("objects.create")}
-        </Link>
+        <div className="dw-inline-actions">
+          <button
+            className="button"
+            type="button"
+            onClick={() => {
+              navigate("/");
+              window.setTimeout(() => window.dispatchEvent(new Event("dw:create-world")), 120);
+            }}
+          >
+            {t("objects.create")}
+          </button>
+          <Link className="button button-ghost" to="/objects/new">
+            {t("objects.createOther")}
+          </Link>
+        </div>
       </div>
 
       <div className="list-toolbar">
@@ -112,9 +125,16 @@ export default function ObjectsPage() {
                 ? t("objects.emptyAll")
                 : t("objects.empty")}
           </p>
-          <Link className="button" to="/objects/new">
+          <button
+            className="button"
+            type="button"
+            onClick={() => {
+              navigate("/");
+              window.setTimeout(() => window.dispatchEvent(new Event("dw:create-world")), 120);
+            }}
+          >
             {t("objects.create")}
-          </Link>
+          </button>
         </div>
       ) : null}
 

@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: Apache-2.0
-import { lazy, Suspense, useEffect, useId, useState, type CSSProperties, type ReactNode } from "react";
+import { lazy, Suspense, useEffect, useId, useRef, useState, type CSSProperties, type ReactNode } from "react";
 import { useI18n, type MessageKey } from "../../i18n";
 import type {
   OpenWorldField,
@@ -1023,6 +1023,21 @@ function TabsNode({
   const children = Array.isArray(node.children) ? node.children : [];
   const fallback = stringValue(props.default, tabs[0]?.child_id ? stringValue(tabs[0].child_id, "") : "");
   const [active, setActive] = useState<string>(fallback);
+  const previousDefault = useRef(fallback);
+  // A user's tab choice survives ordinary world changes (a story choice, a
+  // collected light). Only a new experience default — for example an applied
+  // AI reshape that makes a new surface primary — moves the active tab, and a
+  // removed surface falls back to the current default.
+  useEffect(() => {
+    if (previousDefault.current !== fallback) {
+      previousDefault.current = fallback;
+      setActive(fallback);
+      return;
+    }
+    if (fallback !== "" && !children.some((child) => child.id === active)) {
+      setActive(fallback);
+    }
+  }, [active, children, fallback]);
   const activeChild = children.find((child) => child.id === active) ?? children[0];
   return (
     <section className="dw-exp-tabs" data-testid="world-experience-tabs">

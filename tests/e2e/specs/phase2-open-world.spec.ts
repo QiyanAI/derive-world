@@ -4,14 +4,14 @@ import { register, uniqueActor, fillStable } from "../support/actors";
 
 async function createFreeWorld(page: Page, title: string): Promise<string> {
   await page.goto("/");
-  await page.getByRole("button", { name: "Create a beginning" }).click();
+  await page.getByRole("button", { name: "Create a world" }).click();
   await fillStable(page.getByLabel("What do you want to begin?"), title);
-  await page.getByText("Advanced: start blank").click();
-  await page.getByRole("button", { name: "Define a free world" }).click();
-  await page.getByRole("button", { name: "Let it grow" }).click();
+  await page.getByText("Advanced: start from a blank world").click();
+  await page.getByRole("button", { name: "Create blank world" }).click();
   await expect(page.getByTestId("open-world-page")).toBeVisible();
   await expect(page).toHaveURL(/\/worlds\/[0-9a-f-]{36}/);
-  await page.getByRole("button", { name: "Structure", exact: true }).click();
+  await page.getByText("Advanced", { exact: true }).click();
+  await page.getByRole("button", { name: "World structure" }).click();
   return page.url().split("/worlds/")[1].split("?")[0];
 }
 
@@ -111,7 +111,9 @@ test("Phase 2 free world: define kinds, place things, run a rule, persist and de
 
   // Derive the world with its structure; the child keeps the shape but gets
   // new identity and does not rewrite the parent.
-  await page.getByRole("link", { name: "Branch", exact: true }).click();
+  await page.getByText("Advanced", { exact: true }).click();
+  await page.getByRole("button", { name: "Derive a new world" }).click();
+  await page.getByRole("link", { name: "Need more options? Open the full derive page" }).click();
   await expect(page).toHaveURL(new RegExp(`/objects/${worldID}/derive`));
   await page.getByLabel("Title of the new branch").fill("A world of different tides");
   await page.getByRole("button", { name: "Create derived object" }).click();

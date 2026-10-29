@@ -53,6 +53,19 @@ export default defineConfig({
       use: { ...devices["Desktop Firefox"], baseURL, ...firefoxChannel }
     },
     {
+      // The owner's acceptance videos were recorded on an ordinary laptop.
+      // These specs are the explicit 1366x768 evidence, independent of the
+      // 1280x720 desktop default.
+      name: "laptop-1366",
+      use: {
+        ...devices["Desktop Chrome"],
+        baseURL,
+        viewport: { width: 1366, height: 768 },
+        ...chromeChannel
+      },
+      testMatch: /(p0-readability-laptop|p0-create-sentence)\.spec\.ts/
+    },
+    {
       name: "mobile-chromium",
       use: {
         ...devices["Desktop Chrome"],

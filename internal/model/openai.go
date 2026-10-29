@@ -173,6 +173,7 @@ type chatResponse struct {
 		Message struct {
 			Content string `json:"content"`
 		} `json:"message"`
+		FinishReason string `json:"finish_reason"`
 	} `json:"choices"`
 	Usage struct {
 		PromptTokens     int `json:"prompt_tokens"`
@@ -300,8 +301,9 @@ func (o *OpenAICompatible) Complete(ctx context.Context, req Request) (Response,
 		outputTokens = 0
 	}
 	return Response{
-		Text:  text,
-		Model: responseModel,
+		Text:         text,
+		Model:        responseModel,
+		FinishReason: decoded.Choices[0].FinishReason,
 		Usage: Usage{
 			InputTokens:  inputTokens,
 			OutputTokens: outputTokens,

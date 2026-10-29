@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: Apache-2.0
 import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent } from "react";
-import { Link } from "react-router";
+import { Link, useNavigate } from "react-router";
 import {
   applyAction,
   errorMessage,
@@ -54,6 +54,7 @@ function pickCentral(
 }
 
 export default function FriendsPage() {
+  const navigate = useNavigate();
   const { t, lang } = useI18n();
   const { status, user } = useAuth();
   const zh = lang === "zh";
@@ -530,10 +531,17 @@ export default function FriendsPage() {
                   : "Create a world, then send a separate world invitation. Friendship never grants access by itself."}
               </p>
               <div className="dw-collab-center-actions">
-                <Link className="dw-button dw-button-primary" to="/">
+                <button
+                  className="dw-button dw-button-primary"
+                  type="button"
+                  onClick={() => {
+                    navigate("/");
+                    window.setTimeout(() => window.dispatchEvent(new Event("dw:create-world")), 120);
+                  }}
+                >
                   <Icon name="plus" size={15} />
-                  {zh ? "创建共同世界" : "Create a shared world"}
-                </Link>
+                  {zh ? "创建一个世界" : "Create a world"}
+                </button>
                 <button className="dw-button dw-button-ghost" type="button" onClick={() => setSearchOpen(true)}>
                   {zh ? "先找好友" : "Find a friend first"}
                 </button>

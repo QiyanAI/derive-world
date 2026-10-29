@@ -138,7 +138,8 @@ export const en = {
 
   "objects.title": "Living Objects",
   "objects.lead": "Every object has an authoritative version, a role for you, and an event history.",
-  "objects.create": "Create object",
+  "objects.create": "Create a world",
+  "objects.createOther": "Other object types (advanced)",
   "objects.tab.owned": "Owned",
   "objects.tab.shared": "Shared",
   "objects.tab.all": "All",
@@ -1370,7 +1371,7 @@ export const en = {
   "openWorld.deriveQuick": "Branch a new world",
   "openWorld.deriveOptions": "More branch options",
   "derive.working": "Branching…",
-  "openWorld.ai": "Ask my AI",
+  "openWorld.ai": "Create with my AI",
   "openWorld.structure": "Structure",
   "openWorld.createFirstKind": "Define the first kind",
   "openWorld.createFirstThing": "Place the first thing",

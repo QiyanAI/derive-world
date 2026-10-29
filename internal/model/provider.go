@@ -36,6 +36,10 @@ type Response struct {
 	Text  string
 	Usage Usage
 	Model string
+	// FinishReason is the provider's reason for stopping ("stop", "length",
+	// "content_filter", …). It is diagnostic only: callers must never treat a
+	// truncated response as complete.
+	FinishReason string
 }
 
 // Provider is the frozen model interface from G00 contract §A.9.1.

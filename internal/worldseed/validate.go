@@ -98,6 +98,22 @@ func validSurface(value string) bool {
 	}
 }
 
+// ValidSurface is the public form of the surface vocabulary. Personal AI uses
+// it to explain a rejected brief without importing the compiler internals.
+func ValidSurface(value string) bool { return validSurface(value) }
+
+// surfaceDiagnostic keeps a rejected value short and printable so the server
+// log names what failed without storing model text verbatim.
+func surfaceDiagnostic(value string) string {
+	trimmed := strings.TrimSpace(value)
+	trimmed = strings.ReplaceAll(trimmed, "\n", " ")
+	trimmed = strings.ReplaceAll(trimmed, "\r", " ")
+	if runeLength(trimmed) > 40 {
+		trimmed = string([]rune(trimmed)[:40]) + "…"
+	}
+	return "(" + trimmed + ")"
+}
+
 func surfacesOf(experience *Experience) []string {
 	if experience == nil {
 		return []string{"space"}
@@ -141,8 +157,11 @@ func validateExperienceSpec(brief *Brief) error {
 	}
 	seen := map[string]bool{}
 	for index, surface := range surfaces {
-		if !validSurface(surface) || seen[surface] {
-			return fmt.Errorf("%w: experience/surfaces/%d", ErrInvalid, index)
+		if !validSurface(surface) {
+			return fmt.Errorf("%w: experience/surfaces/%d %s", ErrInvalid, index, surfaceDiagnostic(surface))
+		}
+		if seen[surface] {
+			return fmt.Errorf("%w: experience/surfaces/%d %s (duplicate)", ErrInvalid, index, surfaceDiagnostic(surface))
 		}
 		seen[surface] = true
 	}

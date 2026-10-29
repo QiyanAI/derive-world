@@ -78,7 +78,10 @@ func (s *Service) CreateWorldCreateConfirmationTx(ctx context.Context, tx pgx.Tx
 		Title:      title,
 		Content:    canonicalContent,
 	}); err != nil {
-		return nil, false, nil
+		// Keep the reason for the caller's redacted diagnostic. The caller maps
+		// ErrInvalidRequest to a bounded rejection stage; it never returns this
+		// error to the client verbatim.
+		return nil, false, fmt.Errorf("%w: %v", ErrInvalidRequest, err)
 	}
 	payload := WorldCreatePayload{
 		Action:       ConfirmationWorldCreate,

@@ -4,9 +4,9 @@ import { fillStable, register, uniqueActor } from "../support/actors";
 
 async function createViaAI(page: Page, prompt: string, surface: string): Promise<void> {
   await page.goto("/");
-  await page.getByRole("button", { name: "Create a beginning" }).first().click();
+  await page.getByRole("button", { name: "Create a world" }).first().click();
   await fillStable(page.getByLabel("What do you want to begin?"), prompt);
-  await page.getByRole("button", { name: "Let my Personal AI create it" }).click();
+  await page.getByTestId("create-world-ai").click();
   const proposal = page.getByTestId("personal-ai-dialog").getByTestId("world-proposal").first();
   await expect(proposal).toBeVisible({ timeout: 30_000 });
   await proposal.getByRole("button", { name: "Create this world" }).click();

@@ -11,6 +11,11 @@ import Icon from "./Icon";
 const FOCUSABLE =
   'a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])';
 
+// Only the most recently opened modal may react to Escape. Capture listeners
+// on the document otherwise let one Escape close every stacked modal.
+const modalStack: string[] = [];
+let bodyOverflowBeforeModals = "";
+
 export default function Modal({
   open,
   onClose,
@@ -32,24 +37,33 @@ export default function Modal({
 }) {
   const panelRef = useRef<HTMLElement | null>(null);
   const restoreRef = useRef<HTMLElement | null>(null);
+  const onCloseRef = useRef(onClose);
   const titleID = useId();
+  const modalKey = useId();
+  onCloseRef.current = onClose;
 
   useEffect(() => {
     if (!open) {
       return;
     }
+    if (modalStack.length === 0) {
+      bodyOverflowBeforeModals = document.body.style.overflow;
+    }
+    modalStack.push(modalKey);
     restoreRef.current = document.activeElement instanceof HTMLElement ? document.activeElement : null;
-    const previousOverflow = document.body.style.overflow;
     document.body.style.overflow = "hidden";
     const panel = panelRef.current;
     const first = panel?.querySelector<HTMLElement>(FOCUSABLE);
     window.requestAnimationFrame(() => (first ?? panel)?.focus());
 
     function onKeyDown(event: KeyboardEvent) {
+      if (modalStack[modalStack.length - 1] !== modalKey) {
+        return;
+      }
       if (event.key === "Escape") {
         event.preventDefault();
         event.stopPropagation();
-        onClose();
+        onCloseRef.current();
         return;
       }
       if (event.key !== "Tab" || !panel) {
@@ -80,10 +94,16 @@ export default function Modal({
     document.addEventListener("keydown", onKeyDown, true);
     return () => {
       document.removeEventListener("keydown", onKeyDown, true);
-      document.body.style.overflow = previousOverflow;
+      const index = modalStack.lastIndexOf(modalKey);
+      if (index >= 0) {
+        modalStack.splice(index, 1);
+      }
+      if (modalStack.length === 0) {
+        document.body.style.overflow = bodyOverflowBeforeModals;
+      }
       restoreRef.current?.focus();
     };
-  }, [open, onClose]);
+  }, [open, modalKey]);
 
   if (!open || typeof document === "undefined") {
     return null;

@@ -104,9 +104,11 @@ test("V2 touch: the inspector opts into native vertical scrolling", async ({ pag
   const actor = uniqueActor("v2touchscroll", "V2 Touch Scroll Owner");
   await register(page, actor);
   await page.goto("/");
-  await page.getByRole("button", { name: "Create a beginning" }).click();
+  await page.getByRole("button", { name: "Create a world" }).click();
   await fillStable(page.getByLabel("What do you want to begin?"), "A touch scroll world");
-  await page.getByRole("button", { name: "Let it grow" }).click();
+  await page.getByText("Advanced: start from a blank world").click();
+  await page.getByRole("button", { name: "Idea scene" }).click();
+  await page.getByRole("button", { name: "Create blank world" }).click();
   const inspector = page.getByTestId("stage-inspector");
   await expect(inspector).toBeVisible();
 

@@ -4,9 +4,9 @@ import { fillStable, register, uniqueActor } from "../support/actors";
 
 async function createViaAI(page: Page, prompt: string, surface: string): Promise<string> {
   await page.goto("/");
-  await page.getByRole("button", { name: "Create a beginning" }).first().click();
+  await page.getByRole("button", { name: "Create a world" }).first().click();
   await fillStable(page.getByLabel("What do you want to begin?"), prompt);
-  await page.getByRole("button", { name: "Let my Personal AI create it" }).click();
+  await page.getByTestId("create-world-ai").click();
   const dialog = page.getByTestId("personal-ai-dialog");
   await expect(dialog).toBeVisible();
   const proposal = dialog.getByTestId("world-proposal").first();
@@ -117,12 +117,11 @@ test("Phase 2D: animation plays, a custom surface persists, and reshape/derive s
     "Create a world that is a playable star-dust forest where I gather three fallen lights",
     "world-live"
   );
-  await page.getByRole("button", { name: "Change with AI" }).click();
+  await page.getByTestId("ai-entry").click();
   await fillStable(page.locator("#dw-ai-compose"), "Turn this world into a playable star instrument");
   await page.getByRole("button", { name: "Send", exact: true }).click();
   const proposal = page.getByTestId("proposal-card").first();
   await expect(proposal).toBeVisible({ timeout: 30_000 });
-  page.once("dialog", (dialog) => void dialog.accept());
   await proposal.getByRole("button", { name: "Apply proposal" }).click();
   await expect(page.getByTestId("world-custom")).toBeVisible({ timeout: 30_000 });
   await page.getByTestId("custom-node-pad_a").click({ force: true });
@@ -132,7 +131,9 @@ test("Phase 2D: animation plays, a custom surface persists, and reshape/derive s
     .toBe("1");
 
   // Branch the reshaped world and change only the child.
-  await page.getByRole("button", { name: "Branch a new world" }).click();
+  await page.getByText("Advanced", { exact: true }).click();
+  await page.getByRole("button", { name: "Derive a new world" }).click();
+  await page.getByRole("dialog").getByRole("button", { name: "Create this branch" }).click();
   await expect(page).not.toHaveURL(gameURL, { timeout: 30_000 });
   await expect(page.getByTestId("world-custom")).toBeVisible({ timeout: 30_000 });
   const childURL = page.url();
