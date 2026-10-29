@@ -5,6 +5,9 @@ import (
 	"encoding/json"
 	"strings"
 	"testing"
+
+	"github.com/QiyanAI/derive-world/internal/objects"
+	"github.com/QiyanAI/derive-world/internal/worldseed"
 )
 
 const validWorldCreateBrief = `{
@@ -146,6 +149,150 @@ func TestWorldCreateRepairsBenignBriefShapes(t *testing.T) {
 			}
 		})
 	}
+}
+
+// A change to an existing world goes through the same bounded repairs as a
+// creation. Nothing here is guessed: the unknown key is removed, the number is
+// moved to its documented bound, and the change still has to decode strictly.
+func TestReimagineRepairsBenignBriefShapes(t *testing.T) {
+	state := json.RawMessage(`{"title":"Rain City","premise":"rain","kinds":[{"id":"k1","name":"Street","hue":210}],"nodes":[],"links":[],"rules":[],"views":["scene"],"tags":[]}`)
+	brief := json.RawMessage(`{
+		"premise":"A rainy street at night.",
+		"background":"heavy rain",
+		"things":[{"kind":0,"name":"Wet street"}],
+		"experience":{
+			"surfaces":["live"],
+			"live":{"particles":{"kind":"rain","count":900}}
+		}
+	}`)
+	seed, repair, rejection := decodeReimagineBrief(brief, state)
+	if rejection != nil {
+		t.Fatalf("a change with benign shapes was rejected at %s: %s", rejection.Stage, rejection.Detail)
+	}
+	if seed == nil || len(seed.Things) != 1 {
+		t.Fatal("the change lost its content")
+	}
+	if len(repair.Dropped) != 1 || repair.Dropped[0] != "$.background" {
+		t.Fatalf("dropped paths = %v", repair.Dropped)
+	}
+	if !repair.Clamped {
+		t.Fatal("an out-of-range particle count was not clamped")
+	}
+	if notice := seedRepairNotice(repair, true); notice == "" {
+		t.Fatal("the repair is invisible to the user")
+	}
+
+	ambiguous := json.RawMessage(`{"premise":"A rainy street.","things":[{"kind":4,"name":"Nowhere"}]}`)
+	if _, _, rejection := decodeReimagineBrief(ambiguous, state); rejection == nil {
+		t.Fatal("a thing pointing at a missing kind was accepted")
+	} else if rejection.Stage != "reimagine_decode" {
+		t.Fatalf("stage = %q", rejection.Stage)
+	}
+}
+
+// Personal AI must be able to keep modifying a world it already created. A
+// person says "add another lamp": the brief names one new thing and no kinds,
+// and the change still appends to the same world, keeping every existing id.
+func TestConsecutiveModificationAppendsToTheSameWorld(t *testing.T) {
+	state := composedWorldState(t, `{
+		"premise":"A rainy street at night.",
+		"kinds":[{"name":"Street"}],
+		"things":[{"kind":0,"name":"Wet street"}]
+	}`, "Rain City")
+	var before objects.OpenWorldState
+	if err := json.Unmarshal(state, &before); err != nil {
+		t.Fatalf("decode state: %v", err)
+	}
+	if len(before.Nodes) != 1 {
+		t.Fatalf("fixture has %d nodes", len(before.Nodes))
+	}
+	existingID := before.Nodes[0].ID
+
+	steps := []struct {
+		name  string
+		brief string
+	}{
+		{"thing by kind index", `{"things":[{"kind":0,"name":"A second lamp"}]}`},
+		{"thing by exact kind name", `{"things":[{"kind":"Street","name":"A third lamp"}]}`},
+		{"look change only", `{"experience":{"surfaces":["live"],"primary":"live",
+			"live":{"particles":{"kind":"rain","count":30}}}}`},
+	}
+	wantNodes := len(before.Nodes)
+	for _, step := range steps {
+		t.Run(step.name, func(t *testing.T) {
+			seed, _, rejection := decodeReimagineBrief(json.RawMessage(step.brief), state)
+			if rejection != nil {
+				t.Fatalf("change rejected at %s: %s", rejection.Stage, rejection.Detail)
+			}
+			result, err := worldseed.Reshape(state, seed)
+			if err != nil {
+				t.Fatalf("reshape: %v", err)
+			}
+			if strings.Contains(step.brief, "things") {
+				wantNodes++
+			}
+			if len(result.State.Nodes) != wantNodes {
+				t.Fatalf("nodes = %d, want %d", len(result.State.Nodes), wantNodes)
+			}
+			if result.State.Nodes[0].ID != existingID {
+				t.Fatalf("existing node id changed: %q", result.State.Nodes[0].ID)
+			}
+			if result.State.Premise != "A rainy street at night." {
+				t.Fatalf("premise was overwritten: %q", result.State.Premise)
+			}
+			state = mustMarshalState(t, result.State)
+		})
+	}
+}
+
+// A kind the world does not have is not guessed, even though its name would be
+// a plausible thing to add.
+func TestReimagineRejectsAnUnknownKind(t *testing.T) {
+	state := composedWorldState(t, `{
+		"premise":"A rainy street at night.",
+		"kinds":[{"name":"Street"}],
+		"things":[{"kind":0,"name":"Wet street"}]
+	}`, "Rain City")
+	_, _, rejection := decodeReimagineBrief(
+		json.RawMessage(`{"things":[{"kind":"Lighthouse","name":"A lighthouse"}]}`), state)
+	if rejection == nil {
+		t.Fatal("a thing of an unknown kind was accepted")
+	}
+	if rejection.Stage != "reimagine_decode" {
+		t.Fatalf("stage = %q", rejection.Stage)
+	}
+}
+
+func composedWorldState(t *testing.T, briefJSON, title string) json.RawMessage {
+	t.Helper()
+	brief, _, err := worldseed.DecodeRepairing(json.RawMessage(briefJSON))
+	if err != nil {
+		t.Fatalf("decode fixture brief: %v", err)
+	}
+	composition, err := worldseed.Compose(brief, title)
+	if err != nil {
+		t.Fatalf("compose fixture world: %v", err)
+	}
+	encoded, err := json.Marshal(composition.Content)
+	if err != nil {
+		t.Fatal(err)
+	}
+	state, _, err := objects.ValidateCreate(objects.CreateInput{
+		ObjectType: objects.TypeOpenWorld, Title: title, Content: encoded,
+	})
+	if err != nil {
+		t.Fatalf("validate fixture world: %v", err)
+	}
+	return state
+}
+
+func mustMarshalState(t *testing.T, state objects.OpenWorldState) json.RawMessage {
+	t.Helper()
+	encoded, err := json.Marshal(state)
+	if err != nil {
+		t.Fatalf("marshal state: %v", err)
+	}
+	return encoded
 }
 
 // Out-of-range presentation numbers are bounded, never re-guessed, and the

@@ -77,6 +77,7 @@ func TestPromptKeepsContractForANaturalChangeRequest(t *testing.T) {
 		"A world brief has this shape",
 		"particles count 0..120",
 		"send only what should change",
+		"you may leave kinds out",
 	} {
 		if !strings.Contains(system, phrase) {
 			t.Fatalf("a bound open world turn lacks %q", phrase)

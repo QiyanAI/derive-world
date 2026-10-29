@@ -267,6 +267,7 @@ func buildSystem(
 			system.WriteString("To change how an open world looks, moves, reads, is played or is worked in, use capability_id world.reimagine with input ")
 			system.WriteString(`{"summary":"...","brief":{...}}. The server merges the brief into the current world; the human still applies it. `)
 			system.WriteString("For an existing world send only what should change. Content you leave out is preserved, and kinds or things you name again are updated instead of duplicated, so reuse the exact names shown in the state. ")
+			system.WriteString("To add things of a kind the world already has, you may leave kinds out: things[].kind is then the 0-based index of that kind in the state's kinds array, or the kind's exact name. ")
 			system.WriteString("Never invent a kind, thing or field that is not in the state when you mean to change an existing one. ")
 			system.WriteString(worldBriefContract)
 			if guide {

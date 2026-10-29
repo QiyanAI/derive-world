@@ -535,11 +535,9 @@ func (s *Service) applyModelAction(
 		if len(reimagine.Brief) == 0 {
 			return nil, &actionRejection{Stage: "reimagine_decode", Detail: "empty brief"}, nil, nil
 		}
-		normalized, repair := repairingSeedBrief(reimagine.Brief)
-		seed, dropped, err := worldseed.DecodeRepairing(normalized)
-		repair.Dropped = dropped
-		if err != nil {
-			return nil, &actionRejection{Stage: "reimagine_decode", Detail: truncateActionDetail(err.Error())}, nil, nil
+		seed, repair, decodeRejection := decodeReimagineBrief(reimagine.Brief, input.Object.State)
+		if decodeRejection != nil {
+			return nil, decodeRejection, nil, nil
 		}
 		result, err := worldseed.Reshape(input.Object.State, seed)
 		if err != nil {
@@ -621,6 +619,27 @@ func repairingSeedBrief(raw json.RawMessage) (json.RawMessage, *seedRepair) {
 		repair.Clamped = true
 	}
 	return normalized, repair
+}
+
+// decodeReimagineBrief applies the same bounded repairs to a world.reimagine
+// brief as to a world.create brief: documented alternate shapes are normalized,
+// presentation numbers are clamped to their documented bounds, and unknown
+// field names are removed only when the rest still validates. The strict
+// decode, range and enum checks still run on the result, so a change that is
+// ambiguous or beyond the runtime is rejected instead of half-applied.
+func decodeReimagineBrief(raw, state json.RawMessage) (*worldseed.Brief, *seedRepair, *actionRejection) {
+	normalized, repair := repairingSeedBrief(raw)
+	// A change that adds content may name only the things; their kind is the
+	// index (or exact name) of a kind the world already has.
+	if completed, changed := adoptingExistingKinds(normalized, state); changed {
+		normalized = completed
+	}
+	seed, dropped, err := worldseed.DecodeRepairing(normalized)
+	if err != nil {
+		return nil, nil, &actionRejection{Stage: "reimagine_decode", Detail: truncateActionDetail(err.Error())}
+	}
+	repair.Dropped = dropped
+	return seed, repair, nil
 }
 
 // buildWorldCreateContent validates the model's world.create input before any

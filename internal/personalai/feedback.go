@@ -3,6 +3,7 @@ package personalai
 
 import (
 	"encoding/json"
+	"strconv"
 	"strings"
 	"unicode"
 	"unicode/utf8"
@@ -248,6 +249,156 @@ func joinNoticeText(notices []string) string {
 	}
 	runes := []rune(joined)
 	return string(runes[:maxRunes])
+}
+
+// adoptingExistingKinds completes a change brief that refers to kinds the
+// world already has. A person saying "add another lamp" produces a brief with
+// one thing and no kind declarations; refusing it would make every incremental
+// change fail. The prompt states the rule explicitly, so the mapping is exact:
+// when kinds are omitted, things[].kind is the 0-based index of the kind in the
+// state's kinds array, or the kind's exact name. The adopted declarations carry
+// only names and field labels, which a merge treats as the same kinds, so
+// nothing in the existing world is rewritten.
+func adoptingExistingKinds(raw, state json.RawMessage) (json.RawMessage, bool) {
+	document, ok := decodeObjectDocument(raw)
+	if !ok {
+		return raw, false
+	}
+	names := []string{}
+	declared, isList := document["kinds"].([]any)
+	if isList && len(declared) > 0 {
+		names = declaredKindNames(declared)
+	} else {
+		if !refersToKinds(document) {
+			return raw, false
+		}
+		stateNames, stateKinds, ok := existingKindDeclarations(state)
+		if !ok || len(stateKinds) == 0 {
+			return raw, false
+		}
+		names = stateNames
+		document["kinds"] = stateKinds
+	}
+	if !mapThingKindNames(document, names) && isList && len(declared) > 0 {
+		return raw, false
+	}
+	encoded, err := json.Marshal(document)
+	if err != nil {
+		return raw, false
+	}
+	return encoded, true
+}
+
+func decodeObjectDocument(raw json.RawMessage) (map[string]any, bool) {
+	var document map[string]any
+	decoder := json.NewDecoder(strings.NewReader(string(raw)))
+	decoder.UseNumber()
+	if err := decoder.Decode(&document); err != nil {
+		return nil, false
+	}
+	return document, true
+}
+
+func declaredKindNames(kinds []any) []string {
+	names := make([]string, 0, len(kinds))
+	for _, entry := range kinds {
+		kind, ok := entry.(map[string]any)
+		if !ok {
+			continue
+		}
+		if name, ok := kind["name"].(string); ok {
+			names = append(names, strings.TrimSpace(name))
+		}
+	}
+	return names
+}
+
+// refersToKinds reports whether the brief needs kind declarations to decode:
+// things, relations and interactions are all indexed by kind or thing.
+func refersToKinds(document map[string]any) bool {
+	for _, key := range []string{"things", "relations", "interactions"} {
+		if list, ok := document[key].([]any); ok && len(list) > 0 {
+			return true
+		}
+	}
+	return false
+}
+
+// existingKindDeclarations reads the world's current kinds into the brief shape.
+// Fields keep their labels and types so value mapping stays exact; hue and
+// appearance are deliberately left out, so an adopted kind is unchanged.
+func existingKindDeclarations(state json.RawMessage) ([]string, []any, bool) {
+	type stateField struct {
+		Label string `json:"label"`
+		Type  string `json:"type"`
+	}
+	var parsed struct {
+		Kinds []struct {
+			Name   string       `json:"name"`
+			Fields []stateField `json:"fields"`
+		} `json:"kinds"`
+	}
+	if err := json.Unmarshal(state, &parsed); err != nil {
+		return nil, nil, false
+	}
+	names := make([]string, 0, len(parsed.Kinds))
+	kinds := make([]any, 0, len(parsed.Kinds))
+	for _, kind := range parsed.Kinds {
+		name := strings.TrimSpace(kind.Name)
+		if name == "" {
+			continue
+		}
+		names = append(names, name)
+		entry := map[string]any{"name": name}
+		if len(kind.Fields) > 0 {
+			fields := make([]any, 0, len(kind.Fields))
+			for _, field := range kind.Fields {
+				if field.Label == "" || field.Type == "" {
+					continue
+				}
+				fields = append(fields, map[string]any{"label": field.Label, "type": field.Type})
+			}
+			if len(fields) > 0 {
+				entry["fields"] = fields
+			}
+		}
+		kinds = append(kinds, entry)
+	}
+	return names, kinds, true
+}
+
+// mapThingKindNames rewrites an exact kind name to its index. Anything that
+// does not match exactly stays as it was and is rejected by the strict decoder,
+// so an unknown kind is never guessed.
+func mapThingKindNames(document map[string]any, names []string) bool {
+	things, ok := document["things"].([]any)
+	if !ok || len(names) == 0 {
+		return false
+	}
+	changed := false
+	for _, entry := range things {
+		thing, ok := entry.(map[string]any)
+		if !ok {
+			continue
+		}
+		name, ok := thing["kind"].(string)
+		if !ok {
+			continue
+		}
+		index := -1
+		for position, candidate := range names {
+			if candidate == strings.TrimSpace(name) {
+				index = position
+				break
+			}
+		}
+		if index < 0 {
+			continue
+		}
+		thing["kind"] = json.Number(strconv.Itoa(index))
+		changed = true
+	}
+	return changed
 }
 
 // normalizingSeedBrief repairs two benign provider shapes before the strict
