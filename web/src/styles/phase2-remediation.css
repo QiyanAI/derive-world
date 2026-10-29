@@ -190,6 +190,10 @@
   display: flex;
   flex-wrap: wrap;
   gap: 8px;
+  /* The composer is sticky at the bottom of the modal body. Leave enough
+     scroll margin so the primary approval button can always be scrolled
+     above it on a 768px laptop. */
+  scroll-margin-bottom: 150px;
 }
 
 /* --- World header, advanced menu and origin banner ------------------------ */

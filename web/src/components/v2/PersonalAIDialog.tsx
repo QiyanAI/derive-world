@@ -56,6 +56,7 @@ export default function PersonalAIDialog({
   const [lastPrompt, setLastPrompt] = useState("");
   const sentInitial = useRef("");
   const transcriptRef = useRef<HTMLDivElement | null>(null);
+  const proposalRef = useRef<HTMLElement | null>(null);
 
   const worldProposals = useMemo(
     () => confirmations.filter((item) => item.action === "world.create"),
@@ -174,6 +175,19 @@ export default function PersonalAIDialog({
     }
     node.scrollTop = node.scrollHeight;
   }, [messages.length, worldProposals.length, busy]);
+
+  // A proposal's approval buttons must be visible when the plan arrives, even
+  // on a 768px laptop where the composer occupies the bottom of the modal.
+  useEffect(() => {
+    if (worldProposals.length === 0) {
+      return;
+    }
+    const timer = window.setTimeout(() => {
+      const actions = proposalRef.current?.querySelector<HTMLElement>(".dw-world-proposal-actions");
+      (actions ?? proposalRef.current)?.scrollIntoView({ block: "nearest", behavior: "smooth" });
+    }, 120);
+    return () => window.clearTimeout(timer);
+  }, [worldProposals.length]);
 
   async function send(contentOverride?: string, intent?: "create" | "change") {
     const content = (contentOverride ?? draft).trim();
@@ -317,22 +331,6 @@ export default function PersonalAIDialog({
           </span>
         </div>
 
-        {worldProposals.length > 0 ? (
-          <section className="dw-personal-ai-proposals" aria-label={t("ai.universal.worldProposal")}>
-            <h3>{zh ? "等待你确认的世界方案" : "World plans waiting for your approval"}</h3>
-            {worldProposals.map((item) => (
-              <WorldProposalCard
-                key={item.id}
-                item={item}
-                busy={busy}
-                zh={zh}
-                onCreate={(proposal) => void createProposed(proposal)}
-                onDismiss={(proposal) => void dismissProposal(proposal)}
-              />
-            ))}
-          </section>
-        ) : null}
-
         {notice ? (
           <p className="dw-form-success" role="status">
             {notice}
@@ -380,6 +378,26 @@ export default function PersonalAIDialog({
             </div>
           ) : null}
         </div>
+
+        {worldProposals.length > 0 ? (
+          <section
+            className="dw-personal-ai-proposals"
+            aria-label={t("ai.universal.worldProposal")}
+            ref={proposalRef}
+          >
+            <h3>{zh ? "等待你确认的世界方案" : "World plans waiting for your approval"}</h3>
+            {worldProposals.map((item) => (
+              <WorldProposalCard
+                key={item.id}
+                item={item}
+                busy={busy}
+                zh={zh}
+                onCreate={(proposal) => void createProposed(proposal)}
+                onDismiss={(proposal) => void dismissProposal(proposal)}
+              />
+            ))}
+          </section>
+        ) : null}
 
         {canRetry ? (
           <div className="dw-ai-retry">
