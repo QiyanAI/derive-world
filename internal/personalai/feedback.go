@@ -74,6 +74,66 @@ func fallbackNotice(zh bool, reason string) string {
 	return "Nothing was created or changed. Try again, or describe the idea a little more concretely."
 }
 
+// rejectionNotice returns the sentence in a stored notice that reports a
+// refused action, or "" when the notice only reports something else (a repaired
+// plan, a truncated reply). The match is against the closed sentence set, so it
+// can never be fooled by model-authored text: notices are server sentences.
+func rejectionNotice(notice string) string {
+	if strings.TrimSpace(notice) == "" {
+		return ""
+	}
+	for _, zh := range []bool{true, false} {
+		for _, stage := range rejectionStages {
+			if sentence := rejectionExplanation(stage, zh); sentence != "" &&
+				strings.Contains(notice, sentence) {
+				return sentence
+			}
+		}
+		// Unparseable and truncated provider output still means nothing was
+		// created, and the model should know its previous turn failed.
+		for _, reason := range []string{"unparseable", "truncated"} {
+			if sentence := fallbackNotice(zh, reason); strings.Contains(notice, sentence) {
+				return sentence
+			}
+		}
+		if sentence := rejectionExplanation("unknown_stage", zh); strings.Contains(notice, sentence) {
+			return sentence
+		}
+	}
+	return ""
+}
+
+// seedRepairNotice explains, in user-facing language, that the server had to
+// fit some detail of an accepted plan to what the runtime can actually run.
+// The plan is still real and still needs approval; this sentence only keeps the
+// difference between "exactly what you asked for" and "the closest runnable
+// version" honest.
+func seedRepairNotice(repair *seedRepair, zh bool) string {
+	if repair.empty() {
+		return ""
+	}
+	if zh {
+		return "方案里有几项细节无法识别，或超出了运行时的可用范围，已经按最接近的可用形式准备；其余部分仍按你的原意。"
+	}
+	return "A few details in the plan were not recognizable or were outside what the runtime supports, so they were fitted to the nearest usable form. The rest still follows what you asked for."
+}
+
+// rejectionStages lists every closed rejection stage. It exists so a stored
+// notice can be classified without persisting a second column: a notice may
+// also carry repair or truncation feedback for a turn that succeeded, and that
+// must never be described to the model as a refused plan.
+var rejectionStages = []string{
+	"title_or_body", "seed_decode", "reimagine_decode",
+	"seed_compose", "reimagine_reshape", "content_encode", "reimagine_encode",
+	"capability_id", "permission", "derive_permission",
+	"input_json", "empty_action",
+	"confirmation_invalid", "proposal_invalid", "derive_invalid",
+	"confirmation_not_accepted", "proposal_not_accepted", "derive_not_accepted",
+	"world_pending", "duplicate_action", "action_budget", "context_stale",
+	"version_mismatch", "object_mismatch", "derive_version",
+	"reimagine_unsupported", "derive_forbidden",
+}
+
 // rejectionExplanation maps one closed rejection stage to a sentence an
 // ordinary user can act on. It deliberately never includes field paths,
 // provider text, or internal identifiers.

@@ -119,6 +119,47 @@ func TestRejectionExplanationsStayUserFacing(t *testing.T) {
 	}
 }
 
+// Every stage that can appear in a stored notice must have its own sentence,
+// otherwise a rejection would fall back to the generic "not executed" text.
+func TestEveryRejectionStageHasItsOwnExplanation(t *testing.T) {
+	genericZh := rejectionExplanation("no_such_stage", true)
+	genericEn := rejectionExplanation("no_such_stage", false)
+	for _, stage := range rejectionStages {
+		if zh := rejectionExplanation(stage, true); zh == "" || zh == genericZh {
+			t.Fatalf("stage %q has no specific zh explanation", stage)
+		}
+		if en := rejectionExplanation(stage, false); en == "" || en == genericEn {
+			t.Fatalf("stage %q has no specific en explanation", stage)
+		}
+	}
+}
+
+func TestRejectionNoticeOnlyReportsRefusedTurns(t *testing.T) {
+	zhRejection := rejectionExplanation("seed_decode", true)
+	enRejection := rejectionExplanation("seed_compose", false)
+	repair := seedRepairNotice(&seedRepair{Dropped: []string{"$.background"}}, true)
+	fallback := fallbackNotice(true, "unparseable")
+	cases := []struct {
+		name   string
+		notice string
+		want   string
+	}{
+		{"zh rejection", "修正后的方案仍在等待确认。" + zhRejection, zhRejection},
+		{"en rejection", enRejection, enRejection},
+		{"rejection beside a repair", zhRejection + " " + repair, zhRejection},
+		{"repair only", repair, ""},
+		{"fallback", fallback, fallback},
+		{"empty", "   ", ""},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := rejectionNotice(tc.notice); got != tc.want {
+				t.Fatalf("rejectionNotice(%q) = %q, want %q", tc.notice, got, tc.want)
+			}
+		})
+	}
+}
+
 func TestJoinNoticeTextDeduplicatesAndBounds(t *testing.T) {
 	if got := joinNoticeText([]string{"a", "a", " ", "b"}); got != "a b" {
 		t.Fatalf("join = %q", got)

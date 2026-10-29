@@ -92,6 +92,66 @@ func TestOpenAICompatibleReportsFinishReason(t *testing.T) {
 	}
 }
 
+// The protocol must not depend on one provider's response shape. Some
+// OpenAI-compatible endpoints answer with a list of content parts instead of a
+// plain string; both must reach the Personal AI runtime as the same text.
+func TestOpenAICompatibleAcceptsContentParts(t *testing.T) {
+	cases := []struct {
+		name string
+		body string
+		want string
+	}{
+		{
+			name: "plain string",
+			body: `{"choices":[{"message":{"content":"{\"reply\":\"ok\"}"}}]}`,
+			want: `{"reply":"ok"}`,
+		},
+		{
+			name: "text parts",
+			body: `{"choices":[{"message":{"content":[{"type":"text","text":"{\"reply\":"},{"type":"text","text":"\"ok\"}"}]}}]}`,
+			want: `{"reply":"ok"}`,
+		},
+		{
+			name: "non-text parts are skipped",
+			body: `{"choices":[{"message":{"content":[{"type":"reasoning","text":"ignored"},{"type":"text","text":"ok"}]}}]}`,
+			want: "ok",
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+				w.Header().Set("Content-Type", "application/json")
+				fmt.Fprint(w, tc.body)
+			}))
+			defer server.Close()
+			provider := mustProvider(t, server.URL, time.Second)
+			response, err := provider.Complete(context.Background(), Request{
+				Messages: []Message{{Role: "user", Content: "hello"}},
+			})
+			if err != nil {
+				t.Fatalf("complete: %v", err)
+			}
+			if response.Text != tc.want {
+				t.Fatalf("text = %q, want %q", response.Text, tc.want)
+			}
+		})
+	}
+}
+
+func TestOpenAICompatibleRejectsUnknownContentShape(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		fmt.Fprint(w, `{"choices":[{"message":{"content":42}}]}`)
+	}))
+	defer server.Close()
+	provider := mustProvider(t, server.URL, time.Second)
+	if _, err := provider.Complete(context.Background(), Request{
+		Messages: []Message{{Role: "user", Content: "hello"}},
+	}); err == nil {
+		t.Fatal("an unsupported content shape was accepted")
+	}
+}
+
 func TestOpenAICompatibleErrorMapping(t *testing.T) {
 	t.Run("server error", func(t *testing.T) {
 		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {

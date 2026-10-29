@@ -171,7 +171,10 @@ type chatResponse struct {
 	Model   string `json:"model"`
 	Choices []struct {
 		Message struct {
-			Content string `json:"content"`
+			// Some OpenAI-compatible providers return the text as an array of
+			// content parts instead of a plain string. Both are accepted so the
+			// protocol does not depend on one provider's response shape.
+			Content json.RawMessage `json:"content"`
 		} `json:"message"`
 		FinishReason string `json:"finish_reason"`
 	} `json:"choices"`
@@ -179,6 +182,44 @@ type chatResponse struct {
 		PromptTokens     int `json:"prompt_tokens"`
 		CompletionTokens int `json:"completion_tokens"`
 	} `json:"usage"`
+}
+
+// chatMessageText reads a response message body written either as a plain
+// string (the documented shape) or as a list of content parts, which several
+// OpenAI-compatible providers emit. Only text parts are joined; a provider that
+// sends nothing textual, or an unknown shape, is an invalid output rather than
+// a silent empty reply.
+func chatMessageText(raw json.RawMessage) (string, error) {
+	trimmed := bytes.TrimSpace(raw)
+	if len(trimmed) == 0 || bytes.Equal(trimmed, []byte("null")) {
+		return "", nil
+	}
+	switch trimmed[0] {
+	case '"':
+		var text string
+		if err := json.Unmarshal(trimmed, &text); err != nil {
+			return "", err
+		}
+		return text, nil
+	case '[':
+		var parts []struct {
+			Type string `json:"type"`
+			Text string `json:"text"`
+		}
+		if err := json.Unmarshal(trimmed, &parts); err != nil {
+			return "", err
+		}
+		var builder strings.Builder
+		for _, part := range parts {
+			if part.Type != "" && part.Type != "text" {
+				continue
+			}
+			builder.WriteString(part.Text)
+		}
+		return builder.String(), nil
+	default:
+		return "", fmt.Errorf("content is neither a string nor an array of parts")
+	}
 }
 
 // Complete performs one non-streaming chat completion.
@@ -281,7 +322,10 @@ func (o *OpenAICompatible) Complete(ctx context.Context, req Request) (Response,
 	if len(decoded.Choices) == 0 {
 		return Response{}, &Error{Code: CodeInvalidOutput, Message: "model response has no choices"}
 	}
-	text := decoded.Choices[0].Message.Content
+	text, err := chatMessageText(decoded.Choices[0].Message.Content)
+	if err != nil {
+		return Response{}, &Error{Code: CodeInvalidOutput, Message: "model response content has an unsupported shape", Err: err}
+	}
 	if strings.TrimSpace(text) == "" {
 		return Response{}, &Error{Code: CodeInvalidOutput, Message: "model response is empty"}
 	}

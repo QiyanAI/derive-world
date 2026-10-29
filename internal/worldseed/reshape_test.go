@@ -102,6 +102,41 @@ func TestReshapeMapsFieldValuesByLabel(t *testing.T) {
 	}
 }
 
+// A world created empty must be startable by Personal AI: the first reimagine
+// brief supplies the whole content, and nothing in the blank shell has to be
+// pre-filled by a developer template.
+func TestReshapeStartsABlankWorld(t *testing.T) {
+	blank := objects.OpenWorldState{
+		Title: "Blank world", Premise: "",
+		Kinds: []objects.OpenWorldKind{}, Nodes: []objects.OpenWorldNode{},
+		Rules: []objects.OpenWorldRule{}, Views: []string{objects.OpenWorldViewScene},
+		Tags: []string{},
+	}
+	current, err := json.Marshal(blank)
+	if err != nil {
+		t.Fatal(err)
+	}
+	brief := decodeBrief(t, `{
+		"premise":"A rainy street at night.",
+		"kinds":[{"name":"Street"}],
+		"things":[{"kind":0,"name":"Wet street"}]
+	}`)
+	result, err := Reshape(current, brief)
+	if err != nil {
+		t.Fatalf("reshape blank world: %v", err)
+	}
+	if len(result.State.Kinds) != 1 || len(result.State.Nodes) != 1 {
+		t.Fatalf("blank world was not started: kinds=%d nodes=%d",
+			len(result.State.Kinds), len(result.State.Nodes))
+	}
+	if result.State.Premise != "A rainy street at night." {
+		t.Fatalf("premise not applied: %q", result.State.Premise)
+	}
+	if len(result.State.Views) == 0 {
+		t.Fatal("a started world lost its views")
+	}
+}
+
 // Rules are part of the world, not of a surface. The authored round-trip must
 // carry them through unchanged so a reshape cannot silently delete behavior.
 func TestAuthoredStateRoundTripPreservesRules(t *testing.T) {

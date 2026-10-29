@@ -343,6 +343,7 @@ UPDATE ai_conversations SET updated_at = GREATEST(now(), updated_at) WHERE id = 
 			return nil, err
 		}
 		acceptedWorldCreate := false
+		repairs := make([]*seedRepair, 0, 1)
 		for _, action := range turn.actions {
 			// One assistant reply may prepare at most one world. A second
 			// world.create would render a duplicate confirm button with the same
@@ -359,10 +360,11 @@ UPDATE ai_conversations SET updated_at = GREATEST(now(), updated_at) WHERE id = 
 			}
 			var result *AcceptedAction
 			var rejection *actionRejection
+			var repair *seedRepair
 			if input.Object != nil {
-				result, rejection, err = s.applyModelAction(ctx, tx, input, effective, action)
+				result, rejection, repair, err = s.applyModelAction(ctx, tx, input, effective, action)
 			} else {
-				result, rejection, err = s.applyGlobalModelAction(ctx, tx, input, effective, action)
+				result, rejection, repair, err = s.applyGlobalModelAction(ctx, tx, input, effective, action)
 			}
 			if rejection != nil {
 				s.logActionRejection(action.CapabilityID, rejection.Stage, rejection.Detail)
@@ -376,8 +378,15 @@ UPDATE ai_conversations SET updated_at = GREATEST(now(), updated_at) WHERE id = 
 					acceptedWorldCreate = true
 				}
 				accepted = append(accepted, *result)
+				repairs = append(repairs, repair)
 				remaining--
 			}
+		}
+		// A plan the server had to repair still runs, but the human is told
+		// that some detail was fitted to what the runtime supports. Silent
+		// repair would be a claim the plan is exactly what they asked for.
+		if text := seedRepairNotice(mergeRepairs(repairs), zh); text != "" {
+			notices = append(notices, text)
 		}
 	}
 	if contextStale {
@@ -457,87 +466,88 @@ func (s *Service) applyModelAction(
 	input SendMessageInput,
 	effective *trust.Effective,
 	action rawAction,
-) (*AcceptedAction, *actionRejection, error) {
+) (*AcceptedAction, *actionRejection, *seedRepair, error) {
 	switch action.CapabilityID {
 	case "object.propose_change":
 		var proposal proposalActionInput
 		if err := decodeSingleJSON(string(action.Input), &proposal); err != nil {
-			return nil, &actionRejection{Stage: "input_json", Detail: truncateActionDetail(err.Error())}, nil
+			return nil, &actionRejection{Stage: "input_json", Detail: truncateActionDetail(err.Error())}, nil, nil
 		}
 		if proposal.Action == "" || len(proposal.Input) == 0 {
-			return nil, &actionRejection{Stage: "empty_action"}, nil
+			return nil, &actionRejection{Stage: "empty_action"}, nil, nil
 		}
 		if proposal.ObjectID != nil && *proposal.ObjectID != input.Object.ObjectID.String() {
-			return nil, &actionRejection{Stage: "object_mismatch"}, nil
+			return nil, &actionRejection{Stage: "object_mismatch"}, nil, nil
 		}
 		if proposal.ExpectedVersion != nil && *proposal.ExpectedVersion != effective.ObjectVersion {
-			return nil, &actionRejection{Stage: "version_mismatch"}, nil
+			return nil, &actionRejection{Stage: "version_mismatch"}, nil, nil
 		}
 		if !effective.Can("contribute") {
-			return nil, &actionRejection{Stage: "permission"}, nil
+			return nil, &actionRejection{Stage: "permission"}, nil, nil
 		}
 		proposalID, accepted, err := s.recordProposalAction(ctx, tx, input, effective,
 			proposal.Action, proposal.Input)
 		if err != nil {
-			return nil, nil, err
+			return nil, nil, nil, err
 		}
 		if !accepted {
-			return nil, &actionRejection{Stage: "proposal_not_accepted"}, nil
+			return nil, &actionRejection{Stage: "proposal_not_accepted"}, nil, nil
 		}
 		return &AcceptedAction{
 			Kind: "proposal", ProposalID: &proposalID, Action: proposal.Action,
-		}, nil, nil
+		}, nil, nil, nil
 	case "object.derive":
 		var derive deriveActionInput
 		if err := decodeSingleJSON(string(action.Input), &derive); err != nil {
-			return nil, &actionRejection{Stage: "input_json", Detail: truncateActionDetail(err.Error())}, nil
+			return nil, &actionRejection{Stage: "input_json", Detail: truncateActionDetail(err.Error())}, nil, nil
 		}
 		if derive.ObjectID != nil && *derive.ObjectID != input.Object.ObjectID.String() {
-			return nil, &actionRejection{Stage: "object_mismatch"}, nil
+			return nil, &actionRejection{Stage: "object_mismatch"}, nil, nil
 		}
 		if derive.ExpectedVersion != nil && *derive.ExpectedVersion != effective.ObjectVersion {
-			return nil, &actionRejection{Stage: "derive_version"}, nil
+			return nil, &actionRejection{Stage: "derive_version"}, nil, nil
 		}
 		if !effective.Can("derive") {
-			return nil, &actionRejection{Stage: "derive_permission"}, nil
+			return nil, &actionRejection{Stage: "derive_permission"}, nil, nil
 		}
 		confirmationID, accepted, err := s.recordDeriveConfirmation(ctx, tx, input, effective, derive)
 		if err != nil {
-			return nil, nil, err
+			return nil, nil, nil, err
 		}
 		if !accepted {
-			return nil, &actionRejection{Stage: "derive_not_accepted"}, nil
+			return nil, &actionRejection{Stage: "derive_not_accepted"}, nil, nil
 		}
 		return &AcceptedAction{
 			Kind: "confirmation", ConfirmationID: &confirmationID,
 			Action: trust.ConfirmationDeriveCreate,
-		}, nil, nil
+		}, nil, nil, nil
 	case "world.reimagine":
 		if input.Object == nil || input.Object.ObjectType != "open_world" || s.proposals == nil {
-			return nil, &actionRejection{Stage: "reimagine_unsupported"}, nil
+			return nil, &actionRejection{Stage: "reimagine_unsupported"}, nil, nil
 		}
 		if !effective.Can("contribute") {
-			return nil, &actionRejection{Stage: "permission"}, nil
+			return nil, &actionRejection{Stage: "permission"}, nil, nil
 		}
 		var reimagine worldReimagineInput
 		if err := decodeSingleJSON(string(action.Input), &reimagine); err != nil {
-			return nil, &actionRejection{Stage: "reimagine_decode", Detail: truncateActionDetail(err.Error())}, nil
+			return nil, &actionRejection{Stage: "reimagine_decode", Detail: truncateActionDetail(err.Error())}, nil, nil
 		}
 		if len(reimagine.Brief) == 0 {
-			return nil, &actionRejection{Stage: "reimagine_decode", Detail: "empty brief"}, nil
+			return nil, &actionRejection{Stage: "reimagine_decode", Detail: "empty brief"}, nil, nil
 		}
-		normalized, _ := normalizingSeedBrief(reimagine.Brief)
-		seed, err := worldseed.Decode(normalized)
+		normalized, repair := repairingSeedBrief(reimagine.Brief)
+		seed, dropped, err := worldseed.DecodeRepairing(normalized)
+		repair.Dropped = dropped
 		if err != nil {
-			return nil, &actionRejection{Stage: "reimagine_decode", Detail: truncateActionDetail(err.Error())}, nil
+			return nil, &actionRejection{Stage: "reimagine_decode", Detail: truncateActionDetail(err.Error())}, nil, nil
 		}
 		result, err := worldseed.Reshape(input.Object.State, seed)
 		if err != nil {
-			return nil, &actionRejection{Stage: "reimagine_reshape", Detail: truncateActionDetail(err.Error())}, nil
+			return nil, &actionRejection{Stage: "reimagine_reshape", Detail: truncateActionDetail(err.Error())}, nil, nil
 		}
 		encoded, err := json.Marshal(result.State)
 		if err != nil {
-			return nil, &actionRejection{Stage: "reimagine_encode", Detail: truncateActionDetail(err.Error())}, nil
+			return nil, &actionRejection{Stage: "reimagine_encode", Detail: truncateActionDetail(err.Error())}, nil, nil
 		}
 		summary := strings.TrimSpace(reimagine.Summary)
 		if summary == "" || utf8.RuneCountInString(summary) > 500 {
@@ -547,23 +557,23 @@ func (s *Service) applyModelAction(
 			"note": summary, "content": json.RawMessage(encoded),
 		})
 		if err != nil {
-			return nil, &actionRejection{Stage: "reimagine_encode", Detail: truncateActionDetail(err.Error())}, nil
+			return nil, &actionRejection{Stage: "reimagine_encode", Detail: truncateActionDetail(err.Error())}, nil, nil
 		}
 		proposalID, accepted, err := s.proposals.CreateProposalTx(ctx, tx,
 			input.Object.ObjectID, input.UserID, effective.AIProfileID,
 			effective.DelegationID, "world.reimagine", "reshape_world", payload,
 			effective.ObjectVersion, input.RequestID, input.IPHash)
 		if err != nil {
-			return nil, nil, err
+			return nil, nil, nil, err
 		}
 		if !accepted {
-			return nil, &actionRejection{Stage: "proposal_not_accepted"}, nil
+			return nil, &actionRejection{Stage: "proposal_not_accepted"}, nil, nil
 		}
 		return &AcceptedAction{
 			Kind: "proposal", ProposalID: &proposalID, Action: "reshape_world",
-		}, nil, nil
+		}, nil, repair, nil
 	default:
-		return nil, &actionRejection{Stage: "capability_id"}, nil
+		return nil, &actionRejection{Stage: "capability_id"}, nil, nil
 	}
 }
 
@@ -575,34 +585,80 @@ type actionRejection struct {
 	Detail string
 }
 
+// seedRepair records what the AI authoring path had to change before a brief
+// could pass the strict validator. It is diagnostic only: the repaired brief
+// still runs through every type, range and enum check.
+type seedRepair struct {
+	Dropped []string
+	Clamped bool
+}
+
+func (repair *seedRepair) empty() bool {
+	return repair == nil || (len(repair.Dropped) == 0 && !repair.Clamped)
+}
+
+func mergeRepairs(repairs []*seedRepair) *seedRepair {
+	merged := &seedRepair{}
+	for _, repair := range repairs {
+		if repair == nil {
+			continue
+		}
+		merged.Dropped = append(merged.Dropped, repair.Dropped...)
+		merged.Clamped = merged.Clamped || repair.Clamped
+	}
+	return merged
+}
+
+// repairingSeedBrief applies the two repairs that are lossless for the product:
+// documented-but-alternate shapes (a palette written as prose, audio listed as
+// a tab), and out-of-range presentation numbers moved to the documented bound.
+// Anything ambiguous is left for the strict decoder to reject.
+func repairingSeedBrief(raw json.RawMessage) (json.RawMessage, *seedRepair) {
+	repair := &seedRepair{}
+	normalized, _ := normalizingSeedBrief(raw)
+	if clamped, changed := worldseed.ClampBriefNumbers(normalized); changed {
+		normalized = clamped
+		repair.Clamped = true
+	}
+	return normalized, repair
+}
+
 // buildWorldCreateContent validates the model's world.create input before any
 // confirmation row is written. The rejection stage lets the server record a
 // redacted diagnostic without persisting the raw model output.
 func buildWorldCreateContent(create worldCreateActionInput) (json.RawMessage, *actionRejection) {
+	content, _, rejection := buildWorldCreate(create)
+	return content, rejection
+}
+
+func buildWorldCreate(create worldCreateActionInput) (json.RawMessage, *seedRepair, *actionRejection) {
 	title := strings.TrimSpace(create.Title)
 	if title == "" || (len(create.Content) == 0 && len(create.Brief) == 0) {
-		return nil, &actionRejection{Stage: "title_or_body"}
+		return nil, nil, &actionRejection{Stage: "title_or_body"}
 	}
 	if len(create.Brief) == 0 {
-		return create.Content, nil
+		return create.Content, nil, nil
 	}
-	// Benign provider shapes (audio listed as a tab) are normalized before the
-	// strict compiler sees them; the normalized brief still passes through the
-	// full Decode, Compose and ValidateCreate chain.
-	brief, _ := normalizingSeedBrief(create.Brief)
-	seed, err := worldseed.Decode(brief)
+	// Benign provider shapes (audio listed as a tab) and out-of-range
+	// presentation numbers are normalized before the strict compiler sees them;
+	// the normalized brief still passes through the full Decode, Compose and
+	// ValidateCreate chain. An unrecognized field name is removed only when the
+	// rest of the brief still validates on its own.
+	brief, repair := repairingSeedBrief(create.Brief)
+	seed, dropped, err := worldseed.DecodeRepairing(brief)
+	repair.Dropped = dropped
 	if err != nil {
-		return nil, &actionRejection{Stage: "seed_decode", Detail: truncateActionDetail(err.Error())}
+		return nil, nil, &actionRejection{Stage: "seed_decode", Detail: truncateActionDetail(err.Error())}
 	}
 	composition, err := worldseed.Compose(seed, title)
 	if err != nil {
-		return nil, &actionRejection{Stage: "seed_compose", Detail: truncateActionDetail(err.Error())}
+		return nil, nil, &actionRejection{Stage: "seed_compose", Detail: truncateActionDetail(err.Error())}
 	}
 	encoded, err := json.Marshal(composition.Content)
 	if err != nil {
-		return nil, &actionRejection{Stage: "content_encode", Detail: truncateActionDetail(err.Error())}
+		return nil, nil, &actionRejection{Stage: "content_encode", Detail: truncateActionDetail(err.Error())}
 	}
-	return encoded, nil
+	return encoded, repair, nil
 }
 
 func truncateActionDetail(value string) string {
@@ -627,28 +683,28 @@ func (s *Service) applyGlobalModelAction(
 	input SendMessageInput,
 	effective *trust.Effective,
 	action rawAction,
-) (*AcceptedAction, *actionRejection, error) {
+) (*AcceptedAction, *actionRejection, *seedRepair, error) {
 	if action.CapabilityID != "world.create" {
-		return nil, &actionRejection{Stage: "capability_id"}, nil
+		return nil, &actionRejection{Stage: "capability_id"}, nil, nil
 	}
 	if !effective.Can("contribute") {
-		return nil, &actionRejection{Stage: "permission"}, nil
+		return nil, &actionRejection{Stage: "permission"}, nil, nil
 	}
 	var create worldCreateActionInput
 	if err := decodeSingleJSON(string(action.Input), &create); err != nil {
-		return nil, &actionRejection{Stage: "input_json", Detail: truncateActionDetail(err.Error())}, nil
+		return nil, &actionRejection{Stage: "input_json", Detail: truncateActionDetail(err.Error())}, nil, nil
 	}
 	if pending, err := s.trust.HasPendingWorldCreateTx(ctx, tx,
 		input.UserID, input.ConversationID); err != nil {
-		return nil, nil, err
+		return nil, nil, nil, err
 	} else if pending {
 		// One conversation keeps one live plan and therefore one confirm
 		// button. The human can deny it before asking for a new one.
-		return nil, &actionRejection{Stage: "world_pending"}, nil
+		return nil, &actionRejection{Stage: "world_pending"}, nil, nil
 	}
-	content, rejection := buildWorldCreateContent(create)
+	content, repair, rejection := buildWorldCreate(create)
 	if rejection != nil {
-		return nil, rejection, nil
+		return nil, rejection, nil, nil
 	}
 	confirmation, accepted, err := s.trust.CreateWorldCreateConfirmationTx(ctx, tx,
 		trust.WorldCreateConfirmationParams{
@@ -658,17 +714,17 @@ func (s *Service) applyGlobalModelAction(
 		})
 	if err != nil {
 		if errors.Is(err, trust.ErrInvalidRequest) || errors.Is(err, trust.ErrPayloadTooLarge) {
-			return nil, &actionRejection{Stage: "confirmation_invalid", Detail: truncateActionDetail(err.Error())}, nil
+			return nil, &actionRejection{Stage: "confirmation_invalid", Detail: truncateActionDetail(err.Error())}, nil, nil
 		}
-		return nil, nil, err
+		return nil, nil, nil, err
 	}
 	if !accepted {
-		return nil, &actionRejection{Stage: "confirmation_not_accepted"}, nil
+		return nil, &actionRejection{Stage: "confirmation_not_accepted"}, nil, nil
 	}
 	return &AcceptedAction{
 		Kind: "confirmation", ConfirmationID: &confirmation.ID,
 		Action: trust.ConfirmationWorldCreate,
-	}, nil, nil
+	}, nil, repair, nil
 }
 
 func (s *Service) recordProposalAction(ctx context.Context, tx pgx.Tx, input SendMessageInput,
