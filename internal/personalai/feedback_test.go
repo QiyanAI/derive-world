@@ -129,3 +129,60 @@ func TestJoinNoticeTextDeduplicatesAndBounds(t *testing.T) {
 		t.Fatalf("notice was not bounded: %d runes", len([]rune(got)))
 	}
 }
+
+func TestNormalizingSeedBriefDropsTextPalette(t *testing.T) {
+	brief := json.RawMessage(`{
+		"premise":"A rainy city you can walk through.",
+		"palette":"rainy dusk, blue and amber",
+		"kinds":[{"name":"Street","motion":"none"}],
+		"things":[{"kind":0,"name":"Main street","x":0.5,"y":0.5}],
+		"experience":{"surfaces":["scene3d"],"primary":"scene3d","scene3d":{"player":0,"views":[{"kind":0,"primitive":"box"}]}}
+	}`)
+	normalized, changed := normalizingSeedBrief(brief)
+	if !changed {
+		t.Fatal("text palette was not normalized")
+	}
+	seed, err := worldseed.Decode(normalized)
+	if err != nil {
+		t.Fatalf("normalized brief does not decode: %v", err)
+	}
+	if seed.Palette != nil {
+		t.Fatalf("palette = %#v, want nil", seed.Palette)
+	}
+}
+
+func TestNormalizingSeedBriefCleansPaletteObject(t *testing.T) {
+	brief := json.RawMessage(`{
+		"premise":"A tiny street at dusk.",
+		"palette":{"sky_hue":220,"ground_hue":"140","accent_hue":40,"mood":"dusk"},
+		"kinds":[{"name":"Lamp"}],
+		"things":[{"kind":0,"name":"One lamp"}]
+	}`)
+	normalized, changed := normalizingSeedBrief(brief)
+	if !changed {
+		t.Fatal("invalid palette fields were not normalized")
+	}
+	seed, err := worldseed.Decode(normalized)
+	if err != nil {
+		t.Fatalf("normalized brief does not decode: %v", err)
+	}
+	if seed.Palette == nil || seed.Palette.SkyHue == nil || *seed.Palette.SkyHue != 220 {
+		t.Fatalf("sky hue lost: %#v", seed.Palette)
+	}
+	if seed.Palette.GroundHue != nil || seed.Palette.AccentHue == nil || *seed.Palette.AccentHue != 40 {
+		t.Fatalf("palette cleanup = %#v", seed.Palette)
+	}
+}
+
+func TestNormalizingSeedBriefKeepsValidPalette(t *testing.T) {
+	brief := json.RawMessage(`{
+		"premise":"A tiny street at dusk.",
+		"palette":{"sky_hue":220},
+		"kinds":[{"name":"Lamp"}],
+		"things":[{"kind":0,"name":"One lamp"}]
+	}`)
+	normalized, changed := normalizingSeedBrief(brief)
+	if changed || string(normalized) != string(brief) {
+		t.Fatal("a valid palette must not be rewritten")
+	}
+}

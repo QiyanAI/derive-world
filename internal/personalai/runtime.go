@@ -526,7 +526,7 @@ func (s *Service) applyModelAction(
 		if len(reimagine.Brief) == 0 {
 			return nil, &actionRejection{Stage: "reimagine_decode", Detail: "empty brief"}, nil
 		}
-		normalized, _ := normalizingSeedSurfaces(reimagine.Brief)
+		normalized, _ := normalizingSeedBrief(reimagine.Brief)
 		seed, err := worldseed.Decode(normalized)
 		if err != nil {
 			return nil, &actionRejection{Stage: "reimagine_decode", Detail: truncateActionDetail(err.Error())}, nil
@@ -589,7 +589,7 @@ func buildWorldCreateContent(create worldCreateActionInput) (json.RawMessage, *a
 	// Benign provider shapes (audio listed as a tab) are normalized before the
 	// strict compiler sees them; the normalized brief still passes through the
 	// full Decode, Compose and ValidateCreate chain.
-	brief, _ := normalizingSeedSurfaces(create.Brief)
+	brief, _ := normalizingSeedBrief(create.Brief)
 	seed, err := worldseed.Decode(brief)
 	if err != nil {
 		return nil, &actionRejection{Stage: "seed_decode", Detail: truncateActionDetail(err.Error())}

@@ -84,6 +84,7 @@ export default function AIPanel({ object, canContribute, onChanged }: Props) {
   const transcriptRef = useRef<HTMLDivElement | null>(null);
   const focusNonce = useRef(0);
   const previousMessages = useRef(0);
+  const revealedComposer = useRef(false);
 
   const draftBytes = useMemo(() => new TextEncoder().encode(draft).length, [draft]);
 
@@ -140,6 +141,17 @@ export default function AIPanel({ object, canContribute, onChanged }: Props) {
     if (first) {
       setRevealID(first.id);
     }
+    // Once per open, after history and approvals have laid out, make the
+    // composer reachable. A pending plan wins: its own reveal scrolls to the
+    // real button instead.
+    if (!revealedComposer.current) {
+      revealedComposer.current = true;
+      if (!first) {
+        window.setTimeout(() => {
+          document.getElementById("dw-ai-compose")?.scrollIntoView({ block: "center" });
+        }, 120);
+      }
+    }
   }, [objectID, refreshApprovals]);
 
   useEffect(() => {
@@ -165,7 +177,7 @@ export default function AIPanel({ object, canContribute, onChanged }: Props) {
   // the input just below a 768px viewport.
   useEffect(() => {
     const timer = window.setTimeout(() => {
-      document.getElementById("dw-ai-compose")?.scrollIntoView({ block: "nearest" });
+      document.getElementById("dw-ai-compose")?.scrollIntoView({ block: "center" });
     }, 90);
     return () => window.clearTimeout(timer);
   }, [objectID]);

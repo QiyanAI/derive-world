@@ -190,6 +190,78 @@ func joinNoticeText(notices []string) string {
 	return string(runes[:maxRunes])
 }
 
+// normalizingSeedBrief repairs two benign provider shapes before the strict
+// compiler sees the brief: experience layers listed as tabs, and a palette
+// written as prose instead of the optional numeric hue object. Both repairs
+// are lossless for the product: the composer derives a palette when none is
+// usable, and the strict validator still rejects every other bad value.
+func normalizingSeedBrief(raw json.RawMessage) (json.RawMessage, bool) {
+	normalized, changed := normalizingSeedSurfaces(raw)
+	paletteNormalized, paletteChanged := normalizingSeedPalette(normalized)
+	return paletteNormalized, changed || paletteChanged
+}
+
+// normalizingSeedPalette accepts only the three documented integer hues. A
+// string or array palette (for example "rainy dusk") is removed so the
+// composer derives one; unknown keys and out-of-range hues are dropped.
+func normalizingSeedPalette(raw json.RawMessage) (json.RawMessage, bool) {
+	trimmed := strings.TrimSpace(string(raw))
+	if trimmed == "" || !strings.HasPrefix(trimmed, "{") {
+		return raw, false
+	}
+	var document map[string]json.RawMessage
+	if err := json.Unmarshal(raw, &document); err != nil {
+		return raw, false
+	}
+	paletteRaw, ok := document["palette"]
+	if !ok || string(paletteRaw) == "null" {
+		return raw, false
+	}
+	var palette map[string]json.RawMessage
+	if err := json.Unmarshal(paletteRaw, &palette); err != nil {
+		delete(document, "palette")
+		encoded, err := json.Marshal(document)
+		if err != nil {
+			return raw, false
+		}
+		return encoded, true
+	}
+	cleaned := make(map[string]json.RawMessage, 3)
+	changed := false
+	for _, key := range []string{"sky_hue", "ground_hue", "accent_hue"} {
+		value, ok := palette[key]
+		if !ok {
+			continue
+		}
+		var hue int
+		if err := json.Unmarshal(value, &hue); err != nil || hue < 0 || hue > 360 {
+			changed = true
+			continue
+		}
+		cleaned[key] = value
+	}
+	if len(cleaned) != len(palette) {
+		changed = true
+	}
+	if !changed {
+		return raw, false
+	}
+	if len(cleaned) == 0 {
+		delete(document, "palette")
+	} else {
+		encodedPalette, err := json.Marshal(cleaned)
+		if err != nil {
+			return raw, false
+		}
+		document["palette"] = encodedPalette
+	}
+	encodedDocument, err := json.Marshal(document)
+	if err != nil {
+		return raw, false
+	}
+	return encodedDocument, true
+}
+
 // normalizingSeedSurfaces removes only experience layers that cannot be tabs.
 // Some providers list "audio", "sound", "video" or "image" beside real
 // surfaces; those layers still apply from their own experience block, so

@@ -101,7 +101,8 @@ func buildPromptWithin(
 			system.WriteString(worldSeedGuide)
 		}
 		system.WriteString("To create a derived object use capability_id object.derive with input ")
-		system.WriteString(`{"title":"...","source_version":N,"inheritance_fields":["..."]}. `)
+		system.WriteString(`{"title":"...","source_version":N,"inheritance_fields":["premise","structure"]}. `)
+		system.WriteString("inheritance_fields is required and must be a non-empty array; never omit it or send an empty array. ")
 		system.WriteString("Give a derived world a distinct, human-meaningful title; never append a mechanical branch suffix. ")
 		system.WriteString("Do not propose invitations, member changes, deletions, shared_context changes, or capability invocations. ")
 		system.WriteString("Never say a change was approved, applied or created unless the server already did it; you cannot approve or execute. ")
@@ -308,8 +309,10 @@ const maxModelOutputBytes = 8 * 1024
 
 func parseModelOutput(text string) (string, []rawAction, string, error) {
 	trimmed := strings.TrimSpace(text)
-	// Real providers often wrap JSON in a Markdown fence even when asked for
-	// JSON only. Strip one fence without accepting prose around the object.
+	// Real providers often wrap JSON in a Markdown fence or add a short
+	// sentence before/after it even when asked for JSON only. Strip one leading
+	// fence; the payload extraction below also accepts prose around one
+	// complete object, and the decoded payload still passes every strict check.
 	if strings.HasPrefix(trimmed, "```") {
 		if newline := strings.IndexByte(trimmed, '\n'); newline >= 0 {
 			body := strings.TrimSpace(trimmed[newline+1:])
@@ -341,7 +344,73 @@ func parseModelOutput(text string) (string, []rawAction, string, error) {
 			return payload.Reply, payload.ProposedActions, "structured", nil
 		}
 	}
+	// A provider may prepend a sentence such as "Here is the plan:" or append
+	// a closing remark. Use the first complete object that decodes to the
+	// documented payload; the reply field is what the user sees, so no raw
+	// JSON leaks into chat. Validation of every action is unchanged.
+	if payload, ok := firstStructuredPayload(trimmed); ok {
+		return payload.Reply, payload.ProposedActions, "structured", nil
+	}
 	return trimmed, nil, "fallback", nil
+}
+
+// firstStructuredPayload scans text for complete JSON objects and returns the
+// first one that decodes to a non-empty reply with at most five actions.
+func firstStructuredPayload(text string) (modelPayload, bool) {
+	search := text
+	for {
+		start := strings.IndexByte(search, '{')
+		if start < 0 {
+			return modelPayload{}, false
+		}
+		candidate, ok := balancedJSONObject(search[start:])
+		if ok && len([]byte(candidate)) <= maxModelOutputBytes {
+			var payload modelPayload
+			if decodeSingleJSON(candidate, &payload) == nil &&
+				strings.TrimSpace(payload.Reply) != "" &&
+				len(payload.ProposedActions) <= 5 {
+				return payload, true
+			}
+		}
+		search = search[start+1:]
+	}
+}
+
+// balancedJSONObject returns the first complete {...} object in text. Braces
+// inside JSON strings are ignored; nested objects and arrays are balanced by
+// their enclosing object braces.
+func balancedJSONObject(text string) (string, bool) {
+	depth := 0
+	inString := false
+	escaped := false
+	for index := 0; index < len(text); index++ {
+		char := text[index]
+		if inString {
+			if escaped {
+				escaped = false
+			} else if char == '\\' {
+				escaped = true
+			} else if char == '"' {
+				inString = false
+			}
+			continue
+		}
+		switch char {
+		case '"':
+			inString = true
+		case '{':
+			depth++
+		case '}':
+			depth--
+			if depth == 0 {
+				return text[:index+1], true
+			}
+			if depth < 0 {
+				return "", false
+			}
+		}
+	}
+	return "", false
 }
 
 // completeTruncatedJSON appends only the closing delimiters that a provider
@@ -425,8 +494,9 @@ Field types: text=string, number=number, flag=true/false. Every enum value must 
 // watched, read, worked in, mapped or extended with a custom surface.
 const worldSeedGuide = `A world brief has this shape (omit what does not apply):
 {"premise":"...","atmosphere":"...","kinds":[{"name":"...","hue":200,"motion":"none|pulse|float|sway|flicker|breathe|orbit","form":"M 0 -24 A 24 24 0 1 1 0 24 A 24 24 0 1 1 0 -24 Z","solid":false,"fields":[{"label":"...","type":"text|number|flag"}]}],"things":[{"kind":0,"name":"...","text":"...","x":0.4,"y":0.5}],"relations":[{"from":0,"to":1,"label":"..."}],"interactions":[{"from":0,"verb":"...","to":1,"field":"label","op":"set|add|toggle","value":"..."}],"experience":{"surfaces":["live","story","workspace","space","custom","scene3d","media"],"primary":"live","live":{"avatar":0,"speed":1.8,"timer":60,"particles":{"kind":"rain|motes|stars|snow","count":40},"goal":{"type":"collect|score|reach|survive","kind":1,"count":3,"entity":0,"field":"...","variable":"score","target":5,"label":"..."},"timeline":{"duration":12,"loop":true,"tracks":[{"entity":0,"property":"x|y|scale|opacity|rotate|hue","keys":[{"t":0,"v":400},{"t":6,"v":800}]}]}},"story":{"title":"...","kind":"篇章","chapters":[{"title":"...","text":"...","choices":[{"label":"...","to":1}]}]},"workspace":{"title":"...","kind":0,"columns":["..."],"actions":[{"label":"...","type":"create|done|progress","field":"..."}]},"custom":{"title":"...","width":1200,"height":800,"vars":{"a":0},"nodes":[{"id":"n1","type":"box|dot|path|text|input","x":100,"y":100,"w":80,"h":40,"r":20,"hue":200,"text":"...","path":"M 0 -20 L 20 0 L 0 20 Z","size":20,"bindings":[{"prop":"opacity","var":"a","in_min":0,"in_max":1,"out_min":0.3,"out_max":1}],"bind_text":{"var":"a"},"input":{"var":"a","type":"text|number"},"drag":{"var":"a","min":0,"max":100,"axis":"x"},"on_click":[{"type":"set_var|add_var","name":"a","value":1},{"type":"toggle_var","name":"b"},{"type":"if","cond":{"var":"a","op":"gt","value":2},"then":[],"else":[]},{"type":"sound","freq":440,"duration":0.2,"wave":"sine"}]}],"keys":[{"key":"ArrowRight","actions":[]}],"timeline":{"duration":8,"loop":true,"tracks":[{"node_id":"n1","property":"x|y|w|h|r|rotate|scale|opacity|hue","keys":[{"t":0,"v":0}]}]}},"scene3d":{"title":"...","sky_hue":220,"ground_hue":140,"fog":0.02,"camera":"orbit|follow","distance":14,"player":0,"speed":4,"gravity":20,"views":[{"kind":0,"primitive":"sphere|box|cylinder|cone|torus","scale":1,"elevation":0,"collider":"none|box|sphere","hide_done":true}]},"audio":{"title":"...","tone":{"frequency":220,"wave":"sine|square|triangle|sawtooth","volume":0.06,"pulse":0.2},"volume":0.35,"cues":[{"variable":"signals","mode":"truthy|falsy|change|increase|decrease","tone":{"frequency":440,"wave":"sine","volume":0.12}}]},"media":{"title":"...","kind":"image|video","caption":"...","show_variable":"...","play_variable":"..."}}}
+palette, when present, is an object of optional integer hues {"sky_hue":0-360,"ground_hue":0-360,"accent_hue":0-360}; never write palette as prose. live.goal is optional and only for a concrete objective: goal.kind is an existing kind index, goal.entity is an existing thing index (0..len(things)-1), never a kind index.
 Every field initial, thing value and interaction value must match its field type: text uses a string, number uses a number, flag uses true/false; omit initial to use the default. Unknown enum values reject the seed.
 experience.surfaces may contain only live, story, workspace, space, custom, scene3d, media, each at most once. Never put audio, sound, music, video, image or photo in surfaces: audio is a layer under experience.audio, and video/image are media kinds under experience.media.
-Surface choice is by intent, never a product category: live = time, movement, play or watching; story = readable chapters and choices; workspace = real tables, editing and operations; space = a visual map of things; scene3d = the same things as a real three-dimensional scene with camera, gravity and collisions; media = a real image or video slot; custom = a safe declarative surface for forms the others do not cover. Combine surfaces in one world when the idea needs it; all share one state. A scene3d player is a thing index; colliders make a kind solid; physics is simulated by the browser and only behavior-driven changes are persisted. An audio cue watches a world variable; increase/decrease requires a number, truthy/falsy requires a flag. Media seeds reserve an empty slot: never invent an asset id or URL, because a human uploads the bytes in the world editor. Procedural tones are generated by the browser; uploaded audio can be attached later.
+Surface choice is by intent, never a product category: live = time, movement, play or watching; story = readable chapters and choices; workspace = real tables, editing and operations; space = a visual map of things; scene3d = the same things as a real three-dimensional scene with camera, gravity and collisions; media = a real image or video slot; custom = a safe declarative surface for forms the others do not cover. Combine surfaces in one world when the idea needs it; all share one state. A scene3d player is a thing index; colliders make a kind solid; physics is simulated by the browser and only behavior-driven changes are persisted. Particle bounds: count 0..120, size 1..6, speed 0.2..3, hue 0..359. An audio cue watches a world variable; increase/decrease requires a number, truthy/falsy requires a flag. Media seeds reserve an empty slot: never invent an asset id or URL, because a human uploads the bytes in the world editor. Procedural tones are generated by the browser; uploaded audio can be attached later.
 Custom values can be literals, "$event.value", or {"expr":"$a + $b"} (numbers, + - * /, parentheses). Conditions use {var|entity_id,field,op eq|ne|gt|gte|lt|lte|truthy|falsy,value,all,any,not}. Nodes may use text/inputs/keys/drag/conditions/actions/timelines/tones. Custom programs can be extended in later turns; keep the first one small.
 Never present module names, schema or code to the user. Never claim network access, arbitrary user code, live multiplayer sync, or media you did not receive; state the concrete gap if the idea needs one. You may truthfully say the world has a 3D scene, gravity, collisions, procedural sound and media slots, and that a human can upload real images, video, audio or a GLB model afterwards.`

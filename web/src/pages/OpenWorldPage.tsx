@@ -619,8 +619,10 @@ export default function OpenWorldPage() {
               onClick={() => {
                 setPanel("ai");
                 window.setTimeout(() => {
-                  document.getElementById("dw-ai-compose")?.focus();
-                }, 60);
+                  const composer = document.getElementById("dw-ai-compose");
+                  composer?.scrollIntoView({ block: "center" });
+                  composer?.focus({ preventScroll: true });
+                }, 350);
               }}
             >
               <Icon name="spark" size={15} />

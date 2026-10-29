@@ -1134,7 +1134,7 @@ export const zh: Messages = {
   "openWorld.kicker": "由你定义的世界",
   "openWorld.back": "回到我的世界",
   "openWorld.enter": "进入这个世界",
-  "openWorld.summary": "{kinds} 种存在 · {nodes} 个存在 · {rules} 条规则",
+  "openWorld.summary": "{kinds} 类内容 · {nodes} 个事物",
   "openWorld.premiseEmpty": "写下这个世界开始的地方。",
   "openWorld.experience": "体验",
   "openWorld.experiencePanel": "体验编辑",

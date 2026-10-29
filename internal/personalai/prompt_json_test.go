@@ -62,6 +62,35 @@ func TestParseModelOutputRepairsMissingClosers(t *testing.T) {
 	}
 }
 
+func TestParseModelOutputExtractsPayloadFromProse(t *testing.T) {
+	payload := `{"reply":"hello","proposed_actions":[{"capability_id":"world.create","input":{"title":"Room","brief":` +
+		validWorldCreateBrief + `}}]}`
+	cases := []string{
+		"Here is the plan you asked for:\n" + payload + "\nLet me know if you want changes.",
+		"```json\n" + payload + "\n```\nThis plan is ready for your approval.",
+		"Sure — {\"prelude\":true} then " + payload,
+	}
+	for _, text := range cases {
+		reply, actions, status, err := parseModelOutput(text)
+		if err != nil || status != "structured" || reply != "hello" || len(actions) != 1 {
+			t.Fatalf("prose extraction: reply=%q status=%q actions=%d err=%v", reply, status, len(actions), err)
+		}
+	}
+}
+
+func TestParseModelOutputRejectsProseWithoutPayload(t *testing.T) {
+	for _, text := range []string{
+		"Here is the plan: {\"reply\":\"\"}",
+		"I could not prepare a plan this time.",
+		"```json\n{\"reply\":\"x\",\"proposed_actions\":[1,2,3,4,5,6]}\n```",
+	} {
+		reply, actions, status, err := parseModelOutput(text)
+		if err != nil || status != "fallback" || len(actions) != 0 {
+			t.Fatalf("unexpected parse: reply=%q status=%q actions=%d err=%v text=%q", reply, status, len(actions), err, text)
+		}
+	}
+}
+
 func TestParseModelOutputAcceptsBenignTypeEcho(t *testing.T) {
 	payload := `{"reply":"hello","proposed_actions":[{"capability_id":"world.create","input":{"title":"Room","brief":` +
 		validWorldCreateBrief + `}}],"type":"json_object"}`

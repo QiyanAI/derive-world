@@ -1178,7 +1178,7 @@ export const en = {
   "openWorld.kicker": "A WORLD YOU DEFINE",
   "openWorld.back": "Back to my worlds",
   "openWorld.enter": "Enter this world",
-  "openWorld.summary": "{kinds} kinds · {nodes} things · {rules} rules",
+  "openWorld.summary": "{kinds} types · {nodes} things",
   "openWorld.premiseEmpty": "Write the premise this world begins from.",
   "openWorld.experience": "Experience",
   "openWorld.experiencePanel": "Experience editor",
