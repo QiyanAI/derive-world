@@ -126,7 +126,14 @@ func NewService(db *pgxpool.Pool, auditWriter *audit.Writer, absoluteTTL, idleTT
 	if err != nil {
 		return nil, err
 	}
+	// Each Argon2id hash allocates 64 MiB. Bound concurrent hashes so a login
+	// flood cannot exceed the 1 GiB reference container before the per-IP
+	// throttles kick in, even on a many-core host.
+	const maxArgonSlots = 4
 	slots := runtime.GOMAXPROCS(0)
+	if slots > maxArgonSlots {
+		slots = maxArgonSlots
+	}
 	if slots < 1 {
 		slots = 1
 	}

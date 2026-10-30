@@ -34,6 +34,8 @@ var (
 	ErrInvalidRequest = errors.New("invalid publication request")
 )
 
+const maxConsentAncestorDepth = 256
+
 const (
 	maxTitleRunes    = 200
 	maxSnapshotBytes = 66560
@@ -888,9 +890,13 @@ func (s *Service) ancestorContributors(ctx context.Context, tx pgx.Tx, objectID,
 	seen := make(map[uuid.UUID]bool)
 	current := objectID
 	contributors := make([]uuid.UUID, 0)
-	for depth := 0; depth < 64; depth++ {
+	// The chain is normally a handful of links. If it is pathologically deep or
+	// cyclic, refuse the publication instead of silently returning the
+	// contributors collected so far: a silent stop would let a long private
+	// chain publish source content without its author's consent.
+	for depth := 0; depth < maxConsentAncestorDepth; depth++ {
 		if seen[current] {
-			break
+			return nil, fmt.Errorf("%w: derivation ancestry is cyclic", ErrInvalidRequest)
 		}
 		seen[current] = true
 
@@ -945,7 +951,7 @@ SELECT owner_id FROM living_objects WHERE id = $1`, parentID.String()).Scan(&own
 		contributors = append(contributors, ids...)
 		current = parentID
 	}
-	return contributors, nil
+	return nil, fmt.Errorf("%w: derivation ancestry is too deep to verify consent", ErrInvalidRequest)
 }
 
 func contributorIDs(ctx context.Context, tx pgx.Tx, objectID uuid.UUID, sourceVersion int, publisherID uuid.UUID) ([]uuid.UUID, error) {
