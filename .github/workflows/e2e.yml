@@ -46,11 +46,15 @@ jobs:
           cp .env.example .env
           # Deterministic test-stack limits only. Production defaults are not
           # changed. Two browsers and the smoke scripts register many identities
-          # from one loopback IP.
+          # from one loopback IP. The AI acceptance specs send seven turns in a
+          # few minutes in one account, which exceeds the production 20/hour
+          # burst of 5; the browser suite is not the rate-limit test.
           sed -i 's/^RATE_LIMIT_AUTH_PER_MIN=.*/RATE_LIMIT_AUTH_PER_MIN=1000/' .env
           sed -i 's/^RATE_LIMIT_API_PER_MIN=.*/RATE_LIMIT_API_PER_MIN=600/' .env
+          sed -i 's/^RATE_LIMIT_AI_PER_HOUR=.*/RATE_LIMIT_AI_PER_HOUR=200/' .env
           grep -q '^RATE_LIMIT_AUTH_PER_MIN=1000$' .env
           grep -q '^RATE_LIMIT_API_PER_MIN=600$' .env
+          grep -q '^RATE_LIMIT_AI_PER_HOUR=200$' .env
           grep -q '^MODEL_MODE=fixture$' .env
 
       - name: validate compose
