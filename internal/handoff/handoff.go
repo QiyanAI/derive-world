@@ -23,13 +23,14 @@ import (
 )
 
 const (
-	maxProjectionBytes = 32 * 1024
-	maxSharedBytes     = 4 * 1024
-	maxStateBodyBytes  = 8 * 1024
-	maxRecentEvents    = 20
-	trimRecentEvents   = 5
-	maxSummaryRunes    = 280
-	projectionTTL      = 5 * time.Minute
+	maxProjectionBytes        = 32 * 1024
+	maxSharedBytes            = 4 * 1024
+	maxStateBodyBytes         = 8 * 1024
+	maxProjectedItemTextBytes = 360
+	maxRecentEvents           = 20
+	trimRecentEvents          = 5
+	maxSummaryRunes           = 280
+	projectionTTL             = 5 * time.Minute
 )
 
 // ErrPayloadTooLarge means even the maximum permitted trimming could not fit
@@ -164,14 +165,14 @@ func (s *Service) Build(ctx context.Context, source Source, actor audit.Actor, r
 		}
 	}
 	if len(encoded) > maxProjectionBytes {
-		trimmedState, changed, err := trimStateBody(projection.PermittedObjectContext.State)
+		trimmedState, field, changed, err := trimStateForProjection(projection.PermittedObjectContext.State)
 		if err != nil {
 			return nil, err
 		}
 		if changed {
 			projection.PermittedObjectContext.State = trimmedState
 			projection.Truncated = true
-			markTruncated(projection.DataProvenance, "state.body")
+			markTruncated(projection.DataProvenance, field)
 			encoded, err = marshalProjection(projection)
 			if err != nil {
 				return nil, err
@@ -336,6 +337,63 @@ func trimSharedContext(raw json.RawMessage) (json.RawMessage, error) {
 		}
 	}
 	return json.Marshal(trimmed)
+}
+
+// trimStateForProjection bounds prose-heavy state without destroying the
+// identity or graph of a living scene or free world. It returns the state
+// path that changed so data_provenance stays honest.
+func trimStateForProjection(raw json.RawMessage) (json.RawMessage, string, bool, error) {
+	var value map[string]json.RawMessage
+	if err := json.Unmarshal(raw, &value); err != nil {
+		return raw, "", false, err
+	}
+	if bodyRaw, ok := value["body"]; ok {
+		var body string
+		if err := json.Unmarshal(bodyRaw, &body); err == nil && len(body) > maxStateBodyBytes {
+			body = truncateUTF8(body, maxStateBodyBytes) + "\n[truncated]"
+			encoded, err := json.Marshal(body)
+			if err != nil {
+				return raw, "", false, err
+			}
+			value["body"] = encoded
+			trimmed, err := json.Marshal(value)
+			if err != nil {
+				return raw, "", false, err
+			}
+			return trimmed, "state.body", true, nil
+		}
+	}
+	for _, collection := range []string{"nodes", "elements"} {
+		collectionRaw, ok := value[collection]
+		if !ok {
+			continue
+		}
+		var items []map[string]any
+		if err := json.Unmarshal(collectionRaw, &items); err != nil {
+			continue
+		}
+		changed := false
+		for _, item := range items {
+			if text, ok := item["text"].(string); ok && len(text) > maxProjectedItemTextBytes {
+				item["text"] = truncateUTF8(text, maxProjectedItemTextBytes) + "…"
+				changed = true
+			}
+		}
+		if !changed {
+			continue
+		}
+		encoded, err := json.Marshal(items)
+		if err != nil {
+			return raw, "", false, err
+		}
+		value[collection] = encoded
+		trimmed, err := json.Marshal(value)
+		if err != nil {
+			return raw, "", false, err
+		}
+		return trimmed, "state." + collection, true, nil
+	}
+	return raw, "", false, nil
 }
 
 func trimStateBody(raw json.RawMessage) (json.RawMessage, bool, error) {

@@ -60,10 +60,29 @@ budgets.
 | POST | `/api/v1/confirmations/{id}/deny` | Session | Deny a pending confirmation. |
 | GET | `/api/v1/me/export` | Session | Self-only JSON export, one per hour. |
 
+### Free-world experience actions
+
+An `open_world` may store an optional `experience` document. Two additional
+`POST /api/v1/objects/{id}/actions` actions are available to contributors:
+
+| Action | Input | Meaning |
+|---|---|---|
+| `set_experience` | `{"experience": WorldExperience \| null}` | Replace or clear the composed experience. The wire protocol key is `protocol`, not `version`; the HTTP actor-override guard rejects nested `version` keys. |
+| `invoke_behavior` | `{"behavior_id": "...", "entity_id"?: "...", "value"?: ...}` | Run one experience behavior once. `entity_id` must belong to this world. |
+
+`WorldExperience` (OpenAPI `components.schemas.WorldExperience`) is
+`{protocol: 1, root: WorldViewNode, behaviors?: WorldBehavior[]}`; view nodes
+reference a registered presentation capability and carry validated `props`.
+The capability catalog at `GET /api/v1/world-capabilities` is the source of
+module ids and parameter shapes. The server never executes user code and
+rejects unknown capabilities, unknown props, oversized documents and invalid
+references.
+
 ## Capability endpoints
 
 | Method | Path | Authentication | Notes |
 |---|---|---|---|
+| GET | `/api/v1/world-capabilities` | Session or PAT (`objects:read`) | Presentation and behavior modules that any free world may compose. Descriptor data drives the product palette and generated forms. |
 | GET | `/api/v1/capabilities` | Session or PAT (`capabilities:invoke`) | Enabled descriptors only; never provider addresses or secrets. |
 | GET | `/api/v1/capabilities/{capability_id}` | Session or PAT (`capabilities:invoke`) | One enabled descriptor. |
 | POST | `/api/v1/capabilities/{capability_id}/invoke` | Session or PAT (`capabilities:invoke` + operation scope) | Requires `Idempotency-Key`; all execution passes through the Broker. |

@@ -13,7 +13,7 @@ import (
 )
 
 // RemoveMember revokes a membership immediately. The owner cannot be removed
-// and an owner cannot remove themself in v0.1.0.
+// and an owner cannot remove themself in v0.2.0.
 func (s *Service) RemoveMember(ctx context.Context, actorID, objectID, targetID uuid.UUID, requestID string, ipHash []byte) error {
 	tx, err := s.db.BeginTx(ctx, pgx.TxOptions{IsoLevel: pgx.ReadCommitted})
 	if err != nil {
@@ -66,6 +66,15 @@ SELECT permissions, revoked_at FROM object_memberships
 	if _, err := tx.Exec(ctx, `
 UPDATE object_memberships SET revoked_at = GREATEST(now(), created_at)
  WHERE object_id = $1 AND user_id = $2 AND revoked_at IS NULL`,
+		objectID.String(), targetID.String()); err != nil {
+		return err
+	}
+	// A removed member must not be able to restore their own access with an
+	// invitation token they minted before removal. Owner- or other-member-issued
+	// invitations remain valid until their issuer or the owner revokes them.
+	if _, err := tx.Exec(ctx, `
+UPDATE invitations SET revoked_at = GREATEST(now(), created_at)
+ WHERE object_id = $1 AND created_by = $2 AND revoked_at IS NULL`,
 		objectID.String(), targetID.String()); err != nil {
 		return err
 	}

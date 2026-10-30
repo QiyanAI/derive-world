@@ -27,7 +27,8 @@ type Conversation struct {
 	DeletedAt *time.Time `json:"deleted_at"`
 }
 
-// Message is one private message. Assistant messages carry parse_status.
+// Message is one private message. Assistant messages carry parse_status and
+// an optional server-authored notice explaining a rejected or unreadable turn.
 type Message struct {
 	ID             uuid.UUID `json:"id"`
 	ConversationID uuid.UUID `json:"conversation_id"`
@@ -35,6 +36,7 @@ type Message struct {
 	Content        string    `json:"content"`
 	ModelMode      string    `json:"model_mode"`
 	ParseStatus    *string   `json:"parse_status"`
+	Notice         *string   `json:"notice,omitempty"`
 	CreatedAt      time.Time `json:"created_at"`
 }
 
@@ -176,7 +178,7 @@ func (s *Service) GetConversation(ctx context.Context, userID, conversationID uu
 		return nil, err
 	}
 	rows, err := s.db.Query(ctx, `
-SELECT id, conversation_id, role, content, model_mode, parse_status, created_at
+SELECT id, conversation_id, role, content, model_mode, parse_status, notice, created_at
   FROM ai_messages
  WHERE conversation_id = $1
  ORDER BY created_at ASC, id ASC`, conversationID.String())
@@ -188,7 +190,8 @@ SELECT id, conversation_id, role, content, model_mode, parse_status, created_at
 	for rows.Next() {
 		var item Message
 		if err := rows.Scan(&item.ID, &item.ConversationID, &item.Role,
-			&item.Content, &item.ModelMode, &item.ParseStatus, &item.CreatedAt); err != nil {
+			&item.Content, &item.ModelMode, &item.ParseStatus, &item.Notice,
+			&item.CreatedAt); err != nil {
 			return nil, err
 		}
 		messages = append(messages, item)

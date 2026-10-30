@@ -17,6 +17,7 @@ type businessRoute struct {
 	method   string
 	pattern  string
 	auth     bool
+	public   bool
 	allowPAT bool
 	patScope string
 	handler  http.HandlerFunc
@@ -74,12 +75,64 @@ func (a *App) registerBusinessRoutes(mux *http.ServeMux) {
 		{method: http.MethodGet, pattern: "/api/v1/confirmations/{id}", auth: true, handler: a.getConfirmation},
 		{method: http.MethodPost, pattern: "/api/v1/confirmations/{id}/approve", auth: true, handler: a.approveConfirmation},
 		{method: http.MethodPost, pattern: "/api/v1/confirmations/{id}/deny", auth: true, handler: a.denyConfirmation},
+
+		// living-world World Stage, Living Pulse, Derive Lens, and diagnostics.
+		{method: http.MethodGet, pattern: "/api/v1/world/stage", auth: true, handler: a.worldStage},
+		{method: http.MethodGet, pattern: "/api/v1/world/layout", auth: true, handler: a.worldLayout},
+		{method: http.MethodPut, pattern: "/api/v1/world/layout", auth: true, handler: a.saveWorldLayout},
+		{method: http.MethodGet, pattern: "/api/v1/pulse", auth: true, handler: a.pulse},
+		{method: http.MethodGet, pattern: "/api/v1/system/status", auth: true, handler: a.systemStatus},
+		{method: http.MethodGet, pattern: "/api/v1/system/model-check", auth: true, handler: a.modelCheck},
+		{method: http.MethodGet, pattern: "/api/v1/stream", auth: true, handler: a.streamEvents},
+		{method: http.MethodGet, pattern: "/api/v1/world-capabilities", auth: true, allowPAT: true, patScope: identity.ScopeObjectsRead, handler: a.worldCapabilities},
+		{method: http.MethodGet, pattern: "/api/v1/objects/{id}/assets", auth: true, allowPAT: true, patScope: identity.ScopeObjectsRead, handler: a.listObjectAssets},
+		{method: http.MethodPost, pattern: "/api/v1/objects/{id}/assets", auth: true, allowPAT: true, patScope: identity.ScopeObjectsWrite, handler: a.uploadObjectAsset},
+		{method: http.MethodPost, pattern: "/api/v1/objects/{id}/asset-generation", auth: true, allowPAT: true, patScope: identity.ScopeObjectsWrite, handler: a.generateObjectAsset},
+		{method: http.MethodGet, pattern: "/api/v1/objects/{id}/assets/{asset_id}", auth: true, allowPAT: true, patScope: identity.ScopeObjectsRead, handler: a.getObjectAsset},
+		{method: http.MethodDelete, pattern: "/api/v1/objects/{id}/assets/{asset_id}", auth: true, handler: a.removeObjectAsset},
+		{method: http.MethodGet, pattern: "/api/v1/objects/{id}/lens", auth: true, allowPAT: true, patScope: identity.ScopeObjectsRead, handler: a.getLens},
+		{method: http.MethodGet, pattern: "/api/v1/objects/{id}/versions/{version}", auth: true, allowPAT: true, patScope: identity.ScopeObjectsRead, handler: a.getObjectVersion},
+		{method: http.MethodGet, pattern: "/api/v1/objects/{id}/discussions", auth: true, allowPAT: true, patScope: identity.ScopeObjectsRead, handler: a.listDiscussions},
+		{method: http.MethodPost, pattern: "/api/v1/objects/{id}/discussions", auth: true, handler: a.postDiscussion},
+
+		// living-world Social: friendships, blocks, direct human messages.
+		{method: http.MethodGet, pattern: "/api/v1/social/user-search", auth: true, handler: a.searchUsers},
+		{method: http.MethodGet, pattern: "/api/v1/social/discoverability", auth: true, handler: a.getDiscoverability},
+		{method: http.MethodPatch, pattern: "/api/v1/social/discoverability", auth: true, handler: a.setDiscoverability},
+		{method: http.MethodGet, pattern: "/api/v1/social/friends", auth: true, handler: a.listFriends},
+		{method: http.MethodGet, pattern: "/api/v1/social/friend-requests", auth: true, handler: a.listFriendRequests},
+		{method: http.MethodPost, pattern: "/api/v1/social/friend-requests", auth: true, handler: a.sendFriendRequest},
+		{method: http.MethodPost, pattern: "/api/v1/social/friend-requests/{id}/accept", auth: true, handler: a.acceptFriendRequest},
+		{method: http.MethodPost, pattern: "/api/v1/social/friend-requests/{id}/decline", auth: true, handler: a.declineFriendRequest},
+		{method: http.MethodDelete, pattern: "/api/v1/social/friends/{user_id}", auth: true, handler: a.removeFriend},
+		{method: http.MethodGet, pattern: "/api/v1/social/messages", auth: true, handler: a.listMessages},
+		{method: http.MethodPost, pattern: "/api/v1/social/messages", auth: true, handler: a.sendDirectMessage},
+		{method: http.MethodPost, pattern: "/api/v1/social/messages/read", auth: true, handler: a.markMessagesRead},
+		{method: http.MethodGet, pattern: "/api/v1/social/blocks", auth: true, handler: a.listBlocks},
+		{method: http.MethodPost, pattern: "/api/v1/social/blocks", auth: true, handler: a.blockUser},
+		{method: http.MethodDelete, pattern: "/api/v1/social/blocks/{user_id}", auth: true, handler: a.unblockUser},
+
+		// living-world Publication: owner publication, consent, anonymous discovery.
+		{method: http.MethodGet, pattern: "/api/v1/objects/{id}/publications", auth: true, allowPAT: true, patScope: identity.ScopeObjectsRead, handler: a.listPublications},
+		{method: http.MethodPost, pattern: "/api/v1/objects/{id}/publications", auth: true, handler: a.createPublication},
+		{method: http.MethodDelete, pattern: "/api/v1/publications/{id}", auth: true, handler: a.revokePublication},
+		{method: http.MethodGet, pattern: "/api/v1/publication-consents", auth: true, handler: a.listPublicationConsents},
+		{method: http.MethodPost, pattern: "/api/v1/publication-consents/{id}/approve", auth: true, handler: a.approvePublicationConsent},
+		{method: http.MethodPost, pattern: "/api/v1/publication-consents/{id}/decline", auth: true, handler: a.declinePublicationConsent},
+		{method: http.MethodGet, pattern: "/api/v1/public/worlds", public: true, handler: a.publicWorlds},
+		{method: http.MethodGet, pattern: "/api/v1/public/worlds/{id}", public: true, handler: a.publicWorld},
+		{method: http.MethodGet, pattern: "/api/v1/public/worlds/{id}/lineage", public: true, handler: a.publicWorldLineage},
+		{method: http.MethodGet, pattern: "/api/v1/public/worlds/{id}/assets/{asset_id}", public: true, handler: a.publicWorldAsset},
+		{method: http.MethodPost, pattern: "/api/v1/public/worlds/{id}/derive", auth: true, handler: a.publicDerive},
+		{method: http.MethodPost, pattern: "/api/v1/public/worlds/{id}/report", auth: true, handler: a.reportPublicWorld},
 	}
 	methodsByPath := map[string][]string{}
 	for _, route := range routes {
 		handler := route.handler
 		if route.auth {
 			handler = a.withAuthPolicy(route)
+		} else if route.public {
+			handler = a.withPublicPolicy(handler)
 		}
 		mux.Handle(route.method+" "+route.pattern, httpx.TagRoute(route.pattern, handler))
 		a.routes = append(a.routes, RouteSpec{Method: route.method, Pattern: route.pattern})

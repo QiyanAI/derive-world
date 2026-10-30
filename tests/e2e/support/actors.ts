@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: Apache-2.0
-import { expect, type Browser, type BrowserContext, type Page } from "@playwright/test";
+import { expect, type Browser, type BrowserContext, type Locator, type Page } from "@playwright/test";
 
 export interface Actor {
   email: string;
@@ -27,6 +27,19 @@ export function uniqueActor(prefix: string, displayName?: string): Actor {
   };
 }
 
+/**
+ * The V2 create dialog is mounted on open and moves focus into its first
+ * field. A fill issued in the same tick can occasionally be erased by that
+ * mount under Firefox/CI load. Retry the fill until the DOM holds the value;
+ * every caller still asserts the final value.
+ */
+export async function fillStable(locator: Locator, value: string): Promise<void> {
+  await expect(async () => {
+    await locator.fill(value);
+    await expect(locator).toHaveValue(value);
+  }).toPass({ timeout: 30_000 });
+}
+
 export async function fillRegistration(page: Page, actor: Actor): Promise<void> {
   await page.getByLabel("Email", { exact: true }).fill(actor.email);
   await page.getByLabel("Handle").fill(actor.handle);
@@ -38,7 +51,8 @@ export async function register(page: Page, actor: Actor): Promise<void> {
   await page.goto("/register");
   await fillRegistration(page, actor);
   await page.getByRole("button", { name: "Create account" }).click();
-  await expect(page).toHaveURL(/\/welcome/);
+  await expect(page).not.toHaveURL(/\/register/);
+  await expect(page.getByTestId("world-onboarding")).toBeVisible();
 }
 
 export async function registerFromInvite(page: Page, actor: Actor): Promise<void> {
@@ -51,8 +65,8 @@ export async function registerFromInvite(page: Page, actor: Actor): Promise<void
 
 export async function login(page: Page, actor: Actor): Promise<void> {
   await page.goto("/login");
-  await page.getByLabel("Email", { exact: true }).fill(actor.email);
-  await page.getByLabel("Password").fill(actor.password);
+  await fillStable(page.getByLabel("Email", { exact: true }), actor.email);
+  await fillStable(page.getByLabel("Password"), actor.password);
   await page.getByRole("button", { name: "Sign in" }).click();
   await expect(page).not.toHaveURL(/\/login/);
 }

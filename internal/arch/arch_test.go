@@ -226,6 +226,13 @@ func assertTableOwnership(t *testing.T, root string, packages map[string]listedP
 		"model_invocations": "model",
 		"audit_events":      "audit", "audit_actions": "audit",
 		"idempotency_keys": "store", "schema_migrations": "store",
+		// V2 user-private World Stage layout. It is view state only and is
+		// owned by package world; it never changes object business state.
+		"user_world_layouts": "world",
+		// World media metadata and references are owned by the assets
+		// subsystem; other packages call its transaction helpers.
+		"assets": "assets", "object_asset_refs": "assets",
+		"publication_asset_refs": "assets",
 		// G01 bootstrap infrastructure; not part of the 22 business tables.
 		"app_meta": "store",
 	}

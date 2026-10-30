@@ -21,6 +21,7 @@ separate frontend server in the reference deployment.
 ```text
 web / sdk -> OpenAPI -> app -> {identity, personalai, objects, derive, trust, handoff, capability}
 objects -> store
+objects -> worldcap (pure validation/execution registry)
 derive -> objects (controlled interface) + store
 trust -> identity + objects (read-only) + store
 capability -> trust + objects + model (content capabilities only)
@@ -32,12 +33,30 @@ audit -> store
 frozen dependencies. `internal/arch/TestModuleBoundaries` enforces the forbidden
 edges, cycle freedom, submodule isolation, and the table-ownership matrix.
 
+## World experience capabilities
+
+`internal/worldcap` is a standard-library-only registry of presentation and
+behavior modules. The objects package owns the world document, permissions,
+persistence, events, audit and derivation; `worldcap` owns module descriptors,
+props/action validation, bounded condition evaluation and the `WorldAccess`
+mutation surface. A module cannot add an object type, table, permission,
+network call or user code path. The capability catalog is exposed at
+`GET /api/v1/world-capabilities`; the product palette and generated forms use
+that descriptor data, while presentation modules are paired with client
+renderers by id. The optional `experience` field in `open_world_v1` is the only
+world-protocol extension; existing scene/stage/cards/timeline views remain
+registered client modes.
+
 ## Capability scope
 
-This scope keeps the frozen 22-table schema and activates the Capability Broker, the
-five frozen capabilities, `capability_definitions` synchronization, invocation
-recording, Open API endpoints, the TypeScript SDK, and the independent
-`content.structure` Provider. The Broker composes the object, Handoff,
+This scope keeps the published `v0.1.0` 22-table schema intact and appends
+migrations 4–11 for the living-scene object, social and publication domains,
+privacy-aware account discovery and user-private World Stage layout, open
+worlds and world assets, AI message notices, and approval links (36 tables at
+schema version 11). It activates the Capability Broker, the five frozen capabilities,
+`capability_definitions` synchronization, invocation recording, Open API
+endpoints, the TypeScript SDK, and the independent `content.structure`
+Provider. The Broker composes the object, Handoff,
 proposal, derive, Trust Kernel, and confirmation paths; it does not create a
 second authorization, object-write, derive, or confirmation mechanism.
 
@@ -49,7 +68,17 @@ shares one preparation/mutation path with the human endpoints. `internal/trust`
 owns `delegation_grants` and `confirmations` and is the single AI authorization
 decision point. `internal/personalai` owns profiles, private context,
 conversations, and messages; it calls objects through a narrow proposal-writer
-interface and never writes object state. `internal/handoff` reads only object
+interface and never writes object state.
+
+The development branch adds three read/write boundaries without a second
+object store. `internal/social` owns friendships, blocks, direct human messages,
+and object discussions; it never grants object permissions. `internal/publication`
+owns publication records, sanitized version snapshots, contributor consents,
+public derivation links, and abuse reports; anonymous reads never use the
+private object endpoint. `internal/world` is a read-only projection over
+authorized objects, derivation edges, and real events for the World Stage and
+Living Pulse. `internal/stream` carries only authenticated refresh signals; it
+never carries object state or message bodies. `internal/handoff` reads only object
 data. `internal/model` owns `model_invocations`. `internal/identity` writes users,
 sessions, and PATs. `internal/audit` appends audit rows in the caller's
 transaction. `internal/store` owns idempotency reservations.

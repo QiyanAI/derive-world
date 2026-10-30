@@ -20,3 +20,7 @@ tests/*
 !tests/fixtures
 !tests/fixtures/**
 README.zh-CN.md
+var
+ops/github-metrics/snapshot.json
+ops/github-metrics/report.md
+*.storageState.json

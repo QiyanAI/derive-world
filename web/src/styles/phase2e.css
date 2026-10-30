@@ -1,0 +1,203 @@
+/* SPDX-License-Identifier: Apache-2.0 */
+/* Phase 2E: uploaded media, audio controls, and the shared 3D surface. */
+
+.dw-media {
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  width: 100%;
+  overflow: hidden;
+  border-radius: var(--radius-lg, 16px);
+  background: color-mix(in srgb, var(--surface, #101826) 88%, transparent);
+}
+
+.dw-media-content {
+  display: block;
+  width: 100%;
+  max-height: 68vh;
+  border-radius: inherit;
+  background: #05080d;
+}
+
+.dw-media-content.is-contain {
+  object-fit: contain;
+}
+
+.dw-media-content.is-cover {
+  object-fit: cover;
+  min-height: 220px;
+}
+
+.dw-media figcaption {
+  padding: 0 12px 12px;
+  color: var(--text-muted, #9aa7b8);
+  font-size: 0.92rem;
+}
+
+.dw-media-empty,
+.dw-media-unavailable {
+  padding: 18px;
+  border: 1px dashed color-mix(in srgb, var(--text-muted, #9aa7b8) 40%, transparent);
+  border-radius: var(--radius-md, 12px);
+  color: var(--text-muted, #9aa7b8);
+  font-size: 0.95rem;
+}
+
+.dw-media-sound {
+  align-self: flex-start;
+  margin: 0 12px 12px;
+}
+
+.dw-audio {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  padding: 8px 12px;
+  border: 1px solid color-mix(in srgb, var(--text-muted, #9aa7b8) 18%, transparent);
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--surface, #101826) 86%, transparent);
+}
+
+.dw-audio-title {
+  font-size: 0.9rem;
+  color: var(--text-muted, #9aa7b8);
+}
+
+.dw-3d {
+  position: relative;
+  width: 100%;
+  min-height: 420px;
+  aspect-ratio: 16 / 10;
+  overflow: hidden;
+  border-radius: var(--radius-lg, 16px);
+  background: #070b12;
+  outline: none;
+}
+
+.dw-3d-canvas {
+  display: block;
+  width: 100%;
+  height: 100%;
+  touch-action: none;
+}
+
+.dw-3d-fallback {
+  padding: 24px;
+  color: var(--text-muted, #9aa7b8);
+}
+
+.dw-3d-fallback ul {
+  columns: 2;
+  margin: 12px 0 0;
+}
+
+.dw-3d-touch {
+  position: absolute;
+  right: 12px;
+  bottom: 12px;
+  display: grid;
+  grid-template-columns: repeat(3, 42px);
+  grid-template-rows: repeat(3, 42px);
+  gap: 4px;
+  opacity: 0.85;
+}
+
+.dw-3d-touch button {
+  border: 1px solid color-mix(in srgb, #ffffff 22%, transparent);
+  border-radius: 10px;
+  background: color-mix(in srgb, #0a101a 72%, transparent);
+  color: #f3f7ff;
+  font-size: 1rem;
+  touch-action: none;
+}
+
+.dw-3d-touch button:nth-child(1) { grid-column: 2; grid-row: 1; }
+.dw-3d-touch button:nth-child(2) { grid-column: 1; grid-row: 2; }
+.dw-3d-touch button:nth-child(3) { grid-column: 2; grid-row: 2; }
+.dw-3d-touch button:nth-child(4) { grid-column: 3; grid-row: 2; }
+.dw-3d-touch button:nth-child(5) { grid-column: 2; grid-row: 3; }
+
+.dw-exp-assets {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 12px;
+  margin-bottom: 14px;
+  border: 1px solid color-mix(in srgb, var(--text-muted, #9aa7b8) 20%, transparent);
+  border-radius: var(--radius-md, 12px);
+}
+
+.dw-exp-asset-buttons {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.dw-exp-asset-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.dw-exp-asset-list li {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 6px;
+  border-radius: 10px;
+  background: color-mix(in srgb, var(--surface, #101826) 70%, transparent);
+}
+
+.dw-exp-asset-thumb,
+.dw-exp-asset-glyph {
+  width: 44px;
+  height: 44px;
+  flex: 0 0 44px;
+  border-radius: 8px;
+  object-fit: cover;
+  background: #070b12;
+}
+
+.dw-exp-asset-glyph {
+  display: grid;
+  place-items: center;
+  color: var(--accent, #7fd1c8);
+  font-size: 1.2rem;
+}
+
+.dw-exp-asset-meta {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  flex: 1;
+}
+
+.dw-exp-asset-meta strong {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 0.9rem;
+}
+
+.dw-exp-asset-meta small {
+  color: var(--text-muted, #9aa7b8);
+  font-size: 0.78rem;
+}
+
+@media (max-width: 720px) {
+  .dw-3d {
+    min-height: 300px;
+    aspect-ratio: auto;
+  }
+  .dw-media-content {
+    max-height: 52vh;
+  }
+  .dw-3d-touch {
+    opacity: 0.95;
+  }
+}

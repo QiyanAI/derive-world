@@ -64,14 +64,34 @@ export default function WelcomePage() {
         ))}
       </section>
 
-      <div className="form-actions">
-        <Link className="button" to="/objects/new">
-          {t("welcome.create")}
-        </Link>
-        <Link className="button button-ghost" to="/">
-          {t("welcome.world")}
-        </Link>
-      </div>
+      <section className="welcome-start">
+        <h2>{t("welcome.startTitle")}</h2>
+        <p className="muted">{t("welcome.startLead")}</p>
+        <div className="welcome-start-grid">
+          <Link
+            className="card stage-entry welcome-entry"
+            to="/objects/new?template=living_scene&purpose=project&first=1"
+          >
+            <strong>{t("stage.entryProject")}</strong>
+            <small>{t("stage.entryProjectHint")}</small>
+          </Link>
+          <Link
+            className="card stage-entry welcome-entry"
+            to="/objects/new?template=living_scene&purpose=story&first=1"
+          >
+            <strong>{t("stage.entryStory")}</strong>
+            <small>{t("stage.entryStoryHint")}</small>
+          </Link>
+        </div>
+        <div className="form-actions">
+          <Link className="button button-ghost" to="/">
+            {t("welcome.world")}
+          </Link>
+          <Link className="text-link" to="/explore">
+            {t("stage.explore")}
+          </Link>
+        </div>
+      </section>
       <p className="muted welcome-note">{t("welcome.note")}</p>
     </div>
   );

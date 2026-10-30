@@ -27,6 +27,8 @@ import (
 	"github.com/QiyanAI/derive-world/internal/model"
 	"github.com/QiyanAI/derive-world/internal/objects"
 	"github.com/QiyanAI/derive-world/internal/personalai"
+	"github.com/QiyanAI/derive-world/internal/publication"
+	"github.com/QiyanAI/derive-world/internal/social"
 	"github.com/QiyanAI/derive-world/internal/store"
 	"github.com/QiyanAI/derive-world/internal/trust"
 )
@@ -150,6 +152,21 @@ func (a *App) withAuthPolicy(route businessRoute) http.HandlerFunc {
 	}
 }
 
+// withPublicPolicy guards anonymous read endpoints. It applies the anonymous
+// IP budget and the authoritative-field ban but never creates a principal.
+func (a *App) withPublicPolicy(next http.HandlerFunc) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		if !a.allowAnonymousAPI(w, r) {
+			return
+		}
+		if field := detectActorOverride(r, nil); field != "" {
+			a.rejectActorOverride(w, r, nil, field)
+			return
+		}
+		next(w, r)
+	}
+}
+
 func bearerToken(r *http.Request) (string, bool) {
 	header := strings.TrimSpace(r.Header.Get("Authorization"))
 	if header == "" {
@@ -199,6 +216,24 @@ func (a *App) allowExport(w http.ResponseWriter, r *http.Request, userID uuid.UU
 	}
 	a.auditDeny(r, audit.UserActor(userID), audit.ActionRateLimitHit, "route", nil, "export_rate_limited", nil)
 	httpx.WriteError(w, r, httpx.NewError(httpx.CodeRateLimited, "export limit reached"))
+	return false
+}
+
+// allowUserLimit applies one named per-user bucket and writes the standard
+// rate-limit headers. It is used for living-world social and publication abuse
+// controls in addition to the global API bucket.
+func (a *App) allowUserLimit(w http.ResponseWriter, r *http.Request, userID uuid.UUID,
+	limiter *httpx.Limiter, limit int, reason, message string) bool {
+	if limiter == nil {
+		return true
+	}
+	remaining, reset, ok := limiter.Allow(userID.String())
+	a.setRateLimitHeaders(w, limit, remaining, reset)
+	if ok {
+		return true
+	}
+	a.auditDeny(r, audit.UserActor(userID), audit.ActionRateLimitHit, "route", nil, reason, nil)
+	httpx.WriteError(w, r, httpx.NewError(httpx.CodeRateLimited, message))
 	return false
 }
 
@@ -597,6 +632,15 @@ func (a *App) writeDomainError(w http.ResponseWriter, r *http.Request, err error
 		!errors.Is(err, personalai.ErrInvalidRequest) &&
 		!errors.Is(err, personalai.ErrPayloadTooLarge) &&
 		!errors.Is(err, personalai.ErrForbidden) &&
+		!errors.Is(err, social.ErrNotFound) &&
+		!errors.Is(err, social.ErrForbidden) &&
+		!errors.Is(err, social.ErrBlocked) &&
+		!errors.Is(err, social.ErrConflict) &&
+		!errors.Is(err, social.ErrInvalidRequest) &&
+		!errors.Is(err, publication.ErrNotFound) &&
+		!errors.Is(err, publication.ErrForbidden) &&
+		!errors.Is(err, publication.ErrConflict) &&
+		!errors.Is(err, publication.ErrInvalidRequest) &&
 		!errors.Is(err, model.ErrBudgetExceeded) &&
 		!errors.Is(err, model.ErrGlobalBudgetExceeded) &&
 		!errors.Is(err, model.ErrInputTooLarge) &&
@@ -656,7 +700,8 @@ func writeDomainError(w http.ResponseWriter, r *http.Request, err error) {
 		httpx.WriteError(w, r, httpx.NewError(httpx.CodeInvalidRequest, "invalid request").WithDetails(validationFieldDetails(err)))
 	case errors.Is(err, identity.ErrNotFound), errors.Is(err, trust.ErrNotFound),
 		errors.Is(err, trust.ErrProfileNotOwned), errors.Is(err, trust.ErrConfirmationNotOwned),
-		errors.Is(err, personalai.ErrNotFound):
+		errors.Is(err, personalai.ErrNotFound), errors.Is(err, social.ErrNotFound),
+		errors.Is(err, publication.ErrNotFound):
 		httpx.WriteError(w, r, httpx.NewError(httpx.CodeNotFound, "not found"))
 	case errors.Is(err, objects.ErrInvitationInvalid):
 		httpx.WriteError(w, r, httpx.NewError(httpx.CodeInvitationInvalid, "invitation is not valid"))
@@ -667,14 +712,18 @@ func writeDomainError(w http.ResponseWriter, r *http.Request, err error) {
 		httpx.WriteError(w, r, httpx.NewError(httpx.CodeConflict, "conflict").
 			WithDetails(map[string]any{"reason": "owner_cannot_leave"}))
 	case errors.Is(err, trust.ErrForbidden), errors.Is(err, trust.ErrNoActiveDelegation),
-		errors.Is(err, trust.ErrDelegationNotActive), errors.Is(err, personalai.ErrForbidden):
+		errors.Is(err, trust.ErrDelegationNotActive), errors.Is(err, personalai.ErrForbidden),
+		errors.Is(err, social.ErrForbidden), errors.Is(err, social.ErrBlocked),
+		errors.Is(err, publication.ErrForbidden):
 		httpx.WriteError(w, r, httpx.NewError(httpx.CodeForbidden, "forbidden"))
 	case errors.Is(err, trust.ErrInvalidRequest), errors.Is(err, personalai.ErrInvalidRequest),
-		errors.Is(err, trust.ErrUnsupportedAction):
+		errors.Is(err, trust.ErrUnsupportedAction), errors.Is(err, social.ErrInvalidRequest),
+		errors.Is(err, publication.ErrInvalidRequest):
 		httpx.WriteError(w, r, httpx.NewError(httpx.CodeInvalidRequest, "invalid request").WithDetails(validationFieldDetails(err)))
 	case errors.Is(err, trust.ErrVersionConflict):
 		httpx.WriteError(w, r, httpx.NewError(httpx.CodeVersionConflict, "version conflict"))
-	case errors.Is(err, trust.ErrConflict):
+	case errors.Is(err, trust.ErrConflict), errors.Is(err, social.ErrConflict),
+		errors.Is(err, publication.ErrConflict):
 		httpx.WriteError(w, r, httpx.NewError(httpx.CodeConflict, "conflict"))
 	case errors.Is(err, trust.ErrConfirmationExpired):
 		httpx.WriteError(w, r, httpx.NewError(httpx.CodeConfirmationExpired, "confirmation expired"))
@@ -721,7 +770,7 @@ func modelErrorCode(err error) httpx.ErrorCode {
 		return httpx.CodeModelUnavailable
 	case model.CodeTimeout:
 		return httpx.CodeModelTimeout
-	case model.CodeInvalidOutput:
+	case model.CodeInvalidOutput, model.CodeEmptyOutput:
 		return httpx.CodeModelInvalidOutput
 	case model.CodeRateLimited:
 		return httpx.CodeRateLimited
@@ -804,6 +853,15 @@ func (a *App) completeIdempotentFailure(r *http.Request, actorID uuid.UUID, rout
 		code, message = httpx.CodePayloadTooLarge, "payload too large"
 	case errors.Is(err, personalai.ErrInvalidRequest):
 		code, message = httpx.CodeInvalidRequest, "invalid request"
+	case errors.Is(err, social.ErrNotFound), errors.Is(err, publication.ErrNotFound):
+		code, message = httpx.CodeNotFound, "not found"
+	case errors.Is(err, social.ErrForbidden), errors.Is(err, social.ErrBlocked),
+		errors.Is(err, publication.ErrForbidden):
+		code, message = httpx.CodeForbidden, "forbidden"
+	case errors.Is(err, social.ErrConflict), errors.Is(err, publication.ErrConflict):
+		code, message = httpx.CodeConflict, "conflict"
+	case errors.Is(err, social.ErrInvalidRequest), errors.Is(err, publication.ErrInvalidRequest):
+		code, message = httpx.CodeInvalidRequest, "invalid request"
 	}
 	deterministic := true
 	switch {
@@ -815,7 +873,12 @@ func (a *App) completeIdempotentFailure(r *http.Request, actorID uuid.UUID, rout
 		errors.Is(err, identity.ErrInvalidCredentials), errors.Is(err, identity.ErrConflict),
 		errors.Is(err, identity.ErrInvalidRequest), errors.Is(err, objects.ErrSnapshotMissing),
 		errors.Is(err, personalai.ErrNotFound), errors.Is(err, personalai.ErrForbidden),
-		errors.Is(err, personalai.ErrInvalidRequest), errors.Is(err, personalai.ErrPayloadTooLarge):
+		errors.Is(err, personalai.ErrInvalidRequest), errors.Is(err, personalai.ErrPayloadTooLarge),
+		errors.Is(err, social.ErrNotFound), errors.Is(err, social.ErrForbidden),
+		errors.Is(err, social.ErrBlocked), errors.Is(err, social.ErrConflict),
+		errors.Is(err, social.ErrInvalidRequest), errors.Is(err, publication.ErrNotFound),
+		errors.Is(err, publication.ErrForbidden), errors.Is(err, publication.ErrConflict),
+		errors.Is(err, publication.ErrInvalidRequest):
 	default:
 		deterministic = false
 	}

@@ -39,16 +39,31 @@ const (
 
 var permissionOrder = []string{PermRead, PermContribute, PermDerive, PermInvite, PermManage}
 
-// Object and template domains are frozen by G00 contract §A.4.3.
+// Object and template domains are frozen by G00 contract §A.4.3. living-world adds
+// the third native object type without changing the first two.
 const (
 	TypeCollaborative = "collaborative"
 	TypeInteractive   = "interactive"
+	TypeLivingScene   = "living_scene"
 
 	TemplateCollaborative = "collaborative_v1"
 	TemplateInteractive   = "interactive_v1"
+	TemplateLivingScene   = "living_scene_v1"
 
 	StatusActive  = "active"
 	StatusDeleted = "deleted"
+
+	ScenePurposeProject = "project"
+	ScenePurposeStory   = "story"
+
+	SceneKindIdea    = "idea"
+	SceneKindStep    = "step"
+	SceneKindScene   = "scene"
+	SceneKindChoice  = "choice"
+	SceneKindOutcome = "outcome"
+
+	SceneStatusOpen = "open"
+	SceneStatusDone = "done"
 )
 
 // Object is the authoritative persisted object plus the caller's permissions.
@@ -189,6 +204,44 @@ type InteractiveOptionInput struct {
 	Label string `json:"label"`
 }
 
+// SceneElement is one structured creation element inside living_scene_v1.
+type SceneElement struct {
+	ID     string `json:"id"`
+	Kind   string `json:"kind"`
+	Text   string `json:"text"`
+	Status string `json:"status"`
+}
+
+// LivingSceneState is the v1 scene template. Ordering is array order.
+type LivingSceneState struct {
+	Title    string         `json:"title"`
+	Purpose  string         `json:"purpose"`
+	Premise  string         `json:"premise"`
+	Elements []SceneElement `json:"elements"`
+	Tags     []string       `json:"tags"`
+}
+
+// SceneContent is the create-time content input. The server generates element
+// ids and normalizes status to open.
+type SceneContent struct {
+	Purpose  string              `json:"purpose"`
+	Premise  string              `json:"premise"`
+	Elements []SceneElementInput `json:"elements"`
+	Tags     []string            `json:"tags"`
+}
+
+// SceneElementInput lets the client provide the initial element kind and text.
+type SceneElementInput struct {
+	Kind string `json:"kind"`
+	Text string `json:"text"`
+}
+
+// SceneAvailableFields is the derive inheritance whitelist for scene objects.
+// Purpose is structural and copied by the assembler, not selectable.
+func SceneAvailableFields() []string {
+	return []string{"premise", "elements", "tags"}
+}
+
 // ObjectView is the API representation of an object.
 type ObjectView struct {
 	ID                   string          `json:"id"`
@@ -209,9 +262,15 @@ type ObjectView struct {
 }
 
 // DeriveLineage is the read projection assembled from derivation_edges.
+// PublicationID/PublicationTitle are only populated when the parent is hidden
+// as a private object but an active public publication authorizes the source
+// relationship. Public is then true.
 type DeriveLineage struct {
-	Parent          DeriveParent `json:"parent"`
-	InheritedFields []string     `json:"inherited_fields"`
+	Parent           DeriveParent `json:"parent"`
+	InheritedFields  []string     `json:"inherited_fields"`
+	PublicationID    *string      `json:"publication_id,omitempty"`
+	PublicationTitle *string      `json:"publication_title,omitempty"`
+	Public           bool         `json:"public,omitempty"`
 }
 
 // DeriveParent identifies the parent object and the version that was copied.

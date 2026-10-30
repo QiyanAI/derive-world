@@ -58,9 +58,10 @@ test.describe("Handoff, Personal AI proposal, human confirmation, derive", () =>
       await expect(
         pageB.getByText("Fixture structured turn: I propose one body edit for you to review.")
       ).toBeVisible();
-      await expect(pageB.getByRole("heading", { name: "Proposals waiting for a human" })).toBeVisible();
-      await acceptNextDialog(pageB);
-      await pageB.getByRole("button", { name: "Apply proposal" }).click();
+      const proposalCard = pageB.getByTestId("proposal-card").filter({ hasText: "Fixture proposed body" });
+      await expect(proposalCard).toBeVisible();
+      await expect(proposalCard).toHaveAttribute("data-inline", "true");
+      await pageB.getByRole("button", { name: "Confirm and apply" }).click();
       await expect(pageB.getByText("Proposal applied.")).toBeVisible();
       await expect(pageB.getByText("Version 2", { exact: true }).first()).toBeVisible();
 
@@ -70,11 +71,9 @@ test.describe("Handoff, Personal AI proposal, human confirmation, derive", () =>
       const confirmation = pageB.getByTestId("confirmation-card");
       await expect(confirmation).toBeVisible();
       await expect(confirmation.getByText("Fixture derived child")).toBeVisible();
-      await expect(confirmation.getByText("Bound to v2")).toBeVisible();
-      await acceptNextDialog(pageB);
-      await pageB.getByRole("button", { name: "Approve and execute" }).click();
-      await expect(pageB.getByText(/Approval executed: created Fixture derived child at v1\./)).toBeVisible();
-      await pageB.getByRole("link", { name: "Open created object" }).click();
+      await pageB.getByRole("button", { name: "Confirm and create branch" }).click();
+      await expect(confirmation).toHaveAttribute("data-state", "created");
+      await confirmation.getByRole("link", { name: "Enter the new world" }).click();
       await expect(pageB).toHaveURL(/\/objects\/[0-9a-f-]{36}/);
       await expect(pageB.getByRole("heading", { name: "Fixture derived child" })).toBeVisible();
       await expect(pageB.getByText("Version 1", { exact: true }).first()).toBeVisible();

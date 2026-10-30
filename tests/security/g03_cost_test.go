@@ -35,6 +35,10 @@ func TestG03ModelDailyBudget(t *testing.T) {
 	provider := &scriptedProvider{}
 	env := newTestEnvWithProvider(t, func(cfg *config.Config) {
 		cfg.RateLimitAIPerHour = 1_000_000
+		// This test isolates the daily *call* budget. The prompt now always
+		// carries the compact world-brief contract, so the default character
+		// budget would stop the loop first and test a different guard.
+		cfg.Model.DailyInputCharsPerUser = 1_000_000
 	}, provider)
 	a := env.register(t, "g03budget-a")
 	conversation := a.createConversation(t, "Budget chat", nil)

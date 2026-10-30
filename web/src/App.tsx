@@ -7,6 +7,8 @@ import { I18nProvider } from "./i18n";
 import { MetaProvider } from "./meta";
 import AIPage from "./pages/AIPage";
 import DerivePage from "./pages/DerivePage";
+import ExplorePage from "./pages/ExplorePage";
+import FriendsPage from "./pages/FriendsPage";
 import HomePage from "./pages/HomePage";
 import InvitePage from "./pages/InvitePage";
 import LineagePage from "./pages/LineagePage";
@@ -15,6 +17,7 @@ import NotFoundPage from "./pages/NotFoundPage";
 import ObjectNewPage from "./pages/ObjectNewPage";
 import ObjectPage from "./pages/ObjectPage";
 import ObjectsPage from "./pages/ObjectsPage";
+import OpenWorldPage from "./pages/OpenWorldPage";
 import RegisterPage from "./pages/RegisterPage";
 import SelfPage from "./pages/SelfPage";
 import SettingsPage from "./pages/SettingsPage";
@@ -30,6 +33,9 @@ export default function App() {
               <Routes>
                 <Route element={<AppShell />}>
                   <Route index element={<HomePage />} />
+                  <Route path="friends" element={<FriendsPage />} />
+                  <Route path="explore" element={<ExplorePage />} />
+                  <Route path="explore/:id" element={<ExplorePage />} />
                   <Route path="welcome" element={<WelcomePage />} />
                   <Route path="login" element={<LoginPage />} />
                   <Route path="register" element={<RegisterPage />} />
@@ -40,6 +46,7 @@ export default function App() {
                   <Route path="objects/:id" element={<ObjectPage />} />
                   <Route path="objects/:id/derive" element={<DerivePage />} />
                   <Route path="objects/:id/lineage" element={<LineagePage />} />
+                  <Route path="worlds/:id" element={<OpenWorldPage />} />
                   <Route path="invite/:token" element={<InvitePage />} />
                   <Route path="settings" element={<SettingsPage />} />
                   <Route path="*" element={<NotFoundPage />} />

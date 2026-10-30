@@ -10,7 +10,12 @@
  */
 
 export type ModelMode = "fixture" | "real";
-export type ObjectType = "collaborative" | "interactive";
+export type ObjectType = "collaborative" | "interactive" | "living_scene" | "open_world";
+export type PresentationTemplate =
+  | "collaborative_v1"
+  | "interactive_v1"
+  | "living_scene_v1"
+  | "open_world_v1";
 export type Permission = "read" | "contribute" | "derive" | "invite" | "manage";
 export type CapabilityId =
   | "object.read"
@@ -102,12 +107,15 @@ export interface ObjectSummary {
 export interface DeriveLineage {
   parent: { object_id: string; version: number };
   inherited_fields: string[];
+  publication_id?: string;
+  publication_title?: string;
+  public?: boolean;
 }
 
 export interface ObjectView {
   id: string;
   object_type: ObjectType;
-  presentation_template: string;
+  presentation_template: PresentationTemplate;
   schema_version: number;
   creator_id: string;
   owner_id: string;
@@ -145,6 +153,88 @@ export interface ActionInput {
   expected_version: number;
 }
 
+export interface LocalizedLabel {
+  en: string;
+  zh: string;
+}
+
+export interface WorldCondition {
+  entity_id?: string;
+  field?: string;
+  op?: string;
+  value?: unknown;
+  all?: WorldCondition[];
+  any?: WorldCondition[];
+  not?: WorldCondition;
+}
+
+export interface WorldAction {
+  capability: string;
+  action: string;
+  params: Record<string, unknown>;
+}
+
+export interface WorldBehavior {
+  id: string;
+  name?: string;
+  condition?: WorldCondition;
+  actions: WorldAction[];
+}
+
+export interface WorldViewNode {
+  id: string;
+  capability: string;
+  props: Record<string, unknown>;
+  children?: WorldViewNode[];
+  visible_when?: WorldCondition;
+}
+
+export interface WorldExperience {
+  protocol: 1;
+  root: WorldViewNode;
+  behaviors?: WorldBehavior[];
+}
+
+export interface WorldCapabilityProperty {
+  type: "string" | "number" | "integer" | "boolean" | "array" | "object";
+  title: LocalizedLabel;
+  description?: LocalizedLabel;
+  format?: string;
+  enum?: string[];
+  minimum?: number;
+  maximum?: number;
+  max_length?: number;
+  items?: WorldCapabilityProperty;
+  properties?: Record<string, WorldCapabilityProperty>;
+  required?: string[];
+}
+
+export interface WorldCapabilityDescriptor {
+  id: string;
+  kind: "presentation" | "behavior";
+  version: number;
+  title: LocalizedLabel;
+  description: LocalizedLabel;
+  allows_children?: boolean;
+  child_scope?: "item";
+  child_kind_prop?: string;
+  params?: {
+    type: "object";
+    properties: Record<string, WorldCapabilityProperty>;
+    required?: string[];
+  };
+  actions?: Array<{
+    id: string;
+    title: LocalizedLabel;
+    description: LocalizedLabel;
+    params?: {
+      type: "object";
+      properties: Record<string, WorldCapabilityProperty>;
+      required?: string[];
+    };
+  }>;
+}
+
 export interface DeriveInput {
   title: string;
   source_version?: number;
@@ -163,6 +253,7 @@ export interface LineageResponse {
   descendants: LineageDescendant[];
   max_depth: number;
   truncated: boolean;
+  source?: DeriveLineage;
 }
 
 export interface LineageDescendant {
@@ -269,14 +360,37 @@ export interface ObjectProposeChangeInput {
     | "remove_checklist_item"
     | "add_tag"
     | "remove_tag"
-    | "cast_vote";
+    | "cast_vote"
+    | "set_premise"
+    | "add_element"
+    | "update_element"
+    | "remove_element"
+    | "move_element"
+    | "add_kind"
+    | "update_kind"
+    | "remove_kind"
+    | "add_node"
+    | "update_node"
+    | "remove_node"
+    | "move_node"
+    | "set_node_field"
+    | "set_node_status"
+    | "touch_node"
+    | "add_link"
+    | "remove_link"
+    | "add_rule"
+    | "remove_rule"
+    | "set_views";
   input: Record<string, unknown>;
   expected_version: number;
 }
 export interface ObjectDeriveCapabilityInput {
   object_id: string;
   source_version?: number;
-  inheritance_fields: Array<"summary" | "body" | "checklist" | "tags" | "prompt" | "options">;
+  inheritance_fields: Array<
+    "summary" | "body" | "checklist" | "tags" | "prompt" | "options"
+    | "premise" | "elements" | "structure" | "views"
+  >;
   title: string;
 }
 export interface ContentStructureInput {
@@ -490,6 +604,44 @@ export class DeriveWorldClient {
       "GET",
       `/api/v1/objects/${encodeURIComponent(objectId)}/handoff`,
       { signal: options.signal }
+    );
+  }
+
+  // ---- World experience ----
+
+  async listWorldCapabilities(
+    options: ReadOptions = {}
+  ): Promise<{ items: WorldCapabilityDescriptor[] }> {
+    return this.request<{ items: WorldCapabilityDescriptor[] }>(
+      "GET",
+      "/api/v1/world-capabilities",
+      { signal: options.signal }
+    );
+  }
+
+  async setExperience(
+    objectId: string,
+    experience: WorldExperience | null,
+    expectedVersion: number,
+    options: WriteOptions = {}
+  ): Promise<ObjectView> {
+    return this.postAction(
+      objectId,
+      { action: "set_experience", input: { experience }, expected_version: expectedVersion },
+      options
+    );
+  }
+
+  async invokeBehavior(
+    objectId: string,
+    input: { behavior_id: string; entity_id?: string; value?: unknown },
+    expectedVersion: number,
+    options: WriteOptions = {}
+  ): Promise<ObjectView> {
+    return this.postAction(
+      objectId,
+      { action: "invoke_behavior", input, expected_version: expectedVersion },
+      options
     );
   }
 

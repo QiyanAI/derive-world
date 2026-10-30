@@ -48,6 +48,11 @@ SELECT payload->>'option_id' FROM object_action_receipts
 	if err != nil {
 		return nil, err
 	}
+	if objectType == TypeOpenWorld {
+		if err := verifyOpenWorldAssetRefs(ctx, tx, objectID, newState); err != nil {
+			return nil, err
+		}
+	}
 	newVersion := currentVersion + 1
 	tag, err := tx.Exec(ctx, `
 UPDATE living_objects

@@ -53,10 +53,27 @@
 | POST | `/api/v1/confirmations/{id}/deny` | 会话 | 拒绝待确认动作。 |
 | GET | `/api/v1/me/export` | 会话 | 仅本人 JSON 导出，每小时一次。 |
 
+### 自由世界体验动作
+
+`open_world` 可以保存可选的 `experience` 文档。`POST /api/v1/objects/{id}/actions`
+对贡献者额外提供两个动作：
+
+| 动作 | 输入 | 含义 |
+|---|---|---|
+| `set_experience` | `{"experience": WorldExperience \| null}` | 替换或清除组合体验。协议键是 `protocol`，不是 `version`；HTTP actor-override 守卫会拒绝嵌套 `version` 键。 |
+| `invoke_behavior` | `{"behavior_id": "...", "entity_id"?: "...", "value"?: ...}` | 一次性运行一个体验行为；`entity_id` 必须属于本世界。 |
+
+`WorldExperience`（OpenAPI `components.schemas.WorldExperience`）为
+`{protocol: 1, root: WorldViewNode, behaviors?: WorldBehavior[]}`；视图节点引用
+已注册的呈现能力并携带经过校验的 `props`。`GET /api/v1/world-capabilities`
+是模块 ID 与参数形状的来源。服务器不执行用户代码，并拒绝未知能力、未知
+props、超大文档与无效引用。
+
 ## 能力端点
 
 | 方法 | 路径 | 认证 | 说明 |
 |---|---|---|---|
+| GET | `/api/v1/world-capabilities` | 会话或 PAT（`objects:read`） | 任意自由世界可组合的呈现与行为能力模块；描述数据驱动产品能力面板与生成的表单。 |
 | GET | `/api/v1/capabilities` | 会话或 PAT（`capabilities:invoke`） | 仅返回已启用描述符；永不含 Provider 地址或密钥。 |
 | GET | `/api/v1/capabilities/{capability_id}` | 会话或 PAT（`capabilities:invoke`） | 单个已启用描述符。 |
 | POST | `/api/v1/capabilities/{capability_id}/invoke` | 会话或 PAT（`capabilities:invoke` + 操作 scope） | 必须带 `Idempotency-Key`；所有执行经 Broker。 |

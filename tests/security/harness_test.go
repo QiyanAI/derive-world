@@ -75,6 +75,7 @@ func newTestEnvWithCapabilities(t *testing.T, mutate func(*config.Config), provi
 		PublicBaseURL:        "http://derive.test",
 		DatabaseURL:          os.Getenv("DATABASE_URL"),
 		WebDistDir:           webRoot,
+		AssetDir:             t.TempDir(),
 		CursorHMACSecret:     "test-only-cursor-hmac-secret-0000000001",
 		IPHashPepper:         "test-only-ip-hash-pepper-000000000001",
 		CapabilityHMACSecret: "test-only-capability-hmac-secret-000001",

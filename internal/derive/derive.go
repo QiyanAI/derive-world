@@ -23,7 +23,18 @@ import (
 var (
 	collaborativeFields = []string{"summary", "body", "checklist", "tags"}
 	interactiveFields   = []string{"prompt", "options"}
+	livingSceneFields   = []string{"premise", "elements", "tags"}
 )
+
+// AvailableFields returns the derive inheritance whitelist for an object type.
+// The returned slice is a copy; callers cannot mutate the frozen lists.
+func AvailableFields(objectType string) []string {
+	fields := whitelistFor(objectType)
+	if fields == nil {
+		return nil
+	}
+	return append([]string(nil), fields...)
+}
 
 // Request is the strict derive body. SourceVersion is a pointer so an omitted
 // value (use current) is distinguishable from an explicit invalid zero.
@@ -99,20 +110,21 @@ func (s *Service) Create(
 		return nil, claim, err
 	}
 	view, err := s.objects.CreateDerived(ctx, tx, objects.DerivedInput{
-		ChildID:         childID,
-		ParentID:        parentID,
-		ParentType:      prepared.Parent.ObjectType,
-		Template:        prepared.Parent.PresentationTemplate,
-		ActorID:         actorID,
-		State:           prepared.ChildState,
-		SourceVersion:   prepared.SourceVersion,
-		InheritedFields: request.InheritanceFields,
-		Lineage:         prepared.Lineage,
-		Route:           route,
-		IdemKey:         idemKey,
-		LeaseUntil:      claim.LeaseUntil,
-		RequestID:       requestID,
-		IPHash:          ipHash,
+		ChildID:          childID,
+		ParentID:         parentID,
+		ParentType:       prepared.Parent.ObjectType,
+		Template:         prepared.Parent.PresentationTemplate,
+		ActorID:          actorID,
+		State:            prepared.ChildState,
+		SourceVersion:    prepared.SourceVersion,
+		InheritedFields:  request.InheritanceFields,
+		Lineage:          prepared.Lineage,
+		Route:            route,
+		IdemKey:          idemKey,
+		LeaseUntil:       claim.LeaseUntil,
+		RequestID:        requestID,
+		IPHash:           ipHash,
+		CopyObjectAssets: true,
 	})
 	if err != nil {
 		return nil, claim, err
@@ -173,6 +185,7 @@ func (s *Service) CreateCapability(ctx context.Context, actorID, parentID uuid.U
 		State: prepared.ChildState, SourceVersion: prepared.SourceVersion,
 		InheritedFields: request.InheritanceFields, Lineage: prepared.Lineage,
 		RequestID: requestID, IPHash: ipHash, SkipIdempotency: true,
+		CopyObjectAssets: true,
 	})
 	if err != nil {
 		return nil, err
@@ -305,6 +318,10 @@ func whitelistFor(objectType string) []string {
 		return collaborativeFields
 	case objects.TypeInteractive:
 		return interactiveFields
+	case objects.TypeLivingScene:
+		return livingSceneFields
+	case objects.TypeOpenWorld:
+		return objects.OpenWorldAvailableFields()
 	default:
 		return nil
 	}
@@ -317,6 +334,13 @@ func contains(values []string, target string) bool {
 		}
 	}
 	return false
+}
+
+// AssembleFromState applies the frozen inheritance whitelist to an authorized
+// source snapshot. It is shared by private derive and public publication
+// derive so both paths produce identical child state.
+func AssembleFromState(objectType, title string, source json.RawMessage, fields []string) (json.RawMessage, error) {
+	return assemble(objectType, title, source, fields)
 }
 
 func assemble(objectType, title string, source json.RawMessage, fields []string) (json.RawMessage, error) {
@@ -399,6 +423,72 @@ func assemble(objectType, title string, source json.RawMessage, fields []string)
 			child.Votes[optionID] = 0
 		}
 		if err := objects.ValidateInteractiveState(&child); err != nil {
+			return nil, err
+		}
+		encoded, err := store.MarshalCompactJSON(child)
+		if err != nil {
+			return nil, err
+		}
+		size, err := store.CompactJSONSize(child)
+		if err != nil {
+			return nil, err
+		}
+		if size > 64*1024 {
+			return nil, fmt.Errorf("%w: state", objects.ErrPayloadTooLarge)
+		}
+		return encoded, nil
+	case objects.TypeLivingScene:
+		var parent objects.LivingSceneState
+		if err := json.Unmarshal(source, &parent); err != nil {
+			return nil, fmt.Errorf("%w: state", objects.ErrInvalidRequest)
+		}
+		child := objects.LivingSceneState{
+			Title:    title,
+			Purpose:  parent.Purpose,
+			Premise:  "",
+			Elements: make([]objects.SceneElement, 0),
+			Tags:     make([]string, 0),
+		}
+		if selected["premise"] {
+			child.Premise = parent.Premise
+		}
+		if selected["elements"] {
+			for _, element := range parent.Elements {
+				id, err := uuid.NewV7()
+				if err != nil {
+					return nil, err
+				}
+				child.Elements = append(child.Elements, objects.SceneElement{
+					ID: id.String(), Kind: element.Kind, Text: element.Text,
+					Status: element.Status,
+				})
+			}
+		}
+		if selected["tags"] {
+			child.Tags = append(child.Tags, parent.Tags...)
+		}
+		if err := objects.ValidateLivingSceneState(&child); err != nil {
+			return nil, err
+		}
+		encoded, err := store.MarshalCompactJSON(child)
+		if err != nil {
+			return nil, err
+		}
+		size, err := store.CompactJSONSize(child)
+		if err != nil {
+			return nil, err
+		}
+		if size > 64*1024 {
+			return nil, fmt.Errorf("%w: state", objects.ErrPayloadTooLarge)
+		}
+		return encoded, nil
+	case objects.TypeOpenWorld:
+		var parent objects.OpenWorldState
+		if err := json.Unmarshal(source, &parent); err != nil {
+			return nil, fmt.Errorf("%w: state", objects.ErrInvalidRequest)
+		}
+		child, err := objects.OpenWorldDerivedState(title, &parent, selected)
+		if err != nil {
 			return nil, err
 		}
 		encoded, err := store.MarshalCompactJSON(child)

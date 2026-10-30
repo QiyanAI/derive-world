@@ -14,9 +14,14 @@ import {
   type ObjectView
 } from "../api";
 import AIPanel from "../components/AIPanel";
+import DiscussionsPanel from "../components/DiscussionsPanel";
+import FirstLoopGuide from "../components/FirstLoopGuide";
+import LensPanel from "../components/LensPanel";
 import ObjectAccessTab from "../components/ObjectAccessTab";
 import ObjectHistoryTab from "../components/ObjectHistoryTab";
 import ObjectWorkTab from "../components/ObjectWorkTab";
+import PublicationPanel from "../components/PublicationPanel";
+import SceneWorkTab from "../components/SceneWorkTab";
 import SectionNav, { type SectionTab } from "../components/SectionNav";
 import { ErrorNotice, StatusNotice } from "../errors";
 import { useAuth } from "../auth";
@@ -24,6 +29,9 @@ import { useI18n } from "../i18n";
 
 const tabs: SectionTab[] = [
   { id: "work", labelKey: "object.tab.work" },
+  { id: "lens", labelKey: "object.tab.lens" },
+  { id: "discuss", labelKey: "object.tab.discuss" },
+  { id: "publish", labelKey: "object.tab.publish" },
   { id: "ai", labelKey: "object.tab.ai" },
   { id: "access", labelKey: "object.tab.access" },
   { id: "history", labelKey: "object.tab.history" }
@@ -68,6 +76,8 @@ export default function ObjectPage() {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const activeTab = normalizeTab(searchParams.get("tab"));
+  const firstUse = searchParams.get("created") === "1" && searchParams.get("first") === "1";
+  const [guideDismissed, setGuideDismissed] = useState(false);
 
   const [object, setObject] = useState<ObjectView | null>(null);
   const [events, setEvents] = useState<EventView[]>([]);
@@ -355,6 +365,14 @@ export default function ObjectPage() {
   const canInvite = object.permissions.includes("invite");
   const recordedVote = recordedVoteOf(events, user?.id);
   const parentAncestor = lineage?.ancestors.find((ancestor) => !ancestor.redacted);
+  const objectTypeLabel =
+    object.object_type === "living_scene"
+      ? t("object.create.scene")
+      : object.object_type === "interactive"
+        ? t("object.create.interactive")
+        : object.object_type === "open_world"
+          ? t("object.create.open_world")
+          : t("object.create.collaborative");
 
   return (
     <div className="page page-wide object-page">
@@ -368,9 +386,7 @@ export default function ObjectPage() {
         <div>
           <p className="eyebrow">
             <span className={`template-badge template-${object.object_type}`}>
-              {object.object_type === "collaborative"
-                ? t("object.create.collaborative")
-                : t("object.create.interactive")}
+              {objectTypeLabel}
             </span>
           </p>
           <h1>{stateString(object, "title")}</h1>
@@ -418,17 +434,57 @@ export default function ObjectPage() {
 
       <SectionNav objectID={object.id} tabs={tabs} active={activeTab} />
 
+      {firstUse && !guideDismissed ? (
+        <FirstLoopGuide
+          object={object}
+          hasBranch={(lineage?.descendants.length ?? 0) > 0}
+          canDerive={canDerive}
+          onDismiss={() => setGuideDismissed(true)}
+        />
+      ) : null}
+
       <div className="object-layout">
         <div className="object-content">
           {activeTab === "work" ? (
-            <ObjectWorkTab
-              object={object}
-              canContribute={canContribute}
-              canManage={canManage}
-              recordedVote={recordedVote}
-              onUpdated={handleUpdated}
-              onReload={handleReload}
-            />
+            object.object_type === "open_world" ? (
+              <section className="card object-panel" data-testid="open-world-object-panel">
+                <p className="eyebrow">{t("openWorld.kicker")}</p>
+                <h2>{String(object.state.title ?? t("common.untitled"))}</h2>
+                <p className="muted">{String(object.state.premise ?? t("openWorld.premiseEmpty"))}</p>
+                <p className="muted">
+                  {t("openWorld.summary", {
+                    kinds: Array.isArray(object.state.kinds) ? object.state.kinds.length : 0,
+                    nodes: Array.isArray(object.state.nodes) ? object.state.nodes.length : 0,
+                    rules: Array.isArray(object.state.rules) ? object.state.rules.length : 0
+                  })}
+                </p>
+                <Link className="button" to={`/worlds/${object.id}`}>
+                  {t("openWorld.enter")}
+                </Link>
+              </section>
+            ) : object.object_type === "living_scene" ? (
+              <SceneWorkTab
+                object={object}
+                canContribute={canContribute}
+                canManage={canManage}
+                onUpdated={handleUpdated}
+                onReload={handleReload}
+              />
+            ) : (
+              <ObjectWorkTab
+                object={object}
+                canContribute={canContribute}
+                canManage={canManage}
+                recordedVote={recordedVote}
+                onUpdated={handleUpdated}
+                onReload={handleReload}
+              />
+            )
+          ) : null}
+          {activeTab === "lens" ? <LensPanel objectID={object.id} /> : null}
+          {activeTab === "discuss" ? <DiscussionsPanel objectID={object.id} /> : null}
+          {activeTab === "publish" ? (
+            <PublicationPanel objectID={object.id} currentVersion={object.version} canManage={canManage} />
           ) : null}
           {activeTab === "ai" ? <AIPanel object={object} canContribute={canContribute} onChanged={() => void handleReload()} /> : null}
           {activeTab === "access" ? (
@@ -462,11 +518,7 @@ export default function ObjectPage() {
             <dl className="detail-list">
               <div>
                 <dt>{t("object.type")}</dt>
-                <dd>
-                  {object.object_type === "collaborative"
-                    ? t("object.create.collaborative")
-                    : t("object.create.interactive")}
-                </dd>
+                <dd>{objectTypeLabel}</dd>
               </div>
               <div>
                 <dt>{t("object.version")}</dt>
@@ -509,10 +561,15 @@ export default function ObjectPage() {
             <h2>{t("lineage.title")}</h2>
             {object.lineage ? (
               <p>
-                {t("object.derivedFrom", {
-                  title: parentAncestor?.title || t("common.unknown"),
-                  version: object.lineage.parent.version
-                })}
+                {object.lineage.public && object.lineage.publication_title
+                  ? t("object.derivedFromPublic", {
+                      title: object.lineage.publication_title,
+                      version: object.lineage.parent.version
+                    })
+                  : t("object.derivedFrom", {
+                      title: parentAncestor?.title || t("common.unknown"),
+                      version: object.lineage.parent.version
+                    })}
               </p>
             ) : (
               <p className="muted">{t("lineage.none")}</p>

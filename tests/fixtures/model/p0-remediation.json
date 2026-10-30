@@ -1,0 +1,36 @@
+{
+  "responses": [
+    {
+      "match": "A moonlit library where the tide chooses the book",
+      "reply": "{\"reply\":\"I prepared a moonlit tide library you can read.\",\"proposed_actions\":[{\"capability_id\":\"world.create\",\"input\":{\"title\":\"Tide Lit Library\",\"brief\":{\"premise\":\"A moonlit library where the tide decides which book opens.\",\"atmosphere\":\"quiet, silver, wet stone\",\"kinds\":[{\"name\":\"Reader\"},{\"name\":\"Book\"}],\"things\":[{\"kind\":0,\"name\":\"You\"},{\"kind\":1,\"name\":\"The green book\"}],\"experience\":{\"surfaces\":[\"story\"],\"primary\":\"story\",\"story\":{\"title\":\"The Tide Library\",\"chapters\":[{\"title\":\"High water\",\"text\":\"The tide comes in and a green book floats to your hands.\",\"choices\":[{\"label\":\"Open it\",\"to\":1}]},{\"title\":\"What it remembers\",\"text\":\"The pages hold a sea that no longer exists.\",\"choices\":[]}]}}}}}]}"
+    },
+    {
+      "match": "Rewrite the premise as a quiet rumor",
+      "reply": "{\"reply\":\"I propose a quieter premise. Nothing changes until you approve it.\",\"proposed_actions\":[{\"capability_id\":\"object.propose_change\",\"input\":{\"action\":\"set_premise\",\"input\":{\"premise\":\"A quiet rumor moves through the empty rooms.\"}}}]}"
+    },
+    {
+      "match": "Start this world from nothing",
+      "reply": "{\"reply\":\"I can build a small walkable clearing with three drifting lights.\",\"proposed_actions\":[{\"capability_id\":\"world.reimagine\",\"input\":{\"summary\":\"A walkable clearing with three lights.\",\"brief\":{\"premise\":\"A small clearing at night with three drifting lights.\",\"kinds\":[{\"name\":\"Traveler\"},{\"name\":\"Light\"}],\"things\":[{\"kind\":0,\"name\":\"You\"},{\"kind\":1,\"name\":\"First light\"},{\"kind\":1,\"name\":\"Second light\"},{\"kind\":1,\"name\":\"Third light\"}],\"experience\":{\"primary\":\"live\",\"live\":{\"avatar\":0,\"speed\":2,\"goal\":{\"type\":\"collect\",\"kind\":1,\"count\":3,\"label\":\"Gather the lights\"}}}}}}]}"
+    },
+    {
+      "match": "Fork this world for me",
+      "reply": "{\"reply\":\"I propose one independent branch with its own name.\",\"proposed_actions\":[{\"capability_id\":\"object.derive\",\"input\":{\"title\":\"Tide Library, Another Tide\",\"inheritance_fields\":[\"premise\",\"structure\"]}}]}"
+    },
+    {
+      "match": "Show me an unreadable plan",
+      "reply": "{\"reply\":\"x\",\"proposed_actions\":[],\"extra\":1}"
+    },
+    {
+      "match": "Just say hello to this world",
+      "reply": "{\"reply\":\"Hello, world. Nothing needs to change right now.\",\"proposed_actions\":[]}"
+    },
+    {
+      "match": "Make a street with evening sound",
+      "reply": "{\"reply\":\"I prepared a small 3D street with an evening audio layer.\",\"proposed_actions\":[{\"capability_id\":\"world.create\",\"input\":{\"title\":\"Evening Street\",\"brief\":{\"premise\":\"A short 3D street at dusk with a lamp and evening sound.\",\"kinds\":[{\"name\":\"Lamp\"}],\"things\":[{\"kind\":0,\"name\":\"One lamp\"}],\"experience\":{\"surfaces\":[\"scene3d\",\"media\",\"audio\"],\"primary\":\"scene3d\",\"scene3d\":{\"player\":0,\"views\":[{\"kind\":0,\"primitive\":\"sphere\"}]},\"audio\":{\"title\":\"Evening\",\"volume\":0.3}}}}}]}"
+    },
+    {
+      "match": "Claim the world already exists",
+      "reply": "{\"reply\":\"I have created the world and it is live now. Click the approve button in the proposal card.\",\"proposed_actions\":[{\"capability_id\":\"world.create\",\"input\":{\"title\":\"Claimed World\",\"brief\":{\"premise\":\"A small world that tests a truthful reply.\",\"kinds\":[{\"name\":\"Thing\"}],\"things\":[{\"kind\":0,\"name\":\"One thing\"}],\"experience\":{\"surfaces\":[\"live\"],\"primary\":\"live\",\"live\":{\"avatar\":0,\"speed\":1.8}}}}}]}"
+    }
+  ]
+}

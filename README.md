@@ -4,15 +4,23 @@
 
 Derive World is an open-source foundation for *Living Objects*: shared,
 versioned objects that people and their personal AI can read, contribute to,
-derive from, and trace through an explicit lineage. The first release targets a
-small, self-hostable OSS MVP (`v0.1.0`) rather than a complete platform.
+derive from, and trace through an explicit lineage. `v0.2.0` adds a World
+Stage, living scenes, and free creation and derivation: the user
+describes a world in their own words, the Personal AI writes a compact world
+brief, and a server-side composer expands it into a real runnable world — a
+time-based animation, a walkable space or playable game, a readable interactive
+story, an operable workbench, a visual space, and a bounded declarative custom
+surface for new forms. All surfaces share one content, state, variable,
+permission, version and lineage model. A universal Personal AI, direct
+friendship and messaging, opt-in public worlds, and public derivation remain.
+Real-model acceptance is still a separate gate; fixture output is always
+labelled demo data.
 
 **Why it is different:** most AI tools treat chat as the product. Derive World
 treats the *object* as the product: a Living Object has versions, members,
 permissions, and a traceable lineage. A Personal AI can propose changes and
 derive children, but only a human can approve; derived objects are independent,
-not live pointers. The result is a small, auditable foundation you can run
-yourself.
+not live pointers. The result is a small, auditable world you can run yourself.
 
 ## See it in action
 
@@ -24,14 +32,16 @@ and lineage, and an interactive poll. The full recording is
 [Showcase](SHOWCASE.md) has three launch examples and a voluntary way to share
 what you build.
 
-> **Status: public OSS MVP — `v0.1.0`.** This is the first public release of
-> Derive World: a self-hostable foundation for Living Objects, not a production
-> platform. **Real AI is VERIFIED_REAL only for the approved two-call API-level
-> run (DeepSeek `deepseek-flash`, synthetic data); it was not re-run on the
-> release SHA, and no general model/provider claim is made. Fixture mode calls
-> no model and is not real AI.** The frozen 22-table schema and the five
-> capability descriptors are unchanged. See the [release notes](docs/en/release-notes.md)
-> and [CHANGELOG](CHANGELOG.md).
+> **Status: released as `v0.2.0` (V2 product stage).** `v0.2.0` adds schema 11
+> (36 tables): free-intent world creation, blank-world bootstrap, continuous
+> natural-language modification, derivation, multi-form worlds (2D live,
+> story, workspace, space, image/video, audio, 3D and a bounded custom
+> surface), permission-scoped media, the V2 World Stage, friends and direct
+> messages, opt-in publication and public derivation, and one universal
+> Personal AI. **Real AI is verified only for the documented flows on DeepSeek
+> `deepseek-flash`; the release makes no general provider claim. Fixture mode
+> calls no model and is not real AI.** See
+> [release notes](docs/en/release-notes.md) and [CHANGELOG](CHANGELOG.md).
 
 ## The Reference World
 
@@ -39,15 +49,29 @@ what you build.
 |---|---|
 | ![Landing](docs/assets/g05-landing.png) | ![World](docs/assets/g05-world-populated.png) |
 
-- **World** — identity, owned and shared objects, real onboarding progress,
-  pending approvals, and how the pieces connect.
-- **Objects** — collaborative documents and interactive polls with versioned
-  actions, members, invitations, Handoff, AI collaboration, history, and lineage.
-- **Personal AI** — profile, private context, conversations, and a Handoff
-  preview that never impersonates another user's AI.
+- **World** — a stage of your real objects and visible derivation branches,
+  with a Living Pulse of real changes and pending human approvals.
+- **Objects** — collaborative documents, interactive polls, living scenes
+  (ideas, steps, scenes, choices, outcomes), and free worlds whose creator
+  defines the kinds of things, their relations, and one-pass rules. A free
+  world can compose its own experience from registered presentation and
+  behavior capabilities, including uploaded images/video/audio, a GLB model
+  or primitive 3D scene, sound cues and a simple physics world; the classic
+  scene, stage, cards and timeline remain
+  selectable views. Every type has versioned actions, members, invitations,
+  Handoff, AI collaboration, a Derive Lens, history, and lineage.
+- **Friends** — direct human friendship, messages, blocks, and object
+  discussions. Friendship never grants object access by itself.
+- **Explore** — opt-in public snapshots and derivation into an independent,
+  private object when the owner allows it.
+- **Personal AI** — one user-level AI that exists before the first world,
+  keeps separate private conversations per world context, and can propose a
+  real, human-approved first world. The Handoff preview never impersonates
+  another user's AI.
 - **Digital Self** — the consent ledger: delegations, revocation, and the human
   approvals that only you can give.
-- **Settings** — language, tokens, export, deployment mode, and documented limits.
+- **Settings** — language, tokens, export, runtime diagnostics, model
+  connection check, deployment mode, and documented limits.
 
 A two-user tour with expected results is in the
 [Demo guide](docs/en/demo-guide.md). The full tour is in the
@@ -77,15 +101,68 @@ docker compose ps
 curl -fsS http://127.0.0.1:8080/readyz
 ```
 
-The Compose build identifies as `0.1.0`; `DW_COMMIT` and `DW_BUILD_TIME`
+The Compose build identifies as `0.2.0`; `DW_COMMIT` and `DW_BUILD_TIME`
 remain `unknown` unless you set them. Release archives inject the tagged commit
 and commit-derived build time.
 
 Open <http://127.0.0.1:8080>. The top bar shows `FIXTURE` while the deterministic
-adapter is active. Register a local account, create a collaborative or
-interactive object, invite a second person, apply an AI proposal, approve a
-derive, and inspect the lineage. The `.env.example` values are development-only
-placeholders; they are not production secrets.
+adapter is active. Register a local account and you enter the World Stage:
+create a project or story scene, edit its elements directly, open the Derive
+Lens, invite a second person, publish a version to Explore, and inspect the
+lineage. Friends can talk directly without going through Personal AI. The
+`.env.example` values are development-only placeholders; they are not
+production secrets.
+
+### Windows: double-click launcher
+
+On Windows, the self-hosting administrator can use the local launcher instead
+of typing Compose commands:
+
+1. Install and start Docker Desktop (with Compose v2).
+2. Double-click **`Start Derive World.cmd`**.
+
+The launcher checks Docker, the Docker Engine, Compose, port 8080, the
+instance directory, `.env`, the database volume, and product health. It starts
+the stack, waits for `/readyz`, and opens the browser. The same menu stops and
+restarts with data preserved, opens and applies AI settings, and shows
+diagnostics with secrets redacted. See
+[launcher/README.md](launcher/README.md) and the
+[Windows self-hosting guide](docs/en/windows.md). It opens no network listener,
+passes no secret on a command line, and never deletes the database volume.
+The launcher and the Compose stack live in the source checkout; the Windows
+release zip contains the server binary and assets only, not PostgreSQL, the
+Compose stack, or the launcher. Other platforms keep the Compose path above.
+
+### Who needs what
+
+| Entry point | Needs Docker or a database? | What it can do |
+|---|---|---|
+| Public visitor | No | Browse Explore, read active public snapshots, and sign in to derive where the owner allows it. |
+| Registered user on a reachable instance | No | Create and edit objects, use Personal AI, collaborate with friends, publish and derive. |
+| Self-hosting administrator | Yes, for the supported Compose path | Run PostgreSQL, migrations, the Go service, the capability provider, and the web build. |
+
+The Go server binary is **not** a standalone double-click desktop app: it needs
+PostgreSQL, the embedded migrations to run, a built `WEB_DIST_DIR`, and a
+configured provider for Real AI. A container image built once avoids repeated
+compilation, but it does not remove the database requirement.
+
+### Diagnostics
+
+```bash
+curl -fsS http://127.0.0.1:8080/healthz
+curl -fsS http://127.0.0.1:8080/readyz
+```
+
+After signing in, **Settings → Runtime and limits** shows the model mode,
+database and capability readiness, the public base URL, daily and hourly AI
+limits, burst capacity, concurrency, and the deployment-wide stop. The same
+non-secret facts are available at `GET /api/v1/system/status`.
+
+For another device or another city, put the service behind HTTPS and set
+`PUBLIC_BASE_URL` to that public origin. A `localhost` invitation link is only
+valid on the machine that resolves it. The default Compose stack keeps the app
+bound to `127.0.0.1`; do not expose it publicly without TLS, a reverse proxy,
+and the security review in [docs/en/self-hosting.md](docs/en/self-hosting.md).
 
 To stop the stack:
 
@@ -262,16 +339,23 @@ issue.
 ## Limitations
 
 - Single instance only; rate limiting and scheduling are in-process.
-- No email, password reset, OAuth, or account deletion in `v0.1.0`.
-- No real-time collaboration; the object workspace polls every 10 seconds while
-  visible and also offers explicit refresh.
+- No email, password reset, OAuth, or account deletion in `v0.2.0`.
+- No simultaneous co-editing. The object workspace uses an authenticated SSE
+  refresh signal with a polling fallback, and version conflicts are reported
+  instead of silently overwriting. Public worlds, friends, and publications are
+  scoped to one instance; there is no cross-instance federation.
+- Public discovery and derivation are opt-in. Revoking a publication stops new
+  reads and derivations but cannot delete copies that were already downloaded,
+  screenshotted, cached, or independently derived.
 - All five capabilities are exposed through the single Broker; the external
   `content.structure` Provider runs as a separate process on an internal
   network. There is no runtime capability registration or arbitrary provider
   URL.
-- Real AI is VERIFIED_REAL only for the approved two-call API-level run (DeepSeek `deepseek-flash`, synthetic data). It was not
-  re-run on the release SHA and is not a general claim that every model
-  or provider is accepted. One adapter is active per deployment.
+- Real AI is verified only for the documented flows on DeepSeek
+  `deepseek-flash` (see the [release notes](docs/en/release-notes.md)). It is
+  not a general claim that every model or provider is accepted. Strict
+  validation may refuse a malformed plan; the refusal is safe and retryable.
+  One adapter is active per deployment.
 - Fixture mode does not call a model. Deterministic structured fixture replies
   are demo data, never real AI.
 - The reference Compose stack uses the v2 signed-response transport over its
@@ -282,11 +366,11 @@ issue.
   actual Personal AI projection is further limited by the caller's delegation.
 - A legal object can exceed the 32 KiB Handoff budget; the AI tab reports that
   specific capacity failure instead of claiming an action.
-- Historical object state has no read endpoint in `v0.1.0`; history is an event
-  and version summary, and derive-from-an-older-version uses immutable
-  snapshots. The UI states this limitation.
+- Historical object state is readable at
+  `GET /api/v1/objects/{id}/versions/{version}` only while the caller currently
+  holds read permission. Revocation is immediate.
 - Compose is a reference deployment, not a production orchestrator.
-- `v0.1.0` is the first public OSS MVP release. It is not a production
+- `v0.2.0` is the V2 product-stage OSS release. It is not a production
   platform, and no production use is supported or claimed.
 
 ## Documentation

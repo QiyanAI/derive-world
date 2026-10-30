@@ -1,14 +1,15 @@
 # The Open Reference World
 
-Derive World `v0.1.0` is a self-hostable reference world for Living Objects. It
+Derive World `v0.2.0` is a self-hostable reference world for Living Objects. It
 is not a marketing site and it is not a mock: every screen below is driven by
 the same Go API, PostgreSQL schema, authorization chain, and browser test suite
 that ship in this repository.
 
-> **Status:** `v0.1.0` is the first public
-> release. Fixture mode is deterministic demo output, not model intelligence.
-> Real AI is VERIFIED_REAL only for the approved two-call API-level run (DeepSeek `deepseek-flash`); it was not re-run on the
-> release SHA.
+> **Status:** `v0.2.0` is the V2 product-stage public release. Fixture mode is
+> deterministic demo output, not model intelligence. Real AI is verified only
+> for the documented flows on DeepSeek `deepseek-flash`, on the release source
+> tree; it is not a general provider claim. See the
+> [release notes](release-notes.md).
 
 ![Reference World landing](../assets/g05-landing.png)
 

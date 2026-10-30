@@ -62,19 +62,19 @@ export default function LandingPage() {
       <section className="landing-section landing-two-types">
         <h2>{t("landing.twoTypes.title")}</h2>
         <div className="concept-grid concept-grid-two">
-          <article className="card object-preview object-preview-collaborative">
-            <span className="template-badge template-collaborative">
-              {t("landing.twoTypes.collaborative.title")}
+          <article className="card object-preview object-preview-living_scene">
+            <span className="template-badge template-living_scene">
+              {t("stage.entryProject")}
             </span>
-            <h3>{t("landing.twoTypes.collaborative.title")}</h3>
-            <p>{t("landing.twoTypes.collaborative.body")}</p>
+            <h3>{t("stage.entryProject")}</h3>
+            <p>{t("stage.entryProjectHint")}</p>
           </article>
-          <article className="card object-preview object-preview-interactive">
-            <span className="template-badge template-interactive">
-              {t("landing.twoTypes.interactive.title")}
+          <article className="card object-preview object-preview-living_scene">
+            <span className="template-badge template-living_scene">
+              {t("stage.entryStory")}
             </span>
-            <h3>{t("landing.twoTypes.interactive.title")}</h3>
-            <p>{t("landing.twoTypes.interactive.body")}</p>
+            <h3>{t("stage.entryStory")}</h3>
+            <p>{t("stage.entryStoryHint")}</p>
           </article>
         </div>
       </section>

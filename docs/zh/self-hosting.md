@@ -33,7 +33,7 @@ docker compose down -v
 发布时，各平台归档包含服务端二进制（`derive-world` 或 `derive-world.exe`）、构建后的 Web 客户端 `web/dist`、`capabilities.yaml`、确定性 Fixture 数据 `tests/fixtures/model`、`.env.example`、许可证与声明文件、锁定的依赖清单，以及双语文档。解压归档并进入顶层目录，把 `.env.example` 复制为 `.env` 并导出变量。独立二进制只读取进程环境变量，不会自动加载 `.env`：
 
 ```bash
-cd derive-world_0.1.0_linux_amd64
+cd derive-world_0.2.0_linux_amd64
 cp .env.example .env
 set -a; . ./.env; set +a
 ./derive-world migrate
@@ -45,6 +45,8 @@ Windows 下二进制为 `derive-world.exe`；请用 PowerShell 或 cmd 导出 `.
 ## 配置
 
 所有应用配置来自环境变量。Compose 读取 `.env`，该文件被 Git 忽略。生产要求 HTTPS `PUBLIC_BASE_URL`，拒绝 `dw_dev_only_` 密钥、`sslmode=disable` 与 `dw_local_only` 数据库密码。
+
+`ASSET_DIR` 用于保存上传的图像、视频、音频与 GLB 模型，不在 PostgreSQL 中。该目录必须可写，且不能位于 `WEB_DIST_DIR` 下。Compose 将命名卷 `dw_assets` 挂载到 `/app/var/assets`。请将此卷与数据库一起备份；仅 `pg_dump` 不包含媒体字节。删除该卷会保留资源元数据，但已有媒体将不可用。
 
 `MODEL_MODE=fixture` 不需要模型账户。`MODEL_MODE=real` 要求 `MODEL_BASE_URL`、`MODEL_NAME`、`MODEL_API_KEY`，缺一即启动失败。
 
@@ -84,7 +86,7 @@ Windows 下二进制为 `derive-world.exe`；请用 PowerShell 或 cmd 导出 `.
 JSON/Thinking 参数，只需部署配置即可接入；业务模块不编译任何厂商主机或模型 ID。
 架构测试 `TestNoProviderVendorHardcodingOutsideModelAdapter` 强制该边界。
 
-`v0.1.0` **未实现**多 Provider 并发路由、按 Personal AI 独立选择模型或本地模型
+`v0.2.0` **未实现**多 Provider 并发路由、按 Personal AI 独立选择模型或本地模型
 托管；这些属于后续版本工作，不是本构建已实现的能力。
 
 ## Provider 传输与 TLS
@@ -127,7 +129,7 @@ docker compose exec db sh -c 'pg_dump -Fc -U "$POSTGRES_USER" -d "$POSTGRES_DB"'
 docker compose exec -T db sh -c 'pg_restore --clean --if-exists -U "$POSTGRES_USER" -d "$POSTGRES_DB"' < backup.dump
 ```
 
-备份含用户数据。请加密存储，绝不提交到仓库。`v0.1.0` 不提供 WAL 归档或时间点恢复。
+备份含用户数据。请加密存储，绝不提交到仓库。`v0.2.0` 不提供 WAL 归档或时间点恢复。
 
 ## 升级
 
@@ -140,4 +142,4 @@ docker compose exec -T db sh -c 'pg_restore --clean --if-exists -U "$POSTGRES_US
 
 - 仅支持单实例；不要把多个 `app` 副本放在负载均衡后面。
 - 不内置生产 TLS 终止；请使用可信反向代理。
-- `v0.1.0` 不发邮件、不做 OAuth、不提供密码找回。
+- `v0.2.0` 不发邮件、不做 OAuth、不提供密码找回。

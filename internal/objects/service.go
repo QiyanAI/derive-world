@@ -27,18 +27,40 @@ type DelegationRevalidator interface {
 	ProposalApplyAllowedTx(ctx context.Context, tx pgx.Tx, delegationID, userID, profileID, objectID uuid.UUID, permission string) (bool, error)
 }
 
+// PublicSource is the publication-level projection of a public derivation's
+// source. Event readers who cannot read the private parent object receive this
+// projection instead of the parent object id.
+type PublicSource struct {
+	PublicationID string
+	Title         string
+	Active        bool
+}
+
+// PublicSourceResolver resolves the active publication that authorized a
+// public-derived child. The composition root injects it so package objects
+// never imports package publication (same dependency direction as
+// DelegationRevalidator).
+type PublicSourceResolver func(ctx context.Context, childID uuid.UUID) (*PublicSource, error)
+
 // Service is the controlled write path for the object aggregate.
 type Service struct {
-	db          *pgxpool.Pool
-	audit       *audit.Writer
-	idem        *store.Idempotency
-	delegations DelegationRevalidator
+	db            *pgxpool.Pool
+	audit         *audit.Writer
+	idem          *store.Idempotency
+	delegations   DelegationRevalidator
+	publicSources PublicSourceResolver
 }
 
 // NewService assembles the object service. The audit writer must fail closed:
 // an audit error rolls the business transaction back.
 func NewService(db *pgxpool.Pool, auditWriter *audit.Writer, idem *store.Idempotency, delegations DelegationRevalidator) *Service {
 	return &Service{db: db, audit: auditWriter, idem: idem, delegations: delegations}
+}
+
+// SetPublicSourceResolver wires the publication-level source projection used
+// by the event timeline. It is set once at composition time.
+func (s *Service) SetPublicSourceResolver(resolver PublicSourceResolver) {
+	s.publicSources = resolver
 }
 
 type queryer interface {
@@ -342,20 +364,68 @@ SELECT `+objectColumns+`
 // Create inserts a new object, the owner membership, the creation event, and
 // the audit row in one transaction, then completes the idempotency record.
 func (s *Service) Create(ctx context.Context, actorID uuid.UUID, input CreateInput, route, idemKey string, leaseUntil time.Time, requestID string, ipHash []byte) (*ObjectView, error) {
-	state, shared, err := ValidateCreate(input)
-	if err != nil {
-		return nil, err
-	}
-	template := TemplateCollaborative
-	if input.ObjectType == TypeInteractive {
-		template = TemplateInteractive
-	}
-
 	tx, err := s.db.BeginTx(ctx, pgx.TxOptions{IsoLevel: pgx.ReadCommitted})
 	if err != nil {
 		return nil, err
 	}
 	defer func() { _ = tx.Rollback(ctx) }()
+
+	view, err := s.createObjectTx(ctx, tx, actorID, input, requestID, ipHash,
+		CreateOrigin{Actor: audit.UserActor(actorID)})
+	if err != nil {
+		return nil, err
+	}
+	body, err := json.Marshal(view)
+	if err != nil {
+		return nil, err
+	}
+	if err := s.idem.Complete(ctx, tx, actorID, route, idemKey, leaseUntil, 201, body); err != nil {
+		return nil, err
+	}
+	if err := tx.Commit(ctx); err != nil {
+		return nil, err
+	}
+	return view, nil
+}
+
+// CreateOrigin carries the server-derived actor and confirmation provenance of
+// a creation. A human creation uses audit.UserActor; an AI-approved world uses
+// the Personal AI actor plus the confirmation that the human approved.
+type CreateOrigin struct {
+	Actor          audit.Actor
+	ConfirmationID *uuid.UUID
+	ConfirmedBy    *uuid.UUID
+}
+
+// CreateWithinTx creates one object inside an existing transaction. It is the
+// only entry point used by a human approval of a Personal AI world.create
+// confirmation; it deliberately does not own idempotency, because the
+// confirmation's single-use transition is the idempotency boundary.
+func (s *Service) CreateWithinTx(ctx context.Context, tx pgx.Tx, actorID uuid.UUID,
+	input CreateInput, requestID string, ipHash []byte, origin CreateOrigin) (*ObjectView, error) {
+	return s.createObjectTx(ctx, tx, actorID, input, requestID, ipHash, origin)
+}
+
+func (s *Service) createObjectTx(ctx context.Context, tx pgx.Tx, actorID uuid.UUID,
+	input CreateInput, requestID string, ipHash []byte, origin CreateOrigin) (*ObjectView, error) {
+	state, shared, err := ValidateCreate(input)
+	if err != nil {
+		return nil, err
+	}
+	if input.ObjectType == TypeOpenWorld {
+		if err := ensureNoAssetRefs(state); err != nil {
+			return nil, err
+		}
+	}
+	template := TemplateCollaborative
+	switch input.ObjectType {
+	case TypeInteractive:
+		template = TemplateInteractive
+	case TypeLivingScene:
+		template = TemplateLivingScene
+	case TypeOpenWorld:
+		template = TemplateOpenWorld
+	}
 
 	objectID, err := uuid.NewV7()
 	if err != nil {
@@ -382,31 +452,44 @@ VALUES ($1,$2,$3,$2)`, objectID.String(), actorID.String(), permissions); err !=
 		return nil, err
 	}
 
+	actor := origin.Actor
+	if actor.Type == "" {
+		actor = audit.UserActor(actorID)
+	}
 	eventPayload := map[string]any{
 		"state":                 json.RawMessage(state),
 		"object_type":           input.ObjectType,
 		"presentation_template": template,
 	}
-	if err := appendEvent(ctx, tx, actorID, objectID, 1, "object.created", eventPayload); err != nil {
+	auditMetadata := map[string]any{
+		"object_type":           input.ObjectType,
+		"presentation_template": template,
+	}
+	if origin.ConfirmationID != nil {
+		eventPayload["confirmation_id"] = origin.ConfirmationID.String()
+		auditMetadata["confirmation_id"] = origin.ConfirmationID.String()
+	}
+	if origin.ConfirmedBy != nil {
+		eventPayload["confirmed_by_user_id"] = origin.ConfirmedBy.String()
+		auditMetadata["confirmed_by_user_id"] = origin.ConfirmedBy.String()
+	}
+	if _, err := appendEventReturningID(ctx, tx, actor, objectID, 1, "object.created", eventPayload); err != nil {
 		return nil, err
 	}
 	if err := s.audit.Write(ctx, tx, audit.Event{
-		Actor:        audit.UserActor(actorID),
+		Actor:        actor,
 		Action:       audit.ActionObjectCreate,
 		ResourceType: "living_object",
 		ResourceID:   &objectID,
 		Decision:     "allow",
 		RequestID:    requestID,
 		IPHash:       ipHash,
-		Metadata: map[string]any{
-			"object_type":           input.ObjectType,
-			"presentation_template": template,
-		},
+		Metadata:     auditMetadata,
 	}); err != nil {
 		return nil, err
 	}
 
-	view := ObjectView{
+	return &ObjectView{
 		ID:                   objectID.String(),
 		ObjectType:           input.ObjectType,
 		PresentationTemplate: template,
@@ -421,18 +504,7 @@ VALUES ($1,$2,$3,$2)`, objectID.String(), actorID.String(), permissions); err !=
 		Role:                 "owner",
 		CreatedAt:            createdAt,
 		UpdatedAt:            updatedAt,
-	}
-	body, err := json.Marshal(view)
-	if err != nil {
-		return nil, err
-	}
-	if err := s.idem.Complete(ctx, tx, actorID, route, idemKey, leaseUntil, 201, body); err != nil {
-		return nil, err
-	}
-	if err := tx.Commit(ctx); err != nil {
-		return nil, err
-	}
-	return &view, nil
+	}, nil
 }
 
 // ApplyAction executes one whitelisted state action under a row lock and a
@@ -502,13 +574,20 @@ SELECT `+objectColumns+`
 	voteOption := mutation.VoteOption
 	oldVoteOption := mutation.PreviousVoteOption
 
+	eventInput := plan.Input
+	if plan.EventInput != nil {
+		eventInput = plan.EventInput
+	}
 	eventPayload := map[string]any{
 		"action":      plan.Action,
-		"input":       plan.Input,
+		"input":       eventInput,
 		"state_after": json.RawMessage(newState),
 	}
 	if plan.Action == "set_shared_context" {
 		eventPayload["shared_context_changed"] = true
+	}
+	if len(plan.Effects) > 0 {
+		eventPayload["effects"] = plan.Effects
 	}
 	if err := appendEvent(ctx, tx, actorID, objectID, newVersion, "object.state_changed", eventPayload); err != nil {
 		return nil, err
@@ -643,6 +722,32 @@ RETURNING deleted_at`, objectID.String()).Scan(&deletedAt)
 // Events returns the visibility-filtered timeline. cursor is the last seen
 // seq (0 for the first page).
 func (s *Service) Events(ctx context.Context, actorID, objectID uuid.UUID, permissions []string, cursor int64, limit int) ([]Event, *int64, error) {
+	// The private source relationship stays in the database and in the audit
+	// trail, but the read projection must not reveal the private parent to a
+	// reader who cannot currently read that parent. Public-derived children get
+	// the publication-level source instead. This is a server-side projection;
+	// hiding the field in the web client would not be a security boundary.
+	// A public-derived child keeps the publication-level projection even if the
+	// viewer later gains access to the private parent, and it never falls back
+	// to the private relation after the publication is withdrawn.
+	var (
+		publicSource *PublicSource
+		err          error
+	)
+	if s.publicSources != nil {
+		publicSource, err = s.publicSources(ctx, objectID)
+		if err != nil {
+			return nil, nil, err
+		}
+	}
+	privateSourceVisible := false
+	if publicSource == nil {
+		lineage, err := s.LineageForObject(ctx, actorID, objectID)
+		if err != nil {
+			return nil, nil, err
+		}
+		privateSourceVisible = lineage != nil
+	}
 	rows, err := s.db.Query(ctx, `
 SELECT e.id, e.seq, e.object_version, e.event_type, e.actor_type,
        e.actor_user_id, e.payload, e.created_at, u.display_name
@@ -692,6 +797,21 @@ SELECT e.id, e.seq, e.object_version, e.event_type, e.actor_type,
 			_ = json.Unmarshal(payloadRaw, &event.Payload)
 		}
 		delete(event.Payload, "state_after")
+		if event.EventType == "object.derived" && !privateSourceVisible {
+			delete(event.Payload, "parent_object_id")
+			if publicSource != nil {
+				parentVersion := event.Payload["parent_version"]
+				delete(event.Payload, "parent_version")
+				if publicSource.Active {
+					event.Payload["publication_id"] = publicSource.PublicationID
+					event.Payload["publication_title"] = publicSource.Title
+					if parentVersion != nil {
+						event.Payload["publication_version"] = parentVersion
+					}
+					event.Payload["public"] = true
+				}
+			}
+		}
 		items = append(items, event)
 	}
 	if err := rows.Err(); err != nil {
@@ -750,37 +870,7 @@ SELECT m.user_id, u.display_name, m.permissions, m.granted_by, m.created_at
 
 // StateAtVersion reads the immutable state snapshot for historical derive.
 func (s *Service) StateAtVersion(ctx context.Context, tx pgx.Tx, objectID uuid.UUID, version int) (json.RawMessage, error) {
-	var payload []byte
-	var err error
-	if version == 1 {
-		err = tx.QueryRow(ctx, `
-SELECT payload->'state'
-  FROM object_events
- WHERE object_id = $1
-   AND event_type IN ('object.created','object.derived')
-   AND object_version = 1
- ORDER BY seq ASC
- LIMIT 1`, objectID.String()).Scan(&payload)
-	} else {
-		err = tx.QueryRow(ctx, `
-SELECT payload->'state_after'
-  FROM object_events
- WHERE object_id = $1
-   AND event_type = 'object.state_changed'
-   AND object_version = $2
- ORDER BY seq ASC
- LIMIT 1`, objectID.String(), version).Scan(&payload)
-	}
-	if errors.Is(err, pgx.ErrNoRows) {
-		return nil, ErrSnapshotMissing
-	}
-	if err != nil {
-		return nil, err
-	}
-	if len(payload) == 0 {
-		return nil, ErrSnapshotMissing
-	}
-	return payload, nil
+	return stateAtVersion(ctx, tx, objectID, version)
 }
 
 // DerivedInput carries the already-authorized, already-assembled child state.
@@ -801,8 +891,12 @@ type DerivedInput struct {
 	RequestID       string
 	IPHash          []byte
 	SkipIdempotency bool
-	ConfirmationID  *uuid.UUID
-	ConfirmedBy     *uuid.UUID
+	// CopyObjectAssets clones the parent's active asset references into the
+	// child. Public derivation uses publication refs instead and leaves this
+	// false.
+	CopyObjectAssets bool
+	ConfirmationID   *uuid.UUID
+	ConfirmedBy      *uuid.UUID
 }
 
 // CreateDerived writes the child object, owner membership, derivation edge,
@@ -838,6 +932,12 @@ INSERT INTO derivation_edges (
 		input.ChildID.String(), input.ParentID.String(), input.SourceVersion,
 		input.InheritedFields, input.ActorID.String()); err != nil {
 		return nil, err
+	}
+	if input.CopyObjectAssets {
+		if err := copyOpenWorldAssetRefs(ctx, tx, input.ParentID, input.ChildID,
+			input.ActorID, input.State); err != nil {
+			return nil, err
+		}
 	}
 	eventPayload := map[string]any{
 		"parent_object_id": input.ParentID.String(),

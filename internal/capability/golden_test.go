@@ -2,6 +2,7 @@
 package capability
 
 import (
+	"bytes"
 	"crypto/sha256"
 	"encoding/hex"
 	"testing"
@@ -14,13 +15,13 @@ var frozenSchemaSHA256 = map[string]string{
 	"content.structure.input.json":      "7672be7270934bd658866a5d9accdadf1b123bbaea0f5c530885271fe590c956",
 	"content.structure.output.json":     "c888c861927200a4c68e90b10203b21a44a80a56409f5ad210d6e295ff8b6e43",
 	"object.context.input.json":         "613cf4b2c8bb5d2ffae46e2744cce869cc260c391ef9853b5a12d7522814fcad",
-	"object.context.output.json":        "364185d5019efc5a80385fbc4d509774d9e5cbbaab78b77087022171d0a56114",
-	"object.derive.input.json":          "6de3800778ca0436e4ef45888ad8592a99512fcd172904fa07edc4d5275cf079",
+	"object.context.output.json":        "8276cc9b09cb2b71deded3c143c6ec610ebd4f38b0f6e2daa59cc5cc79b99c43",
+	"object.derive.input.json":          "4bcf95752ea102924e5d1198203231da51dcb071f595e84b557449242099e32a",
 	"object.derive.output.json":         "4f25af988b607d7069b60ea9cba828866040434cda93883ae69c47f12b51bba8",
-	"object.propose_change.input.json":  "ac9f21fe52e2592d38a21e888661d70b1287d142d9ceb0be3a7e054b4b77b54d",
+	"object.propose_change.input.json":  "9b7d6dfded9afbc4061e775861be84a9f130c43e1404adcd43c338dba6cfbdbf",
 	"object.propose_change.output.json": "25fe62327a9b5e555e20034bef34334458cb55f13844591a871f869b7922c88d",
 	"object.read.input.json":            "116a4e65a91b420567f86d0ce972c4963f71ea1f8f32ece2f0881334a1a1b4a2",
-	"object.read.output.json":           "a364edef410879f2c9bea0892275280163ae07aec561e6851458c8832742a521",
+	"object.read.output.json":           "0989cc54811980ba959315c30a8dfd39d41792e3401b5d7d5a0208eab195af55",
 }
 
 func TestFrozenSchemaHashes(t *testing.T) {
@@ -44,6 +45,10 @@ func TestFrozenSchemaHashes(t *testing.T) {
 		if err != nil {
 			t.Fatalf("read %s: %v", entry.Name(), err)
 		}
+		// The freeze is about schema content, not the checkout platform's line
+		// endings. Hash canonical LF bytes so Windows CRLF worktrees and LF CI
+		// checkouts agree; the committed blobs are already LF.
+		raw = bytes.ReplaceAll(raw, []byte("\r\n"), []byte("\n"))
 		sum := sha256.Sum256(raw)
 		if got := hex.EncodeToString(sum[:]); got != expected {
 			t.Errorf("%s hash = %s, want %s", entry.Name(), got, expected)

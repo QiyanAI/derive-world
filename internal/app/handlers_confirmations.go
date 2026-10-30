@@ -28,8 +28,18 @@ func (a *App) listConfirmations(w http.ResponseWriter, r *http.Request) {
 	if status == "" {
 		status = "pending"
 	}
+	var conversationID *uuid.UUID
+	if raw := r.URL.Query().Get("conversation_id"); raw != "" {
+		parsed, err := uuid.Parse(raw)
+		if err != nil {
+			httpx.WriteError(w, r, httpx.NewError(httpx.CodeInvalidRequest, "conversation_id is invalid").
+				WithDetails(map[string]any{"field": "/conversation_id"}))
+			return
+		}
+		conversationID = &parsed
+	}
 	principal := principalFrom(r.Context())
-	items, err := a.trust.ListConfirmations(r.Context(), principal.User.ID, status)
+	items, err := a.trust.ListConfirmations(r.Context(), principal.User.ID, status, conversationID)
 	if err != nil {
 		a.writeDomainError(w, r, err)
 		return
@@ -133,6 +143,9 @@ func (a *App) approveConfirmation(w http.ResponseWriter, r *http.Request) {
 			}
 			return nil
 		}
+		if view.ResourceType == "personal_ai" {
+			return a.trust.WorldCreateReplayAllowed(r.Context(), principal.User.ID, confirmationID)
+		}
 		confirmation, err := a.trust.ConfirmationForReplay(r.Context(), principal.User.ID, confirmationID)
 		if err != nil {
 			return err
@@ -150,7 +163,7 @@ func (a *App) approveConfirmation(w http.ResponseWriter, r *http.Request) {
 		confirmationApproveRoute, key, claim.LeaseUntil,
 		httpx.RequestIDFromContext(r.Context()),
 		httpx.HashIPBytes(a.config.IPHashPepper, httpx.ClientIP(r, a.config.TrustProxyHeaders)),
-		func(ctx context.Context, tx pgx.Tx, confirmation trust.Confirmation) ([]byte, error) {
+		func(ctx context.Context, tx pgx.Tx, confirmation trust.Confirmation) ([]byte, *uuid.UUID, error) {
 			return a.executeConfirmation(ctx, tx, confirmation)
 		})
 	if err != nil {
@@ -181,39 +194,104 @@ func (a *App) expireCapabilityConfirmation(ctx context.Context, userID, confirma
 		userID, "confirmation expired", "confirmation_expired")
 }
 
-func (a *App) executeConfirmation(ctx context.Context, tx pgx.Tx, confirmation trust.Confirmation) ([]byte, error) {
+func (a *App) executeConfirmation(ctx context.Context, tx pgx.Tx, confirmation trust.Confirmation) ([]byte, *uuid.UUID, error) {
+	if confirmation.ResourceType == "personal_ai" {
+		payload, err := trust.DecodeWorldCreatePayload(confirmation.Payload)
+		if err != nil {
+			return nil, nil, err
+		}
+		effective, err := a.trust.ResolveGlobalAITx(ctx, tx, confirmation.UserID, payload.AIProfileID)
+		if err != nil {
+			return nil, nil, err
+		}
+		if !effective.Can(objects.PermContribute) {
+			return nil, nil, trust.ErrForbidden
+		}
+		active, err := a.trust.ActiveDelegationTx(ctx, tx, payload.DelegationID,
+			confirmation.UserID, payload.AIProfileID, nil)
+		if err != nil {
+			return nil, nil, err
+		}
+		if !active {
+			return nil, nil, trust.ErrDelegationNotActive
+		}
+		confirmedBy := confirmation.UserID
+		view, err := a.objects.CreateWithinTx(ctx, tx, confirmation.UserID, objects.CreateInput{
+			ObjectType: objects.TypeOpenWorld,
+			Title:      payload.Title,
+			Content:    payload.Content,
+		}, httpx.RequestIDFromContext(ctx), nil, objects.CreateOrigin{
+			Actor:          effective.Actor(),
+			ConfirmationID: &confirmation.ID,
+			ConfirmedBy:    &confirmedBy,
+		})
+		if err != nil {
+			return nil, nil, err
+		}
+		body, err := json.Marshal(view)
+		if err != nil {
+			return nil, nil, err
+		}
+		resultID, err := uuid.Parse(view.ID)
+		if err != nil {
+			return nil, nil, err
+		}
+		return body, &resultID, nil
+	}
 	if confirmation.ResourceType == "capability_invocation" {
 		if a.capability == nil {
-			return nil, trust.ErrUnsupportedAction
+			return nil, nil, trust.ErrUnsupportedAction
 		}
 		payload, err := trust.DecodeCapabilityConfirmationPayload(confirmation.Payload)
 		if err != nil {
-			return nil, trust.ErrConflict
+			return nil, nil, trust.ErrConflict
 		}
-		return a.capability.ApproveAIDeriveTx(ctx, tx, confirmation.UserID, confirmation.ID, payload)
+		body, err := a.capability.ApproveAIDeriveTx(ctx, tx, confirmation.UserID, confirmation.ID, payload)
+		if err != nil {
+			return nil, nil, err
+		}
+		// A capability-backed derive returns the child's ObjectView as its
+		// body (or a child_object_id in some capability results). Without this
+		// id an approved branch could not offer its real entry after a refresh.
+		var derived struct {
+			ID            string `json:"id"`
+			ChildObjectID string `json:"child_object_id"`
+		}
+		if json.Unmarshal(body, &derived) == nil {
+			child := derived.ChildObjectID
+			if child == "" {
+				child = derived.ID
+			}
+			if child != "" {
+				if childID, parseErr := uuid.Parse(child); parseErr == nil {
+					return body, &childID, nil
+				}
+			}
+		}
+		return body, nil, nil
 	}
 	payload, err := trust.DecodeDerivePayload(confirmation.Payload)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	effective, err := a.trust.ResolveAITx(ctx, tx, confirmation.UserID,
 		payload.AIProfileID, payload.ObjectID)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	active, err := a.trust.ActiveDelegationTx(ctx, tx, payload.DelegationID,
 		confirmation.UserID, payload.AIProfileID, &payload.ObjectID)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	if !active {
-		return nil, trust.ErrDelegationNotActive
+		return nil, nil, trust.ErrDelegationNotActive
 	}
 	if effective.ObjectVersion != payload.ExpectedVersion {
-		return nil, trust.ErrVersionConflict
+		return nil, nil, trust.ErrVersionConflict
 	}
 	if !effective.Can("derive") {
-		return nil, trust.ErrForbidden
+		return nil, nil, trust.ErrForbidden
 	}
 	view, err := a.derive.CreateConfirmedTx(ctx, tx, confirmation.UserID, payload.ObjectID,
 		payload.ExpectedVersion, derive.Request{
@@ -223,9 +301,17 @@ func (a *App) executeConfirmation(ctx context.Context, tx pgx.Tx, confirmation t
 		httpx.RequestIDFromContext(ctx),
 		nil)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
-	return json.Marshal(view)
+	body, err := json.Marshal(view)
+	if err != nil {
+		return nil, nil, err
+	}
+	resultID, err := uuid.Parse(view.ID)
+	if err != nil {
+		return nil, nil, err
+	}
+	return body, &resultID, nil
 }
 
 func (a *App) denyConfirmation(w http.ResponseWriter, r *http.Request) {

@@ -15,6 +15,7 @@ func validEnv() map[string]string {
 		"BIND_ADDR":                      "127.0.0.1:8080",
 		"DATABASE_URL":                   "postgres://derive:dw_local_only@127.0.0.1:5432/derive_world?sslmode=disable",
 		"WEB_DIST_DIR":                   "./web/dist",
+		"ASSET_DIR":                      "./var/assets",
 		"CURSOR_HMAC_SECRET":             "0123456789abcdef0123456789abcdef",
 		"IP_HASH_PEPPER":                 "abcdef0123456789abcdef0123456789",
 		"CAPABILITY_HMAC_SECRET":         "fedcba9876543210fedcba9876543210",

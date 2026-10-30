@@ -30,6 +30,9 @@ const (
 	maxOptionLabelRunes   = 200
 	minOptions            = 2
 	maxOptions            = 10
+	maxSceneElements      = 32
+	maxSceneElementRunes  = 2000
+	maxScenePremiseRunes  = 2000
 )
 
 func decodeStrict(raw []byte, dst any) error {
@@ -63,7 +66,8 @@ func runeLength(value string) int {
 // ValidateCreate validates and normalizes a create request. It returns the
 // canonical state and shared context bytes written to the database.
 func ValidateCreate(input CreateInput) (state json.RawMessage, shared json.RawMessage, err error) {
-	if input.ObjectType != TypeCollaborative && input.ObjectType != TypeInteractive {
+	if input.ObjectType != TypeCollaborative && input.ObjectType != TypeInteractive &&
+		input.ObjectType != TypeLivingScene && input.ObjectType != TypeOpenWorld {
 		return nil, nil, fmt.Errorf("%w: object_type", ErrInvalidRequest)
 	}
 	title := strings.TrimSpace(input.Title)
@@ -131,6 +135,49 @@ func ValidateCreate(input CreateInput) (state json.RawMessage, shared json.RawMe
 			stateValue.Votes[optionID] = 0
 		}
 		if err := ValidateInteractiveState(&stateValue); err != nil {
+			return nil, nil, err
+		}
+		state, err = marshalState(stateValue)
+		return state, shared, err
+	case TypeLivingScene:
+		var content SceneContent
+		if len(bytes.TrimSpace(input.Content)) == 0 {
+			return nil, nil, fmt.Errorf("%w: content.purpose", ErrInvalidRequest)
+		}
+		if err := decodeStrict(input.Content, &content); err != nil {
+			return nil, nil, fmt.Errorf("%w: content", ErrInvalidRequest)
+		}
+		stateValue := LivingSceneState{
+			Title:    title,
+			Purpose:  content.Purpose,
+			Premise:  content.Premise,
+			Elements: make([]SceneElement, 0, len(content.Elements)),
+			Tags:     normalizeTags(content.Tags),
+		}
+		for _, element := range content.Elements {
+			id, err := uuid.NewV7()
+			if err != nil {
+				return nil, nil, err
+			}
+			stateValue.Elements = append(stateValue.Elements, SceneElement{
+				ID: id.String(), Kind: element.Kind, Text: element.Text,
+				Status: SceneStatusOpen,
+			})
+		}
+		if err := ValidateLivingSceneState(&stateValue); err != nil {
+			return nil, nil, err
+		}
+		state, err = marshalState(stateValue)
+		return state, shared, err
+	case TypeOpenWorld:
+		var content OpenWorldContent
+		if len(bytes.TrimSpace(input.Content)) == 0 {
+			content = OpenWorldContent{}
+		} else if err := decodeStrict(input.Content, &content); err != nil {
+			return nil, nil, fmt.Errorf("%w: content", ErrInvalidRequest)
+		}
+		stateValue, err := buildOpenWorldState(title, content)
+		if err != nil {
 			return nil, nil, err
 		}
 		state, err = marshalState(stateValue)
@@ -216,6 +263,18 @@ func ValidateStateBytes(objectType string, raw []byte) error {
 			return fmt.Errorf("%w: state", ErrInvalidRequest)
 		}
 		return ValidateInteractiveState(&state)
+	case TypeLivingScene:
+		var state LivingSceneState
+		if err := decodeStrict(raw, &state); err != nil {
+			return fmt.Errorf("%w: state", ErrInvalidRequest)
+		}
+		return ValidateLivingSceneState(&state)
+	case TypeOpenWorld:
+		var state OpenWorldState
+		if err := decodeStrict(raw, &state); err != nil {
+			return fmt.Errorf("%w: state", ErrInvalidRequest)
+		}
+		return ValidateOpenWorldState(&state)
 	default:
 		return fmt.Errorf("%w: object_type", ErrInvalidRequest)
 	}
@@ -308,12 +367,80 @@ func ValidateInteractiveState(state *InteractiveState) error {
 	return nil
 }
 
+// ValidateLivingSceneState checks the living_scene_v1 schema, element ids,
+// ordering-independent uniqueness, and the shared tag rules.
+func ValidateLivingSceneState(state *LivingSceneState) error {
+	if runeLength(strings.TrimSpace(state.Title)) < 1 || runeLength(state.Title) > maxTitleRunes {
+		return fmt.Errorf("%w: /title", ErrInvalidRequest)
+	}
+	if state.Purpose != ScenePurposeProject && state.Purpose != ScenePurposeStory {
+		return fmt.Errorf("%w: /purpose", ErrInvalidRequest)
+	}
+	if runeLength(state.Premise) > maxScenePremiseRunes {
+		return fmt.Errorf("%w: /premise", ErrInvalidRequest)
+	}
+	if len(state.Elements) > maxSceneElements {
+		return fmt.Errorf("%w: /elements", ErrInvalidRequest)
+	}
+	seenElements := make(map[string]bool, len(state.Elements))
+	for index, element := range state.Elements {
+		parsed, err := uuid.Parse(element.ID)
+		if err != nil || parsed.Version() != 7 || seenElements[element.ID] {
+			return fmt.Errorf("%w: /elements/%d/id", ErrInvalidRequest, index)
+		}
+		seenElements[element.ID] = true
+		if !validSceneKind(element.Kind) {
+			return fmt.Errorf("%w: /elements/%d/kind", ErrInvalidRequest, index)
+		}
+		if runeLength(strings.TrimSpace(element.Text)) < 1 || runeLength(element.Text) > maxSceneElementRunes {
+			return fmt.Errorf("%w: /elements/%d/text", ErrInvalidRequest, index)
+		}
+		if element.Status != SceneStatusOpen && element.Status != SceneStatusDone {
+			return fmt.Errorf("%w: /elements/%d/status", ErrInvalidRequest, index)
+		}
+	}
+	if len(state.Tags) > maxTags {
+		return fmt.Errorf("%w: /tags", ErrInvalidRequest)
+	}
+	seenTags := make(map[string]bool, len(state.Tags))
+	for index, tag := range state.Tags {
+		if runeLength(strings.TrimSpace(tag)) < 1 || runeLength(tag) > maxTagRunes {
+			return fmt.Errorf("%w: /tags/%d", ErrInvalidRequest, index)
+		}
+		if seenTags[tag] {
+			return fmt.Errorf("%w: /tags/%d", ErrInvalidRequest, index)
+		}
+		seenTags[tag] = true
+	}
+	return nil
+}
+
+func validSceneKind(kind string) bool {
+	switch kind {
+	case SceneKindIdea, SceneKindStep, SceneKindScene, SceneKindChoice, SceneKindOutcome:
+		return true
+	default:
+		return false
+	}
+}
+
 // ActionPlan is a validated, normalized action.
 type ActionPlan struct {
 	Action     string
 	Permission string
 	Input      map[string]any
 	RawInput   json.RawMessage
+	// Batch holds the validated sub-actions of one batch_change plan. They are
+	// applied sequentially to the same state inside one version increment.
+	Batch []*ActionPlan
+	// EventInput optionally replaces Input in the state-changed event. It lets
+	// a bulk reshape record a human-readable summary instead of duplicating a
+	// full 64 KiB state inside the event.
+	EventInput map[string]any
+	// Effects records declarative consequences that actually ran during this
+	// action. Open worlds are currently the only producer; the event log
+	// writes them so a world explains its own history.
+	Effects []OpenWorldAppliedEffect
 }
 
 type setTitleInput struct {
@@ -359,14 +486,68 @@ type sharedContextInput struct {
 	SharedContext json.RawMessage `json:"shared_context"`
 }
 
+type setPremiseInput struct {
+	Premise string `json:"premise"`
+}
+
+type setPurposeInput struct {
+	Purpose string `json:"purpose"`
+}
+
+type addElementInput struct {
+	Kind string `json:"kind"`
+	Text string `json:"text"`
+}
+
+type updateElementInput struct {
+	ElementID string  `json:"element_id"`
+	Text      *string `json:"text"`
+	Kind      *string `json:"kind"`
+	Status    *string `json:"status"`
+}
+
+type removeElementInput struct {
+	ElementID string `json:"element_id"`
+}
+
+type moveElementInput struct {
+	ElementID string `json:"element_id"`
+	Position  int    `json:"position"`
+}
+
 // RequiredPermission maps an action name and template to its required object
 // permission without validating the action input. The execution chain uses it
 // to authorize before schema validation (D04 section 3.7.3).
 func RequiredPermission(objectType, action string) (string, bool) {
 	switch action {
-	case "set_title", "set_summary", "set_body", "add_checklist_item",
-		"toggle_checklist_item", "remove_checklist_item", "add_tag", "remove_tag":
+	case "set_title", "add_tag", "remove_tag":
+		if objectType == TypeCollaborative || objectType == TypeLivingScene || objectType == TypeOpenWorld {
+			return PermContribute, true
+		}
+	case "set_summary", "set_body", "add_checklist_item",
+		"toggle_checklist_item", "remove_checklist_item":
 		if objectType == TypeCollaborative {
+			return PermContribute, true
+		}
+	case "set_premise":
+		if objectType == TypeLivingScene || objectType == TypeOpenWorld {
+			return PermContribute, true
+		}
+	case "add_element", "update_element", "remove_element", "move_element":
+		if objectType == TypeLivingScene {
+			return PermContribute, true
+		}
+	case "set_purpose":
+		if objectType == TypeLivingScene {
+			return PermManage, true
+		}
+	case "add_kind", "update_kind", "remove_kind",
+		"add_node", "update_node", "remove_node", "move_node",
+		"set_node_field", "set_node_status", "touch_node",
+		"add_link", "remove_link", "add_rule", "remove_rule", "set_views",
+		"set_presentation", "set_experience", "invoke_behavior",
+		"reshape_world", "custom_action", "batch_change":
+		if objectType == TypeOpenWorld {
 			return PermContribute, true
 		}
 	case "cast_vote":
@@ -418,9 +599,18 @@ func PlanAction(objectType, action string, raw json.RawMessage) (*ActionPlan, er
 		return nil, fmt.Errorf("%w: input", ErrInvalidRequest)
 	}
 	plan := &ActionPlan{Action: action, Input: map[string]any{}, RawInput: raw}
+	if isOpenWorldAction(action) {
+		if objectType != TypeOpenWorld {
+			return nil, fmt.Errorf("%w: action", ErrInvalidRequest)
+		}
+		if err := planOpenWorldAction(action, raw, plan); err != nil {
+			return nil, err
+		}
+		return plan, nil
+	}
 	switch action {
 	case "set_title":
-		if objectType != TypeCollaborative {
+		if objectType != TypeCollaborative && objectType != TypeLivingScene && objectType != TypeOpenWorld {
 			return nil, fmt.Errorf("%w: action", ErrInvalidRequest)
 		}
 		if err := validateInputKeys(raw, []string{"title"}, []string{"title"}); err != nil {
@@ -517,7 +707,7 @@ func PlanAction(objectType, action string, raw json.RawMessage) (*ActionPlan, er
 		plan.Permission = PermContribute
 		plan.Input["item_id"] = input.ItemID
 	case "add_tag":
-		if objectType != TypeCollaborative {
+		if objectType != TypeCollaborative && objectType != TypeLivingScene && objectType != TypeOpenWorld {
 			return nil, fmt.Errorf("%w: action", ErrInvalidRequest)
 		}
 		if err := validateInputKeys(raw, []string{"tag"}, []string{"tag"}); err != nil {
@@ -534,7 +724,7 @@ func PlanAction(objectType, action string, raw json.RawMessage) (*ActionPlan, er
 		plan.Permission = PermContribute
 		plan.Input["tag"] = tag
 	case "remove_tag":
-		if objectType != TypeCollaborative {
+		if objectType != TypeCollaborative && objectType != TypeLivingScene && objectType != TypeOpenWorld {
 			return nil, fmt.Errorf("%w: action", ErrInvalidRequest)
 		}
 		if err := validateInputKeys(raw, []string{"tag"}, []string{"tag"}); err != nil {
@@ -550,6 +740,131 @@ func PlanAction(objectType, action string, raw json.RawMessage) (*ActionPlan, er
 		}
 		plan.Permission = PermContribute
 		plan.Input["tag"] = tag
+	case "set_premise":
+		if objectType != TypeLivingScene && objectType != TypeOpenWorld {
+			return nil, fmt.Errorf("%w: action", ErrInvalidRequest)
+		}
+		if err := validateInputKeys(raw, []string{"premise"}, []string{"premise"}); err != nil {
+			return nil, err
+		}
+		var input setPremiseInput
+		if err := decodeStrict(raw, &input); err != nil {
+			return nil, fmt.Errorf("%w: input", ErrInvalidRequest)
+		}
+		if runeLength(input.Premise) > maxScenePremiseRunes {
+			return nil, fmt.Errorf("%w: input.premise", ErrInvalidRequest)
+		}
+		plan.Permission = PermContribute
+		plan.Input["premise"] = input.Premise
+	case "set_purpose":
+		if objectType != TypeLivingScene {
+			return nil, fmt.Errorf("%w: action", ErrInvalidRequest)
+		}
+		if err := validateInputKeys(raw, []string{"purpose"}, []string{"purpose"}); err != nil {
+			return nil, err
+		}
+		var input setPurposeInput
+		if err := decodeStrict(raw, &input); err != nil {
+			return nil, fmt.Errorf("%w: input", ErrInvalidRequest)
+		}
+		if input.Purpose != ScenePurposeProject && input.Purpose != ScenePurposeStory {
+			return nil, fmt.Errorf("%w: input.purpose", ErrInvalidRequest)
+		}
+		plan.Permission = PermManage
+		plan.Input["purpose"] = input.Purpose
+	case "add_element":
+		if objectType != TypeLivingScene {
+			return nil, fmt.Errorf("%w: action", ErrInvalidRequest)
+		}
+		if err := validateInputKeys(raw, []string{"kind", "text"}, []string{"kind", "text"}); err != nil {
+			return nil, err
+		}
+		var input addElementInput
+		if err := decodeStrict(raw, &input); err != nil {
+			return nil, fmt.Errorf("%w: input", ErrInvalidRequest)
+		}
+		if !validSceneKind(input.Kind) {
+			return nil, fmt.Errorf("%w: input.kind", ErrInvalidRequest)
+		}
+		if runeLength(strings.TrimSpace(input.Text)) < 1 || runeLength(input.Text) > maxSceneElementRunes {
+			return nil, fmt.Errorf("%w: input.text", ErrInvalidRequest)
+		}
+		plan.Permission = PermContribute
+		plan.Input["kind"] = input.Kind
+		plan.Input["text"] = input.Text
+	case "update_element":
+		if objectType != TypeLivingScene {
+			return nil, fmt.Errorf("%w: action", ErrInvalidRequest)
+		}
+		if err := validateInputKeys(raw, []string{"element_id"}, []string{"element_id", "text", "kind", "status"}); err != nil {
+			return nil, err
+		}
+		var input updateElementInput
+		if err := decodeStrict(raw, &input); err != nil {
+			return nil, fmt.Errorf("%w: input", ErrInvalidRequest)
+		}
+		if _, err := uuid.Parse(input.ElementID); err != nil {
+			return nil, fmt.Errorf("%w: input.element_id", ErrInvalidRequest)
+		}
+		if input.Text == nil && input.Kind == nil && input.Status == nil {
+			return nil, fmt.Errorf("%w: input", ErrInvalidRequest)
+		}
+		if input.Text != nil {
+			if runeLength(strings.TrimSpace(*input.Text)) < 1 || runeLength(*input.Text) > maxSceneElementRunes {
+				return nil, fmt.Errorf("%w: input.text", ErrInvalidRequest)
+			}
+			plan.Input["text"] = *input.Text
+		}
+		if input.Kind != nil {
+			if !validSceneKind(*input.Kind) {
+				return nil, fmt.Errorf("%w: input.kind", ErrInvalidRequest)
+			}
+			plan.Input["kind"] = *input.Kind
+		}
+		if input.Status != nil {
+			if *input.Status != SceneStatusOpen && *input.Status != SceneStatusDone {
+				return nil, fmt.Errorf("%w: input.status", ErrInvalidRequest)
+			}
+			plan.Input["status"] = *input.Status
+		}
+		plan.Permission = PermContribute
+		plan.Input["element_id"] = input.ElementID
+	case "remove_element":
+		if objectType != TypeLivingScene {
+			return nil, fmt.Errorf("%w: action", ErrInvalidRequest)
+		}
+		if err := validateInputKeys(raw, []string{"element_id"}, []string{"element_id"}); err != nil {
+			return nil, err
+		}
+		var input removeElementInput
+		if err := decodeStrict(raw, &input); err != nil {
+			return nil, fmt.Errorf("%w: input", ErrInvalidRequest)
+		}
+		if _, err := uuid.Parse(input.ElementID); err != nil {
+			return nil, fmt.Errorf("%w: input.element_id", ErrInvalidRequest)
+		}
+		plan.Permission = PermContribute
+		plan.Input["element_id"] = input.ElementID
+	case "move_element":
+		if objectType != TypeLivingScene {
+			return nil, fmt.Errorf("%w: action", ErrInvalidRequest)
+		}
+		if err := validateInputKeys(raw, []string{"element_id", "position"}, []string{"element_id", "position"}); err != nil {
+			return nil, err
+		}
+		var input moveElementInput
+		if err := decodeStrict(raw, &input); err != nil {
+			return nil, fmt.Errorf("%w: input", ErrInvalidRequest)
+		}
+		if _, err := uuid.Parse(input.ElementID); err != nil {
+			return nil, fmt.Errorf("%w: input.element_id", ErrInvalidRequest)
+		}
+		if input.Position < 0 {
+			return nil, fmt.Errorf("%w: input.position", ErrInvalidRequest)
+		}
+		plan.Permission = PermContribute
+		plan.Input["element_id"] = input.ElementID
+		plan.Input["position"] = input.Position
 	case "cast_vote":
 		if objectType != TypeInteractive {
 			return nil, fmt.Errorf("%w: action", ErrInvalidRequest)
@@ -617,6 +932,10 @@ func ApplyStateAction(objectType string, stateRaw, sharedRaw json.RawMessage, pl
 			return nil, nil, "", err
 		}
 		return stateRaw, shared, "", nil
+	}
+
+	if objectType == TypeOpenWorld {
+		return applyOpenWorldAction(stateRaw, sharedRaw, plan)
 	}
 
 	switch objectType {
@@ -702,6 +1021,127 @@ func ApplyStateAction(objectType string, stateRaw, sharedRaw json.RawMessage, pl
 			return nil, nil, "", fmt.Errorf("%w: action", ErrInvalidRequest)
 		}
 		if err := ValidateCollaborativeState(&state); err != nil {
+			return nil, nil, "", err
+		}
+		encoded, err := marshalState(state)
+		return encoded, sharedRaw, "", err
+	case TypeLivingScene:
+		var state LivingSceneState
+		if err := decodeStrict(stateRaw, &state); err != nil {
+			return nil, nil, "", fmt.Errorf("%w: state", ErrInvalidRequest)
+		}
+		switch plan.Action {
+		case "set_title":
+			state.Title = plan.Input["title"].(string)
+		case "set_premise":
+			state.Premise = plan.Input["premise"].(string)
+		case "set_purpose":
+			state.Purpose = plan.Input["purpose"].(string)
+		case "add_element":
+			if len(state.Elements) >= maxSceneElements {
+				return nil, nil, "", fmt.Errorf("%w: scene element limit reached", ErrConflict)
+			}
+			id, err := uuid.NewV7()
+			if err != nil {
+				return nil, nil, "", err
+			}
+			state.Elements = append(state.Elements, SceneElement{
+				ID: id.String(), Kind: plan.Input["kind"].(string),
+				Text: plan.Input["text"].(string), Status: SceneStatusOpen,
+			})
+		case "update_element":
+			elementID := plan.Input["element_id"].(string)
+			found := false
+			for index := range state.Elements {
+				if state.Elements[index].ID != elementID {
+					continue
+				}
+				found = true
+				if value, ok := plan.Input["text"]; ok {
+					state.Elements[index].Text = value.(string)
+				}
+				if value, ok := plan.Input["kind"]; ok {
+					state.Elements[index].Kind = value.(string)
+				}
+				if value, ok := plan.Input["status"]; ok {
+					state.Elements[index].Status = value.(string)
+				}
+				break
+			}
+			if !found {
+				return nil, nil, "", fmt.Errorf("%w: input.element_id", ErrInvalidRequest)
+			}
+		case "remove_element":
+			elementID := plan.Input["element_id"].(string)
+			found := false
+			next := make([]SceneElement, 0, len(state.Elements))
+			for _, element := range state.Elements {
+				if element.ID == elementID {
+					found = true
+					continue
+				}
+				next = append(next, element)
+			}
+			if !found {
+				return nil, nil, "", fmt.Errorf("%w: input.element_id", ErrInvalidRequest)
+			}
+			state.Elements = next
+		case "move_element":
+			elementID := plan.Input["element_id"].(string)
+			position := plan.Input["position"].(int)
+			index := -1
+			for candidate := range state.Elements {
+				if state.Elements[candidate].ID == elementID {
+					index = candidate
+					break
+				}
+			}
+			if index < 0 {
+				return nil, nil, "", fmt.Errorf("%w: input.element_id", ErrInvalidRequest)
+			}
+			if position < 0 || position >= len(state.Elements) {
+				return nil, nil, "", fmt.Errorf("%w: input.position", ErrInvalidRequest)
+			}
+			element := state.Elements[index]
+			remaining := make([]SceneElement, 0, len(state.Elements)-1)
+			remaining = append(remaining, state.Elements[:index]...)
+			remaining = append(remaining, state.Elements[index+1:]...)
+			reordered := make([]SceneElement, 0, len(state.Elements))
+			reordered = append(reordered, remaining[:position]...)
+			reordered = append(reordered, element)
+			reordered = append(reordered, remaining[position:]...)
+			state.Elements = reordered
+		case "add_tag":
+			tag := plan.Input["tag"].(string)
+			for _, existing := range state.Tags {
+				if existing == tag {
+					return nil, nil, "", fmt.Errorf("%w: tag already exists", ErrConflict)
+				}
+			}
+			if len(state.Tags) >= maxTags {
+				return nil, nil, "", fmt.Errorf("%w: tag limit reached", ErrConflict)
+			}
+			state.Tags = append(state.Tags, tag)
+			sort.Strings(state.Tags)
+		case "remove_tag":
+			tag := plan.Input["tag"].(string)
+			found := false
+			next := make([]string, 0, len(state.Tags))
+			for _, existing := range state.Tags {
+				if existing == tag {
+					found = true
+					continue
+				}
+				next = append(next, existing)
+			}
+			if !found {
+				return nil, nil, "", fmt.Errorf("%w: input.tag", ErrInvalidRequest)
+			}
+			state.Tags = next
+		default:
+			return nil, nil, "", fmt.Errorf("%w: action", ErrInvalidRequest)
+		}
+		if err := ValidateLivingSceneState(&state); err != nil {
 			return nil, nil, "", err
 		}
 		encoded, err := marshalState(state)

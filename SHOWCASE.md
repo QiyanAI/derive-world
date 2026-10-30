@@ -54,10 +54,10 @@ collaboration**, apply a proposal, then approve a derive and inspect the new
 child. See the [two-user demo guide](docs/en/demo-guide.md).
 
 **Accurate label:** these screenshots and the demo are **Fixture mode** —
-deterministic demo output, not real model intelligence. The only Real AI
-acceptance evidence in `v0.1.0` is the approved two-call API-level DeepSeek
-`deepseek-flash` run. It was not a browser demo, was not
-re-run on the release SHA, and is not a general provider claim.
+deterministic demo output, not real model intelligence. Real-model evidence for
+`v0.2.0` is scoped to the documented flows on DeepSeek `deepseek-flash` (see
+the [release notes](docs/en/release-notes.md)); it is not a general provider
+claim.
 
 ### 3. A secure, reproducible OSS foundation
 
@@ -136,7 +136,7 @@ submit anything to use the software.** The project is Apache-2.0.
   Apache-2.0 license covers the software, not your submission.
 
 The project will **not** automatically collect or publish private objects,
-conversations, Handoff projections, or AI context. `v0.1.0` adds no public
+conversations, Handoff projections, or AI context. `v0.2.0` adds no public
 object API, cross-deployment import, or cloud sharing service for the showcase.
 
 ## Honest labels
@@ -144,7 +144,7 @@ object API, cross-deployment import, or cloud sharing service for the showcase.
 | Label | Meaning |
 |---|---|
 | **Fixture** | Deterministic demo data. No model is called. Not real AI. |
-| **Real AI** | The user configures an OpenAI-compatible endpoint and key, and pays the provider. `v0.1.0` acceptance evidence is the bounded two-call API-level run described above. |
-| **Not production** | `v0.1.0` is an OSS MVP. No production readiness, security certification, user adoption, stars, downloads, or funding is claimed. |
+| **Real AI** | The user configures an OpenAI-compatible endpoint and key, and pays the provider. `v0.2.0` evidence is scoped to the documented flows on DeepSeek `deepseek-flash` described above. |
+| **Not production** | `v0.2.0` is an OSS release. No production readiness, security certification, user adoption, stars, downloads, or funding is claimed. |
 
 See [Limitations](docs/en/limitations.md) for the complete list.

@@ -18,6 +18,10 @@ type LineageResponse struct {
 	Descendants []LineageDescendant `json:"descendants"`
 	MaxDepth    int                 `json:"max_depth"`
 	Truncated   bool                `json:"truncated"`
+	// Source is the publication-level origin for a public-derived child. It is
+	// populated by the HTTP projection when an active publication exists; the
+	// private parent relation stays internal.
+	Source *DeriveLineage `json:"source,omitempty"`
 }
 
 // LineageRoot identifies the starting object.

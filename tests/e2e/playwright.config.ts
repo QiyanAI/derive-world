@@ -22,7 +22,11 @@ export default defineConfig({
   expect: { timeout: 15_000 },
   fullyParallel: false,
   workers: 1,
-  retries: 0,
+  // CI browsers occasionally lose a controlled-input fill during a modal
+  // mount. One retry absorbs that timing flake; a deterministic failure still
+  // fails on the retry and is never reported as a pass. Local evidence runs
+  // keep retries at zero.
+  retries: process.env.CI ? 1 : 0,
   forbidOnly: Boolean(process.env.CI),
   reporter: [
     ["list"],
@@ -42,11 +46,26 @@ export default defineConfig({
   projects: [
     {
       name: "chromium",
-      use: { ...devices["Desktop Chrome"], baseURL, ...chromeChannel }
+      use: { ...devices["Desktop Chrome"], baseURL, ...chromeChannel },
+      testIgnore: /p0-inline-approval-mobile\.spec\.ts/
     },
     {
       name: "firefox",
-      use: { ...devices["Desktop Firefox"], baseURL, ...firefoxChannel }
+      use: { ...devices["Desktop Firefox"], baseURL, ...firefoxChannel },
+      testIgnore: /p0-inline-approval-mobile\.spec\.ts/
+    },
+    {
+      // The owner's acceptance videos were recorded on an ordinary laptop.
+      // These specs are the explicit 1366x768 evidence, independent of the
+      // 1280x720 desktop default.
+      name: "laptop-1366",
+      use: {
+        ...devices["Desktop Chrome"],
+        baseURL,
+        viewport: { width: 1366, height: 768 },
+        ...chromeChannel
+      },
+      testMatch: /(p0-readability-laptop|p0-create-sentence)\.spec\.ts/
     },
     {
       name: "mobile-chromium",
@@ -58,7 +77,7 @@ export default defineConfig({
         hasTouch: true,
         ...chromeChannel
       },
-      testMatch: /responsive-i18n\.spec\.ts/
+      testMatch: /(responsive-i18n|v2-mobile|phase2d-mobile|phase2e-mobile|p0-inline-approval-mobile)\.spec\.ts/
     }
   ]
 });

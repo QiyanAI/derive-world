@@ -139,6 +139,24 @@ export default function SelfPage() {
     }
   }
 
+  // A conversation-originated approval is answered in its conversation, next
+  // to the reply that proposed it. The ledger links there instead of rendering
+  // a second approve button with the same meaning.
+  function openConversation(conversationID?: string) {
+    window.dispatchEvent(
+      new CustomEvent("dw:open-general-ai", { detail: { conversationId: conversationID } })
+    );
+  }
+
+  function confirmationTarget(item: Confirmation): string {
+    if (!item.target_object_id) {
+      return "";
+    }
+    return item.target_object_type === "open_world"
+      ? `/worlds/${item.target_object_id}?ai=1`
+      : `/objects/${item.target_object_id}?tab=ai`;
+  }
+
   function toggleScopePermission(permission: AIPermission) {
     if (permission === "read") {
       return;
@@ -210,7 +228,15 @@ export default function SelfPage() {
               typeof createdChild.state.title === "string" ? createdChild.state.title : createdChild.id,
             version: createdChild.version
           })}{" "}
-          <Link to={`/objects/${createdChild.id}?tab=work`}>{t("workspace.openCreated")} →</Link>
+          <Link
+            to={
+              createdChild.object_type === "open_world"
+                ? `/worlds/${createdChild.id}`
+                : `/objects/${createdChild.id}?tab=work`
+            }
+          >
+            {t("workspace.openCreated")} →
+          </Link>
         </p>
       ) : null}
       {error ? <ErrorNotice error={error} onRetry={() => void load()} /> : null}
@@ -380,69 +406,69 @@ export default function SelfPage() {
                 ? t("confirmation.deriveSummary")
                 : item.action === "capability.invoke"
                   ? t("confirmation.capabilitySummary")
-                  : t("confirmation.invitationSummary");
+                  : item.action === "world.create"
+                    ? t("confirmation.worldSummary")
+                    : t("confirmation.invitationSummary");
             const stale =
               typeof item.bound_version === "number" &&
               item.target_object_version > 0 &&
               item.bound_version < item.target_object_version;
+            const inConversation = Boolean(item.conversation_id);
+            const target = confirmationTarget(item);
             return (
-            <li key={item.id}>
-              <div>
-                <strong>{t(`confirmation.action.${item.action}`)}</strong>
-                <small>
-                  {item.target_object_title || t("common.unknown")}
-                  {item.target_object_version ? ` · v${item.target_object_version}` : ""} ·{" "}
-                  {t("self.approvalExpires", {
-                    time: timeFormatter.format(new Date(item.expires_at))
-                  })}
-                </small>
-                <p>{summary}</p>
-                {item.effect?.title ? (
+              <li key={item.id}>
+                <div>
+                  <strong>{t(`confirmation.action.${item.action}`)}</strong>
                   <small>
-                    {t("confirmation.childTitle")}: {item.effect.title}
-                    {item.effect.inheritance_fields?.length
-                      ? ` · ${t("confirmation.fields")}: ${item.effect.inheritance_fields.join(", ")}`
-                      : ""}
-                    {typeof item.effect.source_version === "number"
-                      ? ` · ${t("confirmation.sourceVersion")}: v${item.effect.source_version}`
-                      : ""}
+                    {item.effect?.title || item.target_object_title || t("common.unknown")} ·{" "}
+                    {t("self.approvalExpires", {
+                      time: timeFormatter.format(new Date(item.expires_at))
+                    })}
                   </small>
-                ) : null}
-                {typeof item.bound_version === "number" ? (
-                  <small className="mono">
-                    {t("confirmation.boundVersion", { version: item.bound_version })}
-                  </small>
-                ) : null}
-                {stale ? (
-                  <p className="form-error" role="alert">
-                    {t("confirmation.stale")}
-                  </p>
-                ) : null}
-                {item.target_object_id ? (
-                  <Link className="text-link" to={`/objects/${item.target_object_id}`}>
-                    {t("self.approvalObject")} →
-                  </Link>
-                ) : null}
-              </div>
-              <div className="form-actions">
-                <button
-                  className="button button-small"
-                  type="button"
-                  disabled={busy !== ""}
-                  onClick={() => void approve(item)}
-                >
-                  {t("self.approvalApprove")}
-                </button>
-                <button
-                  className="button button-small button-ghost"
-                  type="button"
-                  disabled={busy !== ""}
-                  onClick={() => void deny(item)}
-                >
-                  {t("self.approvalDeny")}
-                </button>
-              </div>
-            </li>
+                  <p>{summary}</p>
+                  {item.effect?.summary ? <p>{item.effect.summary}</p> : null}
+                  {stale ? (
+                    <p className="form-error" role="alert">
+                      {t("confirmation.stale")}
+                    </p>
+                  ) : null}
+                </div>
+                <div className="form-actions">
+                  {item.action === "world.create" && inConversation ? (
+                    <button
+                      className="button button-small"
+                      type="button"
+                      disabled={busy !== ""}
+                      onClick={() => openConversation(item.conversation_id)}
+                    >
+                      {t("self.approvalOpenConversation")}
+                    </button>
+                  ) : inConversation && target ? (
+                    <Link className="button button-small" to={target}>
+                      {t("self.approvalOpenObject")}
+                    </Link>
+                  ) : (
+                    <>
+                      <button
+                        className="button button-small"
+                        type="button"
+                        disabled={busy !== ""}
+                        onClick={() => void approve(item)}
+                      >
+                        {t("self.approvalApprove")}
+                      </button>
+                      <button
+                        className="button button-small button-ghost"
+                        type="button"
+                        disabled={busy !== ""}
+                        onClick={() => void deny(item)}
+                      >
+                        {t("self.approvalDeny")}
+                      </button>
+                    </>
+                  )}
+                </div>
+              </li>
             );
           })}
         </ul>

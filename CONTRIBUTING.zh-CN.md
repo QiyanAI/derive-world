@@ -2,7 +2,7 @@
 
 [English](CONTRIBUTING.md) | 中文
 
-感谢你的兴趣。本仓库是公开的 `v0.1.0` OSS MVP。它包括 Digital Self 会话、Living Objects、对象授权、版本化动作、事件历史、Derive、来源链、审计、幂等、邀请与 Derive Link、Handoff、Personal AI 会话、Trust Kernel、提议与人类确认、个人访问令牌、本人导出、Capability Broker、五项首发能力、Open API、TypeScript SDK 与双语参考世界。
+感谢你的兴趣。本仓库是公开的 `v0.2.0` OSS 发行版。它包括 Digital Self 会话、Living Objects、对象授权、版本化动作、事件历史、Derive、来源链、审计、幂等、邀请与 Derive Link、Handoff、Personal AI 会话、Trust Kernel、提议与人类确认、个人访问令牌、本人导出、Capability Broker、五项首发能力、Open API、TypeScript SDK 与双语参考世界。
 
 ## Developer Certificate of Origin (DCO)
 
@@ -28,7 +28,7 @@ Signed-off-by: Your Name <your@email>
 
 1. 除非是琐碎修复，先开 issue 描述改动。
 2. Fork 仓库，并从 `main` 创建主题分支。
-3. 保持改动小而聚焦。`v0.1.0` 的依赖集冻结在 `go.mod`、`go.sum` 与 `package-lock.json`；没有契约理由与维护者审查，不要新增依赖。
+3. 保持改动小而聚焦。`v0.2.0` 的依赖集冻结在 `go.mod`、`go.sum` 与 `package-lock.json`；没有契约理由与维护者审查，不要新增依赖。
 4. 运行本地检查：
 
 ```bash

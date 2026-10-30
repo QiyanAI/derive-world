@@ -47,7 +47,7 @@ func RequestID(next http.Handler) http.Handler {
 // SecurityHeaders sets the frozen security header set.
 func SecurityHeaders(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Content-Security-Policy", "default-src 'self'; frame-ancestors 'none'; base-uri 'self'; form-action 'self'")
+		w.Header().Set("Content-Security-Policy", "default-src 'self'; img-src 'self' blob:; media-src 'self' blob:; connect-src 'self' blob:; object-src 'none'; frame-ancestors 'none'; base-uri 'self'; form-action 'self'")
 		w.Header().Set("X-Content-Type-Options", "nosniff")
 		w.Header().Set("Referrer-Policy", "no-referrer")
 		w.Header().Set("Permissions-Policy", "camera=(), microphone=(), geolocation=()")
@@ -57,9 +57,15 @@ func SecurityHeaders(next http.Handler) http.Handler {
 
 // BodyLimit limits the request body to maxBytes.
 func BodyLimit(maxBytes int64) Middleware {
+	return BodyLimitExcept(maxBytes, nil)
+}
+
+// BodyLimitExcept limits the request body to maxBytes except for requests the
+// caller explicitly owns. An exempt handler must apply its own bounded reader.
+func BodyLimitExcept(maxBytes int64, exempt func(*http.Request) bool) Middleware {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			if maxBytes > 0 && r.Body != nil {
+			if maxBytes > 0 && r.Body != nil && (exempt == nil || !exempt(r)) {
 				r.Body = http.MaxBytesReader(w, r.Body, maxBytes)
 			}
 			next.ServeHTTP(w, r)
@@ -119,6 +125,15 @@ func (w *responseWriter) WroteHeader() bool {
 
 func (w *responseWriter) Unwrap() http.ResponseWriter {
 	return w.ResponseWriter
+}
+
+// Flush forwards streaming flushes (SSE) to the underlying writer. The method
+// is always present so handlers can detect streaming support through the
+// middleware wrapper; it is a no-op when the underlying writer cannot flush.
+func (w *responseWriter) Flush() {
+	if flusher, ok := w.ResponseWriter.(http.Flusher); ok {
+		flusher.Flush()
+	}
 }
 
 // AccessLog emits one structured line per request. It never logs the raw path,

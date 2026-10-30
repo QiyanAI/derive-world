@@ -59,7 +59,8 @@ func (s *Service) ProposeAITx(ctx context.Context, tx pgx.Tx, call AICall) (uuid
 	}
 	proposalID, accepted, err := s.objects.CreateProposalTx(ctx, tx, call.ObjectID,
 		call.UserID, effective.AIProfileID, effective.DelegationID,
-		call.Action, call.Input, call.ExpectedVersion, call.RequestID, call.IPHash)
+		"object.propose_change", call.Action, call.Input,
+		call.ExpectedVersion, call.RequestID, call.IPHash)
 	if err != nil || !accepted {
 		return uuid.Nil, uuid.Nil, false, err
 	}

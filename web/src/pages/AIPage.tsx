@@ -2,17 +2,13 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Link } from "react-router";
 import {
-  createConversation,
   deleteConversation,
   getAIProfile,
-  getConversation,
   getPrivateContext,
   listConversations,
   listObjects,
-  sendAIMessage,
   updateAIProfile,
   updatePrivateContext,
-  type AIMessage,
   type Conversation,
   type ObjectListItem,
   type PersonalAIProfile,
@@ -38,8 +34,6 @@ export default function AIPage() {
   const [conversations, setConversations] = useState<Conversation[]>([]);
   const [objects, setObjects] = useState<ObjectListItem[]>([]);
   const [generalID, setGeneralID] = useState<string | null>(null);
-  const [generalMessages, setGeneralMessages] = useState<AIMessage[]>([]);
-  const [generalDraft, setGeneralDraft] = useState("");
   const [handoffObjectID, setHandoffObjectID] = useState("");
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState("");
@@ -56,7 +50,6 @@ export default function AIPage() {
   );
 
   const contextBytes = useMemo(() => new TextEncoder().encode(contextDraft).length, [contextDraft]);
-  const generalBytes = useMemo(() => new TextEncoder().encode(generalDraft).length, [generalDraft]);
 
   const objectsByID = useMemo(() => {
     const map = new Map<string, ObjectListItem>();
@@ -65,22 +58,6 @@ export default function AIPage() {
     }
     return map;
   }, [objects]);
-
-  const loadGeneralConversation = useCallback(async (items: Conversation[]) => {
-    const general = items.find((item) => item.object_id === null);
-    if (!general) {
-      setGeneralID(null);
-      setGeneralMessages([]);
-      return;
-    }
-    setGeneralID(general.id);
-    try {
-      const detail = await getConversation(general.id);
-      setGeneralMessages(detail.messages);
-    } catch {
-      setGeneralMessages([]);
-    }
-  }, []);
 
   const load = useCallback(async () => {
     setError(null);
@@ -99,13 +76,13 @@ export default function AIPage() {
       setConversations(conversationPage.items);
       setObjects(objectPage.items);
       setHandoffObjectID((previous) => previous || objectPage.items[0]?.id || "");
-      await loadGeneralConversation(conversationPage.items);
+      setGeneralID(conversationPage.items.find((item) => item.object_id === null)?.id ?? null);
     } catch (failure) {
       setError(failure);
     } finally {
       setLoading(false);
     }
-  }, [loadGeneralConversation]);
+  }, []);
 
   useEffect(() => {
     if (status === "authenticated") {
@@ -144,33 +121,6 @@ export default function AIPage() {
     }
   }
 
-  async function sendGeneral() {
-    const content = generalDraft.trim();
-    if (!content || busy) {
-      return;
-    }
-    setBusy("send");
-    setError(null);
-    setNotice("");
-    try {
-      let conversationID = generalID;
-      if (!conversationID) {
-        const created = await createConversation({ title: t("ai.conversationGeneral") });
-        conversationID = created.id;
-        setGeneralID(created.id);
-      }
-      const result = await sendAIMessage(conversationID, content);
-      setGeneralMessages((previous) => [...previous, result.user_message, result.assistant_message]);
-      setGeneralDraft("");
-      const conversationPage = await listConversations();
-      setConversations(conversationPage.items);
-    } catch (failure) {
-      setError(failure);
-    } finally {
-      setBusy("");
-    }
-  }
-
   async function removeConversation(item: Conversation) {
     if (!window.confirm(t("ai.deleteConversationConfirm"))) {
       return;
@@ -181,7 +131,6 @@ export default function AIPage() {
       await deleteConversation(item.id);
       if (generalID === item.id) {
         setGeneralID(null);
-        setGeneralMessages([]);
       }
       const conversationPage = await listConversations();
       setConversations(conversationPage.items);
@@ -282,52 +231,15 @@ export default function AIPage() {
               <h2>{t("ai.generalTitle")}</h2>
               <small>{t("ai.generalHint")}</small>
             </div>
-            <div className="ai-messages" aria-live="polite">
-              {generalMessages.length === 0 ? <p className="muted">{t("ai.generalEmpty")}</p> : null}
-              {generalMessages.map((message) => (
-                <div key={message.id} className={`ai-message ai-${message.role}`}>
-                  <small>
-                    {message.role === "user" ? t("workspace.you") : t("workspace.ai")}
-                    {message.model_mode === "fixture" ? ` · ${t("mode.fixture")}` : ""}
-                  </small>
-                  <p>{message.content}</p>
-                </div>
-              ))}
-            </div>
-            <label className="ai-compose">
-              <span className="visually-hidden">{t("ai.generalPlaceholder")}</span>
-              <textarea
-                rows={3}
-                maxLength={16384}
-                value={generalDraft}
-                placeholder={t("ai.generalPlaceholder")}
-                onChange={(event) => setGeneralDraft(event.target.value)}
-              />
-            </label>
-            <div className="form-actions">
-              <button
-                className="button button-small"
-                type="button"
-                disabled={!generalDraft.trim() || busy !== "" || generalBytes > 16384}
-                onClick={() => void sendGeneral()}
-              >
-                {busy === "send" ? t("ai.sending") : t("ai.send")}
-              </button>
-              <small className={generalBytes > 16384 ? "form-error" : "muted"}>
-                {t("ai.messageBytes", { bytes: generalBytes })}
-              </small>
-              {mode === "fixture" ? (
-                <button
-                  type="button"
-                  className="chip-button"
-                  disabled={busy !== ""}
-                  onClick={() => setGeneralDraft("hello")}
-                >
-                  {t("workspace.aiQuickHello")}
-                </button>
-              ) : null}
-            </div>
-            {mode === "fixture" ? <p className="fixture-inline">{t("ai.fixtureNote")}</p> : null}
+            <p className="muted">{t("ai.generalBody")}</p>
+            <button
+              className="button button-small"
+              type="button"
+              onClick={() => window.dispatchEvent(new CustomEvent("dw:open-general-ai"))}
+            >
+              {lang === "zh" ? "和我的 AI 一起创造" : "Create with my AI"}
+            </button>
+            <p className="form-hint">{t("ai.generalPlacesNote")}</p>
           </section>
         </div>
 
@@ -392,7 +304,21 @@ export default function AIPage() {
                         <Link className="text-link" to={`/objects/${item.object_id}?tab=ai`}>
                           {t("ai.openConversation")}
                         </Link>
-                      ) : null}
+                      ) : (
+                        <button
+                          type="button"
+                          className="text-link"
+                          onClick={() =>
+                            window.dispatchEvent(
+                              new CustomEvent("dw:open-general-ai", {
+                                detail: { conversationId: item.id }
+                              })
+                            )
+                          }
+                        >
+                          {t("ai.openConversation")}
+                        </button>
+                      )}
                       <button
                         type="button"
                         className="text-button"

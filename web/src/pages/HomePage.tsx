@@ -2,7 +2,7 @@
 import { useAuth } from "../auth";
 import { useI18n } from "../i18n";
 import LandingPage from "./LandingPage";
-import WorldPage from "./WorldPage";
+import WorldStagePage from "./WorldStagePage";
 
 export default function HomePage() {
   const { status } = useAuth();
@@ -13,5 +13,5 @@ export default function HomePage() {
   if (status === "anonymous") {
     return <LandingPage />;
   }
-  return <WorldPage />;
+  return <WorldStagePage />;
 }

@@ -2,7 +2,7 @@
 
 [中文](CONTRIBUTING.zh-CN.md) | English
 
-Thank you for your interest. This repository is the public `v0.1.0` OSS MVP.
+Thank you for your interest. This repository is the public `v0.2.0` OSS release.
 It includes Digital Self sessions, Living Objects, object
 authorization, versioned actions, event history, Derive, Lineage, audit,
 idempotency, invitations and Derive Links, Handoff, Personal AI conversations,
@@ -39,7 +39,7 @@ applies here.
 
 1. Open an issue describing the change, unless it is a trivial fix.
 2. Fork the repository and create a topic branch from `main`.
-3. Keep changes small and scoped. The `v0.1.0` dependency set is frozen in
+3. Keep changes small and scoped. The `v0.2.0` dependency set is frozen in
    `go.mod`, `go.sum`, and `package-lock.json`; do not add a dependency without
    a contract reason and maintainer review.
 4. Run the local checks:

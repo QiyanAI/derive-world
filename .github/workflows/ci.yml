@@ -256,3 +256,38 @@ jobs:
         run: go test -tags=integration ./tests/... -count=1
       - name: integration test discovery
         run: go test -list '.*' -tags=integration ./tests/... | grep -q '^Test'
+
+  launcher:
+    name: Launcher (Windows)
+    runs-on: windows-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Launcher self-test
+        shell: powershell
+        run: ./launcher/DeriveWorld.ps1 -Command SelfTest -NoPause
+      - name: Launcher environment detection
+        shell: powershell
+        run: ./launcher/DeriveWorld.ps1 -Command Check -NoPause -AllowMissingDocker
+      - name: Launcher safety contract
+        shell: powershell
+        run: |
+          $script = Get-Content ./launcher/DeriveWorld.ps1 -Raw
+          $required = @(
+            "'up', '-d', '--build'",
+            "'up', '-d', '--force-recreate', 'app'",
+            'Wait-ForReady',
+            'MODEL_API_KEY',
+            'Mask-Diagnostics',
+            'check-config',
+            'check-model',
+            'last-known-good'
+          )
+          foreach ($needle in $required) {
+            if (-not $script.Contains($needle)) { throw "launcher is missing: $needle" }
+          }
+          if ($script -match "compose down[^\r\n]*-v") { throw 'launcher must never delete volumes' }
+          if ($script -match 'HttpListener|TcpListener') { throw 'launcher must not open a network listener' }
+          if ($script -match 'Start-Process[^\r\n]*MODEL_API_KEY') { throw 'launcher must not pass the API key on a command line' }

@@ -70,7 +70,8 @@ to this repository, commit, and release workflow identity.
 
 See [Limitations]({base}/blob/{args.tag}/docs/en/limitations.md) and
 [Quick start]({base}/blob/{args.tag}/docs/en/quickstart.md). This release is
-the `v0.1.0` OSS MVP, not a production-ready platform.
+Derive World `v{args.version}`, a self-hostable OSS release, not a
+production-ready platform.
 
 ## License
 

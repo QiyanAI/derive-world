@@ -164,7 +164,7 @@ export default function ObjectWorkTab({
   }
 
   return (
-    <section className="card object-panel" data-testid="object-work-panel">
+    <section id="object-work-panel" className="card object-panel" data-testid="object-work-panel">
       <div className="section-heading">
         <h2>{t("workspace.sectionWork")}</h2>
         {collaborative && canContribute ? (

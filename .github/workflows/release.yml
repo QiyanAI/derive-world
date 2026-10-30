@@ -322,6 +322,18 @@ jobs:
           npm ci
           npm run build
 
+      - name: verify the build did not modify the tagged tree
+        run: |
+          set -euo pipefail
+          # package_release.py stages payload files from the working tree. After
+          # the dependency install and web build, refuse to package anything
+          # that no longer matches the tagged commit (tracked or untracked).
+          if [ -n "$(git status --porcelain)" ]; then
+            git status --porcelain
+            echo "the build modified the tagged tree; refusing to package it"
+            exit 1
+          fi
+
       - name: build binaries twice and compare
         run: |
           set -euo pipefail

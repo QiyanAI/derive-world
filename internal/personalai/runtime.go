@@ -17,6 +17,7 @@ import (
 	"github.com/QiyanAI/derive-world/internal/handoff"
 	"github.com/QiyanAI/derive-world/internal/model"
 	"github.com/QiyanAI/derive-world/internal/trust"
+	"github.com/QiyanAI/derive-world/internal/worldseed"
 )
 
 const (
@@ -41,6 +42,7 @@ type SendMessageInput struct {
 	UserID         uuid.UUID
 	ConversationID uuid.UUID
 	Content        string
+	Intent         string
 	Object         *ObjectAccess
 	Route          string
 	IdemKey        string
@@ -65,22 +67,40 @@ type SendMessageResult struct {
 	ModelMode        string           `json:"model_mode"`
 	ParseStatus      string           `json:"parse_status"`
 	ProposedActions  []AcceptedAction `json:"proposed_actions"`
-	ContextStale     bool             `json:"context_stale,omitempty"`
-	Usage            model.Usage      `json:"usage"`
+	// RejectedActions counts model-proposed actions that the server refused to
+	// turn into a proposal or confirmation. It keeps "the model said nothing"
+	// distinguishable from "the model proposed something invalid".
+	RejectedActions int `json:"rejected_actions,omitempty"`
+	// Rejections explains each refused action in user-facing language. The
+	// count remains for compatibility; the list is what the UI shows.
+	Rejections   []ActionRejection `json:"rejections,omitempty"`
+	ContextStale bool              `json:"context_stale,omitempty"`
+	Usage        model.Usage       `json:"usage"`
+}
+
+// ActionRejection is the bounded, non-secret reason one model action was not
+// turned into a proposal or confirmation. Stage is a stable diagnostic code;
+// Message is a localized sentence safe to render in chat.
+type ActionRejection struct {
+	CapabilityID string `json:"capability_id"`
+	Stage        string `json:"stage"`
+	Message      string `json:"message"`
 }
 
 type aiTurn struct {
-	inputChars   int
-	prompt       string
-	messages     []model.Message
-	reply        string
-	actions      []rawAction
-	parseStatus  string
-	rawOutput    string
-	mode         string
-	response     model.Response
-	durationMS   int
-	invocationID uuid.UUID
+	inputChars        int
+	prompt            string
+	messages          []model.Message
+	reply             string
+	actions           []rawAction
+	parseStatus       string
+	rawOutput         string
+	mode              string
+	response          model.Response
+	durationMS        int
+	invocationID      uuid.UUID
+	requestedCreation bool
+	requestedChange   bool
 }
 
 // SendMessage performs exactly one provider call, persists the private
@@ -142,27 +162,21 @@ func (s *Service) SendMessage(ctx context.Context, input SendMessageInput) (*Sen
 	if err != nil {
 		return nil, err
 	}
-	system, messages, inputChars, err := buildPrompt(profile, private, projection, history, input.Content)
+	inputBudget := model.MaxModelInputChars
+	if s.quota != nil {
+		inputBudget = s.quota.Config().MaxInputChars
+	}
+	system, messages, inputChars, err := buildPromptWithin(profile, private, projection, history,
+		input.Content, input.Intent, inputBudget)
 	if err != nil {
 		return nil, err
 	}
-	release, err := s.quota.Reserve(ctx, input.UserID, inputChars)
-	if err != nil {
-		s.recordQuotaDenial(ctx, input, err)
-		return nil, err
-	}
-	defer release(inputChars)
-
-	// Reserve a durable one-call slot before any provider request. The row is
-	// counted by the day-usage queries, so a crash, a rollback of the business
-	// transaction, or a failed final update cannot make a possible billable
-	// call disappear. If this insert fails, no provider call is made.
+	// A provider can return a successful response with no text at all. That
+	// leaves the turn unusable even though the request and the stored world
+	// context are valid. One bounded retry with the same world context but no
+	// conversation history recovers without asking the user to clear the chat.
+	// The first attempt is still recorded as a billable failed invocation.
 	mode := s.providerMode()
-	invocationID, err := uuid.NewV7()
-	if err != nil {
-		release(inputChars)
-		return nil, fmt.Errorf("model invocation id: %w", err)
-	}
 	reservedModel := s.modelName
 	if reservedModel == "" {
 		reservedModel = "unknown"
@@ -170,38 +184,105 @@ func (s *Service) SendMessage(ctx context.Context, input SendMessageInput) (*Sen
 	if runes := []rune(reservedModel); len(runes) > 120 {
 		reservedModel = string(runes[:120])
 	}
-	if err := s.recorder.Reserve(ctx, s.db, model.Invocation{
-		ID: invocationID, UserID: input.UserID,
-		ConversationID: &input.ConversationID,
-		Provider:       mode, Model: reservedModel, InputChars: inputChars,
-		OutputChars: 0, DurationMS: 0, Status: "failed", ErrorCode: "in_flight",
-	}); err != nil {
-		release(inputChars)
-		return nil, fmt.Errorf("model invocation reservation: %w", err)
-	}
+	attemptSystem, attemptMessages, attemptChars := system, messages, inputChars
+	for attempt := 0; attempt < 2; attempt++ {
+		release, reserveErr := s.quota.Reserve(ctx, input.UserID, attemptChars)
+		if reserveErr != nil {
+			s.recordQuotaDenial(ctx, input, reserveErr)
+			return nil, reserveErr
+		}
+		invocationID, idErr := uuid.NewV7()
+		if idErr != nil {
+			release(attemptChars)
+			return nil, fmt.Errorf("model invocation id: %w", idErr)
+		}
+		if err := s.recorder.Reserve(ctx, s.db, model.Invocation{
+			ID: invocationID, UserID: input.UserID,
+			ConversationID: &input.ConversationID,
+			Provider:       mode, Model: reservedModel, InputChars: attemptChars,
+			OutputChars: 0, DurationMS: 0, Status: "failed", ErrorCode: "in_flight",
+		}); err != nil {
+			release(attemptChars)
+			return nil, fmt.Errorf("model invocation reservation: %w", err)
+		}
 
-	started := time.Now()
-	response, callErr := s.provider.Complete(ctx, model.Request{
-		Model: s.modelName, System: system, Messages: messages,
-		Temperature: 0.2,
-	})
-	duration := int(time.Since(started).Milliseconds())
-	if callErr != nil {
-		s.recordFailure(ctx, input, mode, inputChars, duration, callErr, invocationID)
-		return nil, callErr
+		started := time.Now()
+		response, callErr := s.provider.Complete(ctx, model.Request{
+			Model: s.modelName, System: attemptSystem, Messages: attemptMessages,
+			Temperature: 0.2,
+		})
+		duration := int(time.Since(started).Milliseconds())
+		if callErr != nil {
+			s.recordFailure(ctx, input, mode, attemptChars, duration, callErr, invocationID)
+			release(attemptChars)
+			if attempt == 0 && isEmptyModelOutput(callErr) {
+				if retrySystem, retryMessages, retryChars, ok := s.cleanRetryPrompt(profile,
+					private, projection, input, inputBudget); ok {
+					if s.logger != nil {
+						s.logger.Error("personal_ai_empty_output_retry",
+							"conversation_id", input.ConversationID.String(),
+							"first_input_chars", attemptChars)
+					}
+					attemptSystem, attemptMessages, attemptChars = retrySystem, retryMessages, retryChars
+					continue
+				}
+			}
+			return nil, callErr
+		}
+		reply, actions, parseStatus, parseErr := parseModelOutput(response.Text)
+		if parseErr != nil {
+			s.recordFailure(ctx, input, mode, attemptChars, duration, parseErr, invocationID)
+			release(attemptChars)
+			if attempt == 0 && isEmptyModelOutput(parseErr) {
+				if retrySystem, retryMessages, retryChars, ok := s.cleanRetryPrompt(profile,
+					private, projection, input, inputBudget); ok {
+					if s.logger != nil {
+						s.logger.Error("personal_ai_empty_output_retry",
+							"conversation_id", input.ConversationID.String(),
+							"first_input_chars", attemptChars)
+					}
+					attemptSystem, attemptMessages, attemptChars = retrySystem, retryMessages, retryChars
+					continue
+				}
+			}
+			return nil, parseErr
+		}
+		turn := &aiTurn{
+			inputChars: attemptChars, prompt: attemptSystem, messages: attemptMessages,
+			reply: reply, actions: actions, parseStatus: parseStatus,
+			rawOutput: response.Text, mode: mode, response: response,
+			durationMS: duration, invocationID: invocationID,
+			requestedCreation: input.Object == nil && input.Intent == "create",
+			requestedChange:   input.Object != nil && input.Intent == "change",
+		}
+		result, persistErr := s.persistTurn(ctx, input, conversation, profile, turn)
+		release(attemptChars)
+		return result, persistErr
 	}
-	reply, actions, parseStatus, err := parseModelOutput(response.Text)
+	return nil, &model.Error{Code: model.CodeEmptyOutput, Message: "model response is empty"}
+}
+
+// cleanRetryPrompt rebuilds the turn without conversation history. The current
+// user message and the full world context stay; only prior turns are removed.
+func (s *Service) cleanRetryPrompt(profile *Profile, private *PrivateContext,
+	projection *handoff.Projection, input SendMessageInput,
+	budget int) (string, []model.Message, int, bool) {
+	system, messages, chars, err := buildPromptWithin(profile, private, projection, nil,
+		input.Content, input.Intent, budget)
 	if err != nil {
-		s.recordFailure(ctx, input, mode, inputChars, duration, err, invocationID)
-		return nil, err
+		return "", nil, 0, false
 	}
-	turn := &aiTurn{
-		inputChars: inputChars, prompt: system, messages: messages,
-		reply: reply, actions: actions, parseStatus: parseStatus,
-		rawOutput: response.Text, mode: mode, response: response,
-		durationMS: duration, invocationID: invocationID,
+	const notice = "\nThe previous attempt returned no text. Return exactly one json object now, with a non-empty reply and, when appropriate, proposed_actions."
+	if len([]byte(system))+len([]byte(notice)) <= budget {
+		system += notice
+		chars += utf8.RuneCountInString(notice)
 	}
-	return s.persistTurn(ctx, input, conversation, profile, turn)
+	return system, messages, chars, true
+}
+
+func isEmptyModelOutput(err error) bool {
+	var modelErr *model.Error
+	return errors.As(err, &modelErr) && modelErr.Code == model.CodeEmptyOutput
 }
 
 func (s *Service) persistTurn(
@@ -242,14 +323,38 @@ SELECT id, user_id, object_id, title, created_at, updated_at, deleted_at
 	}
 	contextStale := input.Object != nil && effective.ObjectVersion != input.Object.Version
 
-	userMessage, err := insertMessageTx(ctx, tx, input.ConversationID, "user", input.Content, turn.mode, nil)
+	userMessage, err := insertMessageTx(ctx, tx, input.ConversationID, "user", input.Content, turn.mode, nil, nil)
 	if err != nil {
 		return nil, err
 	}
-	parseStatus := turn.parseStatus
-	assistantMessage, err := insertMessageTx(ctx, tx, input.ConversationID, "assistant", turn.reply, turn.mode, &parseStatus)
-	if err != nil {
-		return nil, err
+
+	// A raw provider document must never become chat text. When parsing fell
+	// back and the output still looks like a JSON envelope, the assistant
+	// message is replaced by a short server-authored sentence and the detailed
+	// reason is stored as a bounded notice. Plain prose remains a normal reply:
+	// it is a legitimate refusal or answer, not an unreadable document.
+	zh := containsCJK(input.Content)
+	fallbackReason := ""
+	if turn.parseStatus == "fallback" && looksLikeModelJSON(turn.reply) {
+		if s.logger != nil {
+			s.logger.Error("personal_ai_output_unparseable",
+				"detail", modelOutputDecodeError(turn.rawOutput),
+				"output_bytes", len(turn.rawOutput),
+				"finish_reason", turn.response.FinishReason)
+		}
+		turn.reply, fallbackReason = fallbackReply(zh, turn.response.FinishReason)
+	}
+	notices := make([]string, 0, 4)
+	rejections := make([]ActionRejection, 0, len(turn.actions))
+	addRejection := func(capabilityID, stage string) {
+		message := rejectionExplanation(stage, zh)
+		if message == "" {
+			return
+		}
+		rejections = append(rejections, ActionRejection{
+			CapabilityID: capabilityID, Stage: stage, Message: message,
+		})
+		notices = append(notices, message)
 	}
 	if _, err := tx.Exec(ctx, `
 UPDATE ai_conversations SET updated_at = GREATEST(now(), updated_at) WHERE id = $1`,
@@ -287,7 +392,9 @@ UPDATE ai_conversations SET updated_at = GREATEST(now(), updated_at) WHERE id = 
 	}
 
 	accepted := make([]AcceptedAction, 0)
-	if !contextStale && input.Object != nil && turn.parseStatus == "structured" {
+	groupedAway := 0
+	if !contextStale && turn.parseStatus == "structured" &&
+		(input.Object != nil || len(turn.actions) > 0) {
 		if err := s.trust.LockAIActionBudgetTx(ctx, tx, input.UserID); err != nil {
 			return nil, err
 		}
@@ -296,19 +403,85 @@ UPDATE ai_conversations SET updated_at = GREATEST(now(), updated_at) WHERE id = 
 		if err != nil {
 			return nil, err
 		}
-		for _, action := range turn.actions {
+		acceptedWorldCreate := false
+		repairs := make([]*seedRepair, 0, 1)
+		actions := turn.actions
+		if input.Object != nil {
+			actions, groupedAway = groupTurnActions(turn.actions,
+				input.Object.ObjectID, effective.ObjectVersion, zh)
+		}
+		for _, action := range actions {
+			// One assistant reply may prepare at most one world. A second
+			// world.create would render a duplicate confirm button with the same
+			// meaning, so it is rejected before any confirmation row exists.
+			if input.Object == nil && action.CapabilityID == "world.create" && acceptedWorldCreate {
+				s.logActionRejection(action.CapabilityID, "duplicate_action", "")
+				addRejection(action.CapabilityID, "duplicate_action")
+				continue
+			}
 			if remaining <= 0 {
+				s.logActionRejection(action.CapabilityID, "action_budget", "")
+				addRejection(action.CapabilityID, "action_budget")
 				break
 			}
-			result, err := s.applyModelAction(ctx, tx, input, effective, action)
+			var result *AcceptedAction
+			var rejection *actionRejection
+			var repair *seedRepair
+			if input.Object != nil {
+				result, rejection, repair, err = s.applyModelAction(ctx, tx, input, effective, action)
+			} else {
+				result, rejection, repair, err = s.applyGlobalModelAction(ctx, tx, input, effective, action)
+			}
+			if rejection != nil {
+				s.logActionRejection(action.CapabilityID, rejection.Stage, rejection.Detail)
+				addRejection(action.CapabilityID, rejection.Stage)
+			}
 			if err != nil {
 				return nil, err
 			}
 			if result != nil {
+				if input.Object == nil && action.CapabilityID == "world.create" {
+					acceptedWorldCreate = true
+				}
 				accepted = append(accepted, *result)
+				repairs = append(repairs, repair)
 				remaining--
 			}
 		}
+		// A plan the server had to repair still runs, but the human is told
+		// that some detail was fitted to what the runtime supports. Silent
+		// repair would be a claim the plan is exactly what they asked for.
+		if text := seedRepairNotice(mergeRepairs(repairs), zh); text != "" {
+			notices = append(notices, text)
+		}
+	}
+	if contextStale {
+		addRejection("", "context_stale")
+	}
+	if fallbackReason != "" {
+		notices = append(notices, fallbackNotice(zh, fallbackReason))
+	}
+	// The model never executes anything. Its reply must therefore never claim
+	// that a world or change is already live, and it must never send the user
+	// looking for an approval card elsewhere. Any such sentence is replaced by
+	// a plain, accurate sentence before it becomes chat history.
+	turn.reply = guardAssistantReply(turn.reply, zh, accepted,
+		len(turn.actions) > 0, turn.requestedCreation, turn.requestedChange)
+	parseStatus := turn.parseStatus
+	var notice *string
+	if text := joinNoticeText(notices); text != "" {
+		notice = &text
+	}
+	assistantMessage, err := insertMessageTx(ctx, tx, input.ConversationID, "assistant",
+		turn.reply, turn.mode, &parseStatus, notice)
+	if err != nil {
+		return nil, err
+	}
+	// Link each persisted proposal/confirmation to this exact turn so the UI
+	// can render its approval directly under this reply, including after a
+	// refresh or a reopen. A linking failure rolls the whole turn back.
+	if err := s.linkTurnApprovalsTx(ctx, tx, input.UserID, input.ConversationID, assistantMessage.ID, accepted); err != nil {
+		return nil, err
 	}
 	if err := s.audit.Write(ctx, tx, audit.Event{
 		Actor:        effective.Actor(),
@@ -322,10 +495,21 @@ UPDATE ai_conversations SET updated_at = GREATEST(now(), updated_at) WHERE id = 
 	}); err != nil {
 		return nil, err
 	}
+	rejected := 0
+	if turn.parseStatus == "structured" {
+		rejected = len(turn.actions) - groupedAway - len(accepted)
+		if rejected < 0 {
+			rejected = 0
+		}
+		if contextStale {
+			rejected = len(turn.actions)
+		}
+	}
 	result := &SendMessageResult{
 		UserMessage: userMessage, AssistantMessage: assistantMessage,
 		ModelMode: turn.mode, ParseStatus: turn.parseStatus,
-		ProposedActions: accepted, ContextStale: contextStale,
+		ProposedActions: accepted, RejectedActions: rejected,
+		Rejections: rejections, ContextStale: contextStale,
 		Usage: turn.response.Usage,
 	}
 	encoded, err := json.Marshal(result)
@@ -348,68 +532,304 @@ func (s *Service) applyModelAction(
 	input SendMessageInput,
 	effective *trust.Effective,
 	action rawAction,
-) (*AcceptedAction, error) {
+) (*AcceptedAction, *actionRejection, *seedRepair, error) {
 	switch action.CapabilityID {
 	case "object.propose_change":
 		var proposal proposalActionInput
 		if err := decodeSingleJSON(string(action.Input), &proposal); err != nil {
-			return nil, nil
+			return nil, &actionRejection{Stage: "input_json", Detail: truncateActionDetail(err.Error())}, nil, nil
 		}
 		if proposal.Action == "" || len(proposal.Input) == 0 {
-			return nil, nil
+			return nil, &actionRejection{Stage: "empty_action"}, nil, nil
 		}
 		if proposal.ObjectID != nil && *proposal.ObjectID != input.Object.ObjectID.String() {
-			return nil, nil
+			return nil, &actionRejection{Stage: "object_mismatch"}, nil, nil
 		}
 		if proposal.ExpectedVersion != nil && *proposal.ExpectedVersion != effective.ObjectVersion {
-			return nil, nil
+			return nil, &actionRejection{Stage: "version_mismatch"}, nil, nil
 		}
 		if !effective.Can("contribute") {
-			return nil, nil
+			return nil, &actionRejection{Stage: "permission"}, nil, nil
 		}
 		proposalID, accepted, err := s.recordProposalAction(ctx, tx, input, effective,
 			proposal.Action, proposal.Input)
 		if err != nil {
-			return nil, err
+			return nil, nil, nil, err
 		}
 		if !accepted {
-			return nil, nil
+			return nil, &actionRejection{Stage: "proposal_not_accepted"}, nil, nil
 		}
 		return &AcceptedAction{
 			Kind: "proposal", ProposalID: &proposalID, Action: proposal.Action,
-		}, nil
+		}, nil, nil, nil
 	case "object.derive":
 		var derive deriveActionInput
 		if err := decodeSingleJSON(string(action.Input), &derive); err != nil {
-			return nil, nil
+			return nil, &actionRejection{Stage: "input_json", Detail: truncateActionDetail(err.Error())}, nil, nil
 		}
 		if derive.ObjectID != nil && *derive.ObjectID != input.Object.ObjectID.String() {
-			return nil, nil
+			return nil, &actionRejection{Stage: "object_mismatch"}, nil, nil
 		}
 		if derive.ExpectedVersion != nil && *derive.ExpectedVersion != effective.ObjectVersion {
-			return nil, nil
+			return nil, &actionRejection{Stage: "derive_version"}, nil, nil
 		}
 		if !effective.Can("derive") {
-			return nil, nil
+			return nil, &actionRejection{Stage: "derive_permission"}, nil, nil
 		}
 		confirmationID, accepted, err := s.recordDeriveConfirmation(ctx, tx, input, effective, derive)
 		if err != nil {
-			return nil, err
+			return nil, nil, nil, err
 		}
 		if !accepted {
-			return nil, nil
+			return nil, &actionRejection{Stage: "derive_not_accepted"}, nil, nil
 		}
 		return &AcceptedAction{
 			Kind: "confirmation", ConfirmationID: &confirmationID,
 			Action: trust.ConfirmationDeriveCreate,
-		}, nil
+		}, nil, nil, nil
+	case "world.reimagine":
+		if input.Object == nil || input.Object.ObjectType != "open_world" || s.proposals == nil {
+			return nil, &actionRejection{Stage: "reimagine_unsupported"}, nil, nil
+		}
+		if !effective.Can("contribute") {
+			return nil, &actionRejection{Stage: "permission"}, nil, nil
+		}
+		var reimagine worldReimagineInput
+		if err := decodeSingleJSON(string(action.Input), &reimagine); err != nil {
+			return nil, &actionRejection{Stage: "reimagine_decode", Detail: truncateActionDetail(err.Error())}, nil, nil
+		}
+		if len(reimagine.Brief) == 0 {
+			return nil, &actionRejection{Stage: "reimagine_decode", Detail: "empty brief"}, nil, nil
+		}
+		seed, repair, decodeRejection := decodeReimagineBrief(reimagine.Brief, input.Object.State)
+		if decodeRejection != nil {
+			return nil, decodeRejection, nil, nil
+		}
+		result, err := worldseed.Reshape(input.Object.State, seed)
+		if err != nil {
+			return nil, &actionRejection{Stage: "reimagine_reshape", Detail: truncateActionDetail(err.Error())}, nil, nil
+		}
+		encoded, err := json.Marshal(result.State)
+		if err != nil {
+			return nil, &actionRejection{Stage: "reimagine_encode", Detail: truncateActionDetail(err.Error())}, nil, nil
+		}
+		summary := strings.TrimSpace(reimagine.Summary)
+		if summary == "" || utf8.RuneCountInString(summary) > 500 {
+			summary = result.Summary
+		}
+		payload, err := json.Marshal(map[string]any{
+			"note": summary, "content": json.RawMessage(encoded),
+		})
+		if err != nil {
+			return nil, &actionRejection{Stage: "reimagine_encode", Detail: truncateActionDetail(err.Error())}, nil, nil
+		}
+		proposalID, accepted, err := s.proposals.CreateProposalTx(ctx, tx,
+			input.Object.ObjectID, input.UserID, effective.AIProfileID,
+			effective.DelegationID, "world.reimagine", "reshape_world", payload,
+			effective.ObjectVersion, input.RequestID, input.IPHash)
+		if err != nil {
+			return nil, nil, nil, err
+		}
+		if !accepted {
+			return nil, &actionRejection{Stage: "proposal_not_accepted"}, nil, nil
+		}
+		return &AcceptedAction{
+			Kind: "proposal", ProposalID: &proposalID, Action: "reshape_world",
+		}, nil, repair, nil
 	default:
-		return nil, nil
+		return nil, &actionRejection{Stage: "capability_id"}, nil, nil
 	}
+}
+
+// applyGlobalModelAction accepts only a world.create proposal from an unbound
+// conversation. Object-bound actions remain impossible here, so one world's
+// private context can never be smuggled into a global turn.
+type actionRejection struct {
+	Stage  string
+	Detail string
+}
+
+// seedRepair records what the AI authoring path had to change before a brief
+// could pass the strict validator. It is diagnostic only: the repaired brief
+// still runs through every type, range and enum check.
+type seedRepair struct {
+	Dropped []string
+	Clamped bool
+	Coerced bool
+}
+
+func (repair *seedRepair) empty() bool {
+	return repair == nil || (len(repair.Dropped) == 0 && !repair.Clamped && !repair.Coerced)
+}
+
+func mergeRepairs(repairs []*seedRepair) *seedRepair {
+	merged := &seedRepair{}
+	for _, repair := range repairs {
+		if repair == nil {
+			continue
+		}
+		merged.Dropped = append(merged.Dropped, repair.Dropped...)
+		merged.Clamped = merged.Clamped || repair.Clamped
+		merged.Coerced = merged.Coerced || repair.Coerced
+	}
+	return merged
+}
+
+// repairingSeedBrief applies the two repairs that are lossless for the product:
+// documented-but-alternate shapes (a palette written as prose, audio listed as
+// a tab), and out-of-range presentation numbers moved to the documented bound.
+// Anything ambiguous is left for the strict decoder to reject.
+func repairingSeedBrief(raw json.RawMessage) (json.RawMessage, *seedRepair) {
+	repair := &seedRepair{}
+	normalized, _ := normalizingSeedBrief(raw)
+	if clamped, changed := worldseed.ClampBriefNumbers(normalized); changed {
+		normalized = clamped
+		repair.Clamped = true
+	}
+	if coerced, changed := worldseed.CoerceInteractionValues(normalized); changed {
+		normalized = coerced
+		repair.Coerced = true
+	}
+	if named, changed := worldseed.NormalizeVariableNames(normalized); changed {
+		normalized = named
+		repair.Coerced = true
+	}
+	return normalized, repair
+}
+
+// decodeReimagineBrief applies the same bounded repairs to a world.reimagine
+// brief as to a world.create brief: documented alternate shapes are normalized,
+// presentation numbers are clamped to their documented bounds, and unknown
+// field names are removed only when the rest still validates. The strict
+// decode, range and enum checks still run on the result, so a change that is
+// ambiguous or beyond the runtime is rejected instead of half-applied.
+func decodeReimagineBrief(raw, state json.RawMessage) (*worldseed.Brief, *seedRepair, *actionRejection) {
+	normalized, repair := repairingSeedBrief(raw)
+	// A change that adds content may name only the things; their kind is the
+	// index (or exact name) of a kind the world already has.
+	if completed, changed := adoptingExistingKinds(normalized, state); changed {
+		normalized = completed
+	}
+	seed, dropped, err := worldseed.DecodeRepairing(normalized)
+	if err != nil {
+		return nil, nil, &actionRejection{Stage: "reimagine_decode", Detail: truncateActionDetail(err.Error())}
+	}
+	repair.Dropped = dropped
+	return seed, repair, nil
+}
+
+// buildWorldCreateContent validates the model's world.create input before any
+// confirmation row is written. The rejection stage lets the server record a
+// redacted diagnostic without persisting the raw model output.
+func buildWorldCreateContent(create worldCreateActionInput) (json.RawMessage, *actionRejection) {
+	content, _, rejection := buildWorldCreate(create)
+	return content, rejection
+}
+
+func buildWorldCreate(create worldCreateActionInput) (json.RawMessage, *seedRepair, *actionRejection) {
+	title := strings.TrimSpace(create.Title)
+	if title == "" || (len(create.Content) == 0 && len(create.Brief) == 0) {
+		return nil, nil, &actionRejection{Stage: "title_or_body"}
+	}
+	if len(create.Brief) == 0 {
+		return create.Content, nil, nil
+	}
+	// Benign provider shapes (audio listed as a tab) and out-of-range
+	// presentation numbers are normalized before the strict compiler sees them;
+	// the normalized brief still passes through the full Decode, Compose and
+	// ValidateCreate chain. An unrecognized field name is removed only when the
+	// rest of the brief still validates on its own.
+	brief, repair := repairingSeedBrief(create.Brief)
+	seed, dropped, err := worldseed.DecodeRepairing(brief)
+	repair.Dropped = dropped
+	if err != nil {
+		return nil, nil, &actionRejection{Stage: "seed_decode", Detail: truncateActionDetail(err.Error())}
+	}
+	composition, err := worldseed.Compose(seed, title)
+	if err != nil {
+		return nil, nil, &actionRejection{Stage: "seed_compose", Detail: truncateActionDetail(err.Error())}
+	}
+	encoded, err := json.Marshal(composition.Content)
+	if err != nil {
+		return nil, nil, &actionRejection{Stage: "content_encode", Detail: truncateActionDetail(err.Error())}
+	}
+	return encoded, repair, nil
+}
+
+func truncateActionDetail(value string) string {
+	const limit = 200
+	if len(value) <= limit {
+		return value
+	}
+	return value[:limit]
+}
+
+func (s *Service) logActionRejection(capabilityID, stage, detail string) {
+	if s.logger == nil {
+		return
+	}
+	s.logger.Error("personal_ai_action_rejected",
+		"capability_id", capabilityID, "stage", stage, "detail", detail)
+}
+
+func (s *Service) applyGlobalModelAction(
+	ctx context.Context,
+	tx pgx.Tx,
+	input SendMessageInput,
+	effective *trust.Effective,
+	action rawAction,
+) (*AcceptedAction, *actionRejection, *seedRepair, error) {
+	if action.CapabilityID != "world.create" {
+		return nil, &actionRejection{Stage: "capability_id"}, nil, nil
+	}
+	if !effective.Can("contribute") {
+		return nil, &actionRejection{Stage: "permission"}, nil, nil
+	}
+	var create worldCreateActionInput
+	if err := decodeSingleJSON(string(action.Input), &create); err != nil {
+		return nil, &actionRejection{Stage: "input_json", Detail: truncateActionDetail(err.Error())}, nil, nil
+	}
+	if pending, err := s.trust.HasPendingWorldCreateTx(ctx, tx,
+		input.UserID, input.ConversationID); err != nil {
+		return nil, nil, nil, err
+	} else if pending {
+		// One conversation keeps one live plan and therefore one confirm
+		// button. The human can deny it before asking for a new one.
+		return nil, &actionRejection{Stage: "world_pending"}, nil, nil
+	}
+	content, repair, rejection := buildWorldCreate(create)
+	if rejection != nil {
+		return nil, rejection, nil, nil
+	}
+	confirmation, accepted, err := s.trust.CreateWorldCreateConfirmationTx(ctx, tx,
+		trust.WorldCreateConfirmationParams{
+			UserID: input.UserID, AIProfileID: effective.AIProfileID,
+			DelegationID: effective.DelegationID, Title: create.Title,
+			Content: content, RequestID: input.RequestID, IPHash: input.IPHash,
+		})
+	if err != nil {
+		if errors.Is(err, trust.ErrInvalidRequest) || errors.Is(err, trust.ErrPayloadTooLarge) {
+			return nil, &actionRejection{Stage: "confirmation_invalid", Detail: truncateActionDetail(err.Error())}, nil, nil
+		}
+		return nil, nil, nil, err
+	}
+	if !accepted {
+		return nil, &actionRejection{Stage: "confirmation_not_accepted"}, nil, nil
+	}
+	return &AcceptedAction{
+		Kind: "confirmation", ConfirmationID: &confirmation.ID,
+		Action: trust.ConfirmationWorldCreate,
+	}, nil, repair, nil
 }
 
 func (s *Service) recordProposalAction(ctx context.Context, tx pgx.Tx, input SendMessageInput,
 	effective *trust.Effective, action string, rawInput json.RawMessage) (uuid.UUID, bool, error) {
+	if resolved, changed := resolveChangeReferences(input.Object.State, rawInput, action); changed {
+		rawInput = resolved
+		if s.logger != nil {
+			s.logger.Info("personal_ai_reference_resolved", "action", action)
+		}
+	}
 	if s.capabilities != nil {
 		if !s.capabilities.AllowAI(input.UserID) {
 			return uuid.Nil, false, nil
@@ -417,11 +837,19 @@ func (s *Service) recordProposalAction(ctx context.Context, tx pgx.Tx, input Sen
 		_, proposalID, accepted, err := s.capabilities.ProposeAITx(ctx, tx,
 			input.UserID, effective.AIProfileID, input.Object.ObjectID,
 			action, rawInput, effective.ObjectVersion, input.RequestID, input.IPHash)
+		if !accepted {
+			s.logProposalNotAccepted(input, action, rawInput, "capability")
+		}
 		return proposalID, accepted, err
 	}
-	return s.proposals.CreateProposalTx(ctx, tx, input.Object.ObjectID, input.UserID,
-		effective.AIProfileID, effective.DelegationID, action, rawInput,
+	proposalID, accepted, err := s.proposals.CreateProposalTx(ctx, tx, input.Object.ObjectID, input.UserID,
+		effective.AIProfileID, effective.DelegationID, "object.propose_change",
+		action, rawInput,
 		effective.ObjectVersion, input.RequestID, input.IPHash)
+	if !accepted {
+		s.logProposalNotAccepted(input, action, rawInput, "direct")
+	}
+	return proposalID, accepted, err
 }
 
 func (s *Service) recordDeriveConfirmation(ctx context.Context, tx pgx.Tx, input SendMessageInput,
@@ -464,7 +892,7 @@ func (s *Service) recordDeriveConfirmation(ctx context.Context, tx pgx.Tx, input
 
 func (s *Service) history(ctx context.Context, conversationID uuid.UUID) ([]Message, error) {
 	rows, err := s.db.Query(ctx, `
-SELECT id, conversation_id, role, content, model_mode, parse_status, created_at
+SELECT id, conversation_id, role, content, model_mode, parse_status, notice, created_at
   FROM ai_messages
  WHERE conversation_id = $1
  ORDER BY created_at DESC, id DESC
@@ -477,7 +905,8 @@ SELECT id, conversation_id, role, content, model_mode, parse_status, created_at
 	for rows.Next() {
 		var item Message
 		if err := rows.Scan(&item.ID, &item.ConversationID, &item.Role,
-			&item.Content, &item.ModelMode, &item.ParseStatus, &item.CreatedAt); err != nil {
+			&item.Content, &item.ModelMode, &item.ParseStatus, &item.Notice,
+			&item.CreatedAt); err != nil {
 			return nil, err
 		}
 		items = append(items, item)
@@ -488,10 +917,76 @@ SELECT id, conversation_id, role, content, model_mode, parse_status, created_at
 	for left, right := 0, len(items)-1; left < right; left, right = left+1, right-1 {
 		items[left], items[right] = items[right], items[left]
 	}
-	return items, nil
+	return filterUnreadableTurns(items), nil
 }
 
-func insertMessageTx(ctx context.Context, tx pgx.Tx, conversationID uuid.UUID, role, content, mode string, parseStatus *string) (Message, error) {
+// filterUnreadableTurns removes a fallback assistant message and the user
+// message that caused it from the prompt history. A fallback means the model
+// did not produce a readable answer; replaying it as normal conversation gives
+// the next turn a misleading precedent and can anchor the provider on an empty
+// response. Structured refusals and repaired plans are kept because they carry
+// actionable server-written notices.
+func filterUnreadableTurns(items []Message) []Message {
+	filtered := make([]Message, 0, len(items))
+	for _, item := range items {
+		if isUnreadableFallback(item) {
+			if len(filtered) > 0 && filtered[len(filtered)-1].Role == "user" {
+				filtered = filtered[:len(filtered)-1]
+			}
+			continue
+		}
+		filtered = append(filtered, item)
+	}
+	return filtered
+}
+
+// isUnreadableFallback distinguishes the server-authored fallback for a
+// JSON-looking but unparseable reply from a legitimate plain-prose answer,
+// which also carries parse_status=fallback but has no fallback notice.
+func isUnreadableFallback(item Message) bool {
+	if item.Role != "assistant" || item.ParseStatus == nil ||
+		*item.ParseStatus != "fallback" || item.Notice == nil {
+		return false
+	}
+	notice := *item.Notice
+	return strings.Contains(notice, "Nothing was created or changed") ||
+		strings.Contains(notice, "没有创建或修改任何东西")
+}
+
+// linkTurnApprovalsTx records which conversation turn produced each accepted
+// proposal or confirmation. The write itself belongs to the owning package
+// (objects owns object_proposals, trust owns confirmations); personal AI only
+// passes the ids and the exact assistant message. The columns are display-only;
+// authorization still revalidates the actor, delegation, version and payload
+// hash at execution time.
+func (s *Service) linkTurnApprovalsTx(ctx context.Context, tx pgx.Tx,
+	userID, conversationID, messageID uuid.UUID, accepted []AcceptedAction) error {
+	proposalIDs := make([]uuid.UUID, 0, len(accepted))
+	confirmationIDs := make([]uuid.UUID, 0, len(accepted))
+	for _, action := range accepted {
+		switch {
+		case action.Kind == "proposal" && action.ProposalID != nil:
+			proposalIDs = append(proposalIDs, *action.ProposalID)
+		case action.Kind == "confirmation" && action.ConfirmationID != nil:
+			confirmationIDs = append(confirmationIDs, *action.ConfirmationID)
+		}
+	}
+	if len(proposalIDs) > 0 {
+		if err := s.proposals.LinkProposalsToMessageTx(ctx, tx,
+			userID, conversationID, messageID, proposalIDs); err != nil {
+			return err
+		}
+	}
+	if len(confirmationIDs) > 0 {
+		if err := s.trust.LinkConfirmationsToMessageTx(ctx, tx,
+			userID, conversationID, messageID, confirmationIDs); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func insertMessageTx(ctx context.Context, tx pgx.Tx, conversationID uuid.UUID, role, content, mode string, parseStatus, notice *string) (Message, error) {
 	messageID, err := uuid.NewV7()
 	if err != nil {
 		return Message{}, err
@@ -499,18 +994,20 @@ func insertMessageTx(ctx context.Context, tx pgx.Tx, conversationID uuid.UUID, r
 	var (
 		item         Message
 		statusResult *string
+		noticeResult *string
 	)
 	err = tx.QueryRow(ctx, `
-INSERT INTO ai_messages (id, conversation_id, role, content, model_mode, parse_status)
-VALUES ($1,$2,$3,$4,$5,$6)
-RETURNING id, conversation_id, role, content, model_mode, parse_status, created_at`,
-		messageID.String(), conversationID.String(), role, content, mode, parseStatus).Scan(
+INSERT INTO ai_messages (id, conversation_id, role, content, model_mode, parse_status, notice)
+VALUES ($1,$2,$3,$4,$5,$6,$7)
+RETURNING id, conversation_id, role, content, model_mode, parse_status, notice, created_at`,
+		messageID.String(), conversationID.String(), role, content, mode, parseStatus, notice).Scan(
 		&item.ID, &item.ConversationID, &item.Role, &item.Content,
-		&item.ModelMode, &statusResult, &item.CreatedAt)
+		&item.ModelMode, &statusResult, &noticeResult, &item.CreatedAt)
 	if err != nil {
 		return Message{}, err
 	}
 	item.ParseStatus = statusResult
+	item.Notice = noticeResult
 	return item, nil
 }
 

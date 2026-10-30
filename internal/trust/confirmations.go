@@ -11,12 +11,14 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"strings"
 	"time"
 
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 
 	"github.com/QiyanAI/derive-world/internal/audit"
+	"github.com/QiyanAI/derive-world/internal/objects"
 	"github.com/QiyanAI/derive-world/internal/store"
 )
 
@@ -87,15 +89,45 @@ type ConfirmationView struct {
 	BoundVersion        int                 `json:"bound_version,omitempty"`
 	Effect              *ConfirmationEffect `json:"effect,omitempty"`
 	PermissionSummary   string              `json:"permission_summary"`
+	// ConversationID and MessageID place the approval directly under the
+	// assistant reply that produced it. They are absent for confirmations that
+	// did not originate in a Personal AI turn.
+	ConversationID *uuid.UUID `json:"conversation_id,omitempty"`
+	MessageID      *uuid.UUID `json:"message_id,omitempty"`
+	// ResultObjectID identifies the object an approved confirmation actually
+	// created, and is exposed only while the caller can still read that object.
+	// A refreshed conversation uses it to show the real entry point instead of
+	// asking for the same approval again.
+	ResultObjectID    *uuid.UUID `json:"result_object_id,omitempty"`
+	ResultObjectTitle string     `json:"result_object_title,omitempty"`
+	ResultObjectType  string     `json:"result_object_type,omitempty"`
 }
 
-// ConfirmationEffect is the bounded, non-secret effect of a derive
+// ConfirmationEffect is the bounded, non-secret effect of a pending
 // confirmation. It never includes object state, private context, or the raw
 // model input.
 type ConfirmationEffect struct {
 	Title             string   `json:"title,omitempty"`
 	InheritanceFields []string `json:"inheritance_fields,omitempty"`
 	SourceVersion     *int     `json:"source_version,omitempty"`
+	// ObjectType, Summary, and the counts describe a world.create
+	// confirmation so a human can recognize what will be created without
+	// seeing the raw payload.
+	ObjectType string `json:"object_type,omitempty"`
+	Summary    string `json:"summary,omitempty"`
+	KindCount  int    `json:"kind_count,omitempty"`
+	NodeCount  int    `json:"node_count,omitempty"`
+	RuleCount  int    `json:"rule_count,omitempty"`
+	// KindNames and ThingNames let a human preview the actual content they are
+	// about to create instead of approving a blind title. They are bounded and
+	// derived from the validated content, never from model prose.
+	KindNames        []string `json:"kind_names,omitempty"`
+	ThingNames       []string `json:"thing_names,omitempty"`
+	InteractionCount int      `json:"interaction_count,omitempty"`
+	PrimarySurface   string   `json:"primary_surface,omitempty"`
+	// Surfaces names the real universal runtimes the pending world will use.
+	// It is derived from the validated experience document, never from prose.
+	Surfaces []string `json:"surfaces,omitempty"`
 }
 
 type confirmationPayloadProjection struct {
@@ -182,24 +214,45 @@ RETURNING created_at, expires_at`,
 	}, nil
 }
 
-// ListConfirmations returns the caller's pending confirmations by default.
-func (s *Service) ListConfirmations(ctx context.Context, userID uuid.UUID, status string) ([]ConfirmationView, error) {
-	query := `
+// confirmationViewSelect is the single safe projection shared by list, get and
+// post-decision reads. It joins the target object (for an object-bound action)
+// and the result object (for an approved creation), and it only exposes either
+// while the caller can still read it.
+const confirmationViewSelect = `
 SELECT c.id, c.action, c.resource_type, c.resource_id, c.payload, c.status,
        c.expires_at, c.created_at, c.decided_at, c.payload_hash,
        COALESCE(o.state->>'title',''), COALESCE(o.version,0), COALESCE(o.object_type,''),
        COALESCE(o.status = 'active' AND EXISTS (
            SELECT 1 FROM object_memberships m
             WHERE m.object_id = o.id AND m.user_id = c.user_id AND m.revoked_at IS NULL
-       ), false) AS readable
+       ), false) AS readable,
+       c.conversation_id, c.message_id,
+       ro.id, COALESCE(ro.state->>'title',''), COALESCE(ro.object_type,'')
   FROM confirmations c
   LEFT JOIN living_objects o
     ON o.id = CASE
         WHEN c.resource_type = 'living_object' THEN c.resource_id
         ELSE NULLIF(c.payload->>'object_id','')::uuid
     END
+  LEFT JOIN living_objects ro
+    ON ro.id = c.result_object_id
+   AND ro.status = 'active'
+   AND EXISTS (
+       SELECT 1 FROM object_memberships rm
+        WHERE rm.object_id = ro.id AND rm.user_id = c.user_id AND rm.revoked_at IS NULL
+   )`
+
+// ListConfirmations returns the caller's pending confirmations by default.
+// conversationID optionally scopes the read to one conversation, so a busy
+// account can still find an unexpired approval after a refresh.
+func (s *Service) ListConfirmations(ctx context.Context, userID uuid.UUID, status string, conversationID *uuid.UUID) ([]ConfirmationView, error) {
+	query := confirmationViewSelect + `
  WHERE c.user_id = $1`
 	args := []any{userID.String()}
+	if conversationID != nil {
+		query += fmt.Sprintf(` AND c.conversation_id = $%d`, len(args)+1)
+		args = append(args, conversationID.String())
+	}
 	switch status {
 	case "", "pending":
 		query += ` AND c.status = 'pending' AND c.expires_at > now()`
@@ -227,20 +280,7 @@ SELECT c.id, c.action, c.resource_type, c.resource_id, c.payload, c.status,
 // GetConfirmation returns the safe projection. Expiry is evaluated lazily and
 // returned as confirmation_expired (410).
 func (s *Service) GetConfirmation(ctx context.Context, userID, confirmationID uuid.UUID) (*ConfirmationView, error) {
-	row := s.db.QueryRow(ctx, `
-SELECT c.id, c.action, c.resource_type, c.resource_id, c.payload, c.status,
-       c.expires_at, c.created_at, c.decided_at, c.payload_hash,
-       COALESCE(o.state->>'title',''), COALESCE(o.version,0), COALESCE(o.object_type,''),
-       COALESCE(o.status = 'active' AND EXISTS (
-           SELECT 1 FROM object_memberships m
-            WHERE m.object_id = o.id AND m.user_id = c.user_id AND m.revoked_at IS NULL
-       ), false) AS readable
-  FROM confirmations c
-  LEFT JOIN living_objects o
-    ON o.id = CASE
-        WHEN c.resource_type = 'living_object' THEN c.resource_id
-        ELSE NULLIF(c.payload->>'object_id','')::uuid
-    END
+	row := s.db.QueryRow(ctx, confirmationViewSelect+`
  WHERE c.id = $1 AND c.user_id = $2`, confirmationID.String(), userID.String())
 	view, err := scanConfirmationView(row)
 	if errors.Is(err, pgx.ErrNoRows) {
@@ -262,11 +302,13 @@ UPDATE confirmations SET status = 'expired'
 	return &view, nil
 }
 
-// Approve executes the target domain action and the confirmation transition in
-// one transaction. execute is supplied by the composition root and must
+// ApproveExecutor executes the target domain action inside the approval
+// transaction. It returns the serialized response and, when the action created
+// an object, that object's id so the confirmation can remember the real result
+// across a refresh. execute is supplied by the composition root and must
 // revalidate permissions and version. On any execute error the confirmation
 // remains pending and nothing is committed.
-type ApproveExecutor func(ctx context.Context, tx pgx.Tx, confirmation Confirmation) ([]byte, error)
+type ApproveExecutor func(ctx context.Context, tx pgx.Tx, confirmation Confirmation) ([]byte, *uuid.UUID, error)
 
 // Approve applies the confirmation single-use semantics and idempotency
 // completion. It returns the serialized successful response body.
@@ -340,21 +382,38 @@ UPDATE confirmations SET status = 'expired'
 			payload.Action != confirmation.Action {
 			return nil, ErrConflict
 		}
+	case "personal_ai":
+		if confirmation.Action != ConfirmationWorldCreate {
+			return nil, ErrUnsupportedAction
+		}
+		payload, err := DecodeWorldCreatePayload(confirmation.Payload)
+		if err != nil {
+			return nil, ErrConflict
+		}
+		if payload.AIProfileID != confirmation.ResourceID {
+			return nil, ErrConflict
+		}
 	default:
 		return nil, ErrUnsupportedAction
 	}
 
-	body, err := execute(ctx, tx, *confirmation)
+	body, resultObjectID, err := execute(ctx, tx, *confirmation)
 	if err != nil {
 		return nil, err
 	}
 	if len(body) == 0 || !json.Valid(body) {
 		return nil, errors.New("confirmation executor returned invalid JSON")
 	}
+	var resultArg *string
+	if resultObjectID != nil && *resultObjectID != uuid.Nil {
+		value := resultObjectID.String()
+		resultArg = &value
+	}
 	tag, err := tx.Exec(ctx, `
 UPDATE confirmations
-   SET status = 'approved', decided_at = GREATEST(now(), created_at)
- WHERE id = $1 AND status = 'pending'`, confirmationID.String())
+   SET status = 'approved', decided_at = GREATEST(now(), created_at),
+       result_object_id = $2
+ WHERE id = $1 AND status = 'pending'`, confirmationID.String(), resultArg)
 	if err != nil {
 		return nil, err
 	}
@@ -424,6 +483,16 @@ UPDATE confirmations SET status = 'denied', decided_at = GREATEST(now(), created
  WHERE id = $1 AND status = 'pending'`, confirmationID.String()); err != nil {
 		return nil, err
 	}
+	metadata := map[string]any{
+		"action":      confirmation.Action,
+		"resource_id": confirmation.ResourceID.String(),
+	}
+	if confirmation.ResourceType == "living_object" {
+		metadata["object_id"] = confirmation.ResourceID.String()
+	}
+	if confirmation.ResourceType == "personal_ai" {
+		metadata["ai_profile_id"] = confirmation.ResourceID.String()
+	}
 	if err := s.audit.Write(ctx, tx, audit.Event{
 		Actor:        audit.UserActor(userID),
 		Action:       audit.ActionAIConfirmationDeny,
@@ -432,10 +501,7 @@ UPDATE confirmations SET status = 'denied', decided_at = GREATEST(now(), created
 		Decision:     "allow",
 		RequestID:    requestID,
 		IPHash:       ipHash,
-		Metadata: map[string]any{
-			"action":    confirmation.Action,
-			"object_id": confirmation.ResourceID.String(),
-		},
+		Metadata:     metadata,
 	}); err != nil {
 		return nil, err
 	}
@@ -445,21 +511,59 @@ UPDATE confirmations SET status = 'denied', decided_at = GREATEST(now(), created
 	return s.confirmationView(ctx, userID, confirmationID)
 }
 
+// LinkConfirmationsToMessageTx records the conversation turn behind each
+// accepted confirmation. It is called inside the AI turn's transaction and is
+// the only writer of these display-only columns. A zero-row update is an error:
+// silently committing an unlinked confirmation would reproduce the very bug
+// this feature fixes (the reply says "press the button below" and no button
+// exists after a refresh).
+func (s *Service) LinkConfirmationsToMessageTx(ctx context.Context, tx pgx.Tx,
+	userID, conversationID, messageID uuid.UUID, ids []uuid.UUID) error {
+	seen := make(map[uuid.UUID]struct{}, len(ids))
+	for _, id := range ids {
+		if id == uuid.Nil {
+			continue
+		}
+		if _, duplicate := seen[id]; duplicate {
+			continue
+		}
+		seen[id] = struct{}{}
+		tag, err := tx.Exec(ctx, `
+UPDATE confirmations
+   SET conversation_id = $1, message_id = $2
+ WHERE id = $3 AND user_id = $4
+   AND (message_id IS NULL OR message_id = $2)`,
+			conversationID.String(), messageID.String(), id.String(), userID.String())
+		if err != nil {
+			return err
+		}
+		if tag.RowsAffected() != 1 {
+			return fmt.Errorf("%w: confirmation link", ErrConflict)
+		}
+	}
+	return nil
+}
+
+// HasPendingWorldCreateTx reports whether this conversation already has an
+// unexpired pending world plan. One plan per conversation keeps a single
+// confirm button with one meaning; the human can deny it before asking again.
+func (s *Service) HasPendingWorldCreateTx(ctx context.Context, tx pgx.Tx,
+	userID, conversationID uuid.UUID) (bool, error) {
+	var exists bool
+	err := tx.QueryRow(ctx, `
+SELECT EXISTS (
+    SELECT 1 FROM confirmations
+     WHERE user_id = $1 AND conversation_id = $2
+       AND action = $3 AND status = 'pending' AND expires_at > now()
+)`, userID.String(), conversationID.String(), ConfirmationWorldCreate).Scan(&exists)
+	if err != nil {
+		return false, err
+	}
+	return exists, nil
+}
+
 func (s *Service) confirmationView(ctx context.Context, userID, confirmationID uuid.UUID) (*ConfirmationView, error) {
-	row := s.db.QueryRow(ctx, `
-SELECT c.id, c.action, c.resource_type, c.resource_id, c.payload, c.status,
-       c.expires_at, c.created_at, c.decided_at, c.payload_hash,
-       COALESCE(o.state->>'title',''), COALESCE(o.version,0), COALESCE(o.object_type,''),
-       COALESCE(o.status = 'active' AND EXISTS (
-           SELECT 1 FROM object_memberships m
-            WHERE m.object_id = o.id AND m.user_id = c.user_id AND m.revoked_at IS NULL
-       ), false) AS readable
-  FROM confirmations c
-  LEFT JOIN living_objects o
-    ON o.id = CASE
-        WHEN c.resource_type = 'living_object' THEN c.resource_id
-        ELSE NULLIF(c.payload->>'object_id','')::uuid
-    END
+	row := s.db.QueryRow(ctx, confirmationViewSelect+`
  WHERE c.id = $1 AND c.user_id = $2`, confirmationID.String(), userID.String())
 	view, err := scanConfirmationView(row)
 	if err != nil {
@@ -474,17 +578,23 @@ type rowScanner interface {
 
 func scanConfirmationView(row rowScanner) (ConfirmationView, error) {
 	var (
-		view        ConfirmationView
-		id          string
-		resourceID  string
-		hash        []byte
-		payload     []byte
-		objectTitle string
-		readable    bool
+		view           ConfirmationView
+		id             string
+		resourceID     string
+		hash           []byte
+		payload        []byte
+		objectTitle    string
+		readable       bool
+		conversationID *string
+		messageID      *string
+		resultObjectID *string
+		resultTitle    string
+		resultType     string
 	)
 	err := row.Scan(&id, &view.Action, &view.ResourceType, &resourceID, &payload, &view.Status,
 		&view.ExpiresAt, &view.CreatedAt, &view.DecidedAt, &hash,
-		&objectTitle, &view.TargetObjectVersion, &view.TargetObjectType, &readable)
+		&objectTitle, &view.TargetObjectVersion, &view.TargetObjectType, &readable,
+		&conversationID, &messageID, &resultObjectID, &resultTitle, &resultType)
 	if err != nil {
 		return ConfirmationView{}, err
 	}
@@ -494,7 +604,38 @@ func scanConfirmationView(row rowScanner) (ConfirmationView, error) {
 	if len(view.PayloadHashPrefix) > 12 {
 		view.PayloadHashPrefix = view.PayloadHashPrefix[:12]
 	}
+	if conversationID != nil {
+		if parsed, err := uuid.Parse(*conversationID); err == nil {
+			view.ConversationID = &parsed
+		}
+	}
+	if messageID != nil {
+		if parsed, err := uuid.Parse(*messageID); err == nil {
+			view.MessageID = &parsed
+		}
+	}
+	// The result object join only matches an active object the caller can still
+	// read, so a non-null id here is safe to expose and link to.
+	if resultObjectID != nil && resultType != "" {
+		if parsed, err := uuid.Parse(*resultObjectID); err == nil {
+			view.ResultObjectID = &parsed
+			view.ResultObjectTitle = resultTitle
+			view.ResultObjectType = resultType
+		}
+	}
+	// list/status=all reads must not present an already-expired row as pending.
+	// GetConfirmation still performs the bounded lazy UPDATE when a caller
+	// addresses one row directly.
+	if view.Status == "pending" && !view.ExpiresAt.After(time.Now().UTC()) {
+		view.Status = "expired"
+	}
 	view.PermissionSummary = permissionSummary(view.Action)
+	// An unbound Personal AI world.create confirmation has no object to join.
+	// Its resource is the caller's own AI profile, so the caller may always
+	// review the bounded effect summary.
+	if view.ResourceType == "personal_ai" && view.Action == ConfirmationWorldCreate {
+		readable = true
+	}
 
 	// The confirmation belongs to the caller, but the target object may have
 	// become unreadable after creation (membership removal or soft delete).
@@ -553,7 +694,89 @@ func scanConfirmationView(row rowScanner) (ConfirmationView, error) {
 			}
 		}
 	}
+	if view.Action == ConfirmationWorldCreate {
+		var worldPayload WorldCreatePayload
+		if json.Unmarshal(payload, &worldPayload) == nil && strings.TrimSpace(worldPayload.Title) != "" {
+			var content struct {
+				Premise string `json:"premise"`
+				Kinds   []struct {
+					Name string `json:"name"`
+				} `json:"kinds"`
+				Nodes []struct {
+					Name string `json:"name"`
+				} `json:"nodes"`
+				Rules        []json.RawMessage `json:"rules"`
+				Interactions []json.RawMessage `json:"interactions"`
+				Experience   *struct {
+					Root experienceViewNode `json:"root"`
+				} `json:"experience"`
+			}
+			_ = json.Unmarshal(worldPayload.Content, &content)
+			summary := strings.TrimSpace(content.Premise)
+			if runes := []rune(summary); len(runes) > 300 {
+				summary = string(runes[:300])
+			}
+			surfaces := []string{}
+			if content.Experience != nil {
+				collectExperienceSurfaces(content.Experience.Root, &surfaces, map[string]bool{})
+			}
+			kindNames := make([]string, 0, len(content.Kinds))
+			for _, kind := range content.Kinds {
+				if name := boundedPreviewName(kind.Name, 60); name != "" {
+					kindNames = append(kindNames, name)
+				}
+				if len(kindNames) >= 8 {
+					break
+				}
+			}
+			thingNames := make([]string, 0, len(content.Nodes))
+			for _, node := range content.Nodes {
+				if name := boundedPreviewName(node.Name, 80); name != "" {
+					thingNames = append(thingNames, name)
+				}
+				if len(thingNames) >= 12 {
+					break
+				}
+			}
+			primary := ""
+			for _, surface := range surfaces {
+				if surface != "audio" {
+					primary = surface
+					break
+				}
+			}
+			if primary == "" && len(surfaces) > 0 {
+				primary = surfaces[0]
+			}
+			view.Effect = &ConfirmationEffect{
+				Title:            strings.TrimSpace(worldPayload.Title),
+				ObjectType:       objects.TypeOpenWorld,
+				Summary:          summary,
+				KindCount:        len(content.Kinds),
+				NodeCount:        len(content.Nodes),
+				RuleCount:        len(content.Rules),
+				KindNames:        kindNames,
+				ThingNames:       thingNames,
+				InteractionCount: len(content.Interactions),
+				PrimarySurface:   primary,
+				Surfaces:         surfaces,
+			}
+		}
+	}
 	return view, nil
+}
+
+// boundedPreviewName keeps a preview name short and single-line. It is display
+// text, not an identifier, so it never carries control characters.
+func boundedPreviewName(value string, max int) string {
+	trimmed := strings.TrimSpace(value)
+	trimmed = strings.ReplaceAll(trimmed, "\n", " ")
+	trimmed = strings.ReplaceAll(trimmed, "\r", " ")
+	runes := []rune(trimmed)
+	if len(runes) > max {
+		return string(runes[:max])
+	}
+	return trimmed
 }
 
 func permissionSummary(action string) string {
@@ -564,6 +787,8 @@ func permissionSummary(action string) string {
 		return "Invokes one capability on the target object."
 	case ConfirmationInvitationCreate:
 		return "Creates an invitation. This action is not triggered in v0.1.0."
+	case ConfirmationWorldCreate:
+		return "Creates one new private world owned by you. Nothing is written until you approve."
 	default:
 		return "No permission change."
 	}
@@ -641,4 +866,46 @@ func safeRequestID(value string) string {
 		return value
 	}
 	return "internal-ai"
+}
+
+// experienceViewNode mirrors the composed capability tree. The worldseed
+// composer wraps multi-surface experiences in core.tabs and audio layers in
+// core.stack, so the preview must walk the tree instead of inspecting only the
+// root and its immediate children.
+type experienceViewNode struct {
+	Capability string               `json:"capability"`
+	Children   []experienceViewNode `json:"children"`
+}
+
+func collectExperienceSurfaces(node experienceViewNode, out *[]string, seen map[string]bool) {
+	if name := surfaceNameForCapability(node.Capability); name != "" && !seen[name] {
+		seen[name] = true
+		*out = append(*out, name)
+	}
+	for _, child := range node.Children {
+		collectExperienceSurfaces(child, out, seen)
+	}
+}
+
+func surfaceNameForCapability(capability string) string {
+	switch capability {
+	case "core.live":
+		return "live"
+	case "core.story":
+		return "story"
+	case "core.workspace":
+		return "workspace"
+	case "core.custom":
+		return "custom"
+	case "core.space":
+		return "space"
+	case "core.scene3d":
+		return "scene3d"
+	case "core.media":
+		return "media"
+	case "core.audio":
+		return "audio"
+	default:
+		return ""
+	}
 }

@@ -80,6 +80,7 @@ func renderPrompt(request model.Request) string {
 
 type turnResponse struct {
 	AssistantMessage struct {
+		ID          string `json:"id"`
 		Content     string `json:"content"`
 		ParseStatus string `json:"parse_status"`
 	} `json:"assistant_message"`
@@ -91,6 +92,11 @@ type turnResponse struct {
 		ConfirmationID string `json:"confirmation_id"`
 		Action         string `json:"action"`
 	} `json:"proposed_actions"`
+	Rejections []struct {
+		CapabilityID string `json:"capability_id"`
+		Stage        string `json:"stage"`
+		Message      string `json:"message"`
+	} `json:"rejections"`
 }
 
 func decodeTurn(t *testing.T, body []byte) turnResponse {

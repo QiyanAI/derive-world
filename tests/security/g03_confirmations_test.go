@@ -217,6 +217,7 @@ func TestG03ModelAnomaliesDoNotProduceActions(t *testing.T) {
 			`this is not JSON at all`,
 			`{"reply":"nested {\"capability_id\":\"object.derive\"} text","proposed_actions":[]}`,
 			``,
+			``,
 		},
 		errs: []error{&model.Error{Code: model.CodeTimeout, Message: "scripted timeout"}},
 	}
@@ -250,6 +251,16 @@ func TestG03ModelAnomaliesDoNotProduceActions(t *testing.T) {
 	status, body = a.sendMessage(t, conversation, "empty")
 	requireStatus(t, status, http.StatusBadGateway, body)
 	requireCode(t, body, "model_invalid_output")
+	var emptyCount int
+	if err := env.store.Pool().QueryRow(t.Context(), `
+SELECT count(*) FROM model_invocations
+ WHERE user_id=$1 AND status='failed' AND error_code='model_empty_output'`,
+		a.id).Scan(&emptyCount); err != nil {
+		t.Fatalf("query empty invocation: %v", err)
+	}
+	if emptyCount != 2 {
+		t.Fatalf("empty invocations = %d, want first attempt + one clean-context retry", emptyCount)
+	}
 	status, body = a.sendMessage(t, conversation, "timeout")
 	requireStatus(t, status, http.StatusGatewayTimeout, body)
 	requireCode(t, body, "model_timeout")

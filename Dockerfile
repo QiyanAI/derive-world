@@ -39,9 +39,13 @@ COPY --from=go-builder --chown=10001:10001 /src/capabilities.yaml /app/capabilit
 COPY --from=go-builder --chown=10001:10001 /src/LICENSE /app/LICENSE
 COPY --from=go-builder --chown=10001:10001 /src/NOTICE /app/NOTICE
 COPY --from=go-builder --chown=10001:10001 /src/THIRD_PARTY_NOTICES.md /app/THIRD_PARTY_NOTICES.md
+# A named volume mounts here in Compose. The directory itself must exist and be
+# owned by the runtime user so an empty volume is writable without relaxing
+# read_only.
+RUN mkdir -p /app/var/assets && chown -R 10001:10001 /app/var
 USER 10001:10001
 EXPOSE 8080
-ENV WEB_DIST_DIR=/app/web TMPDIR=/tmp
+ENV WEB_DIST_DIR=/app/web ASSET_DIR=/app/var/assets TMPDIR=/tmp
 HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
     CMD wget -qO- http://127.0.0.1:8080/healthz >/dev/null || exit 1
 ENTRYPOINT ["/app/server"]

@@ -36,6 +36,10 @@ type Response struct {
 	Text  string
 	Usage Usage
 	Model string
+	// FinishReason is the provider's reason for stopping ("stop", "length",
+	// "content_filter", …). It is diagnostic only: callers must never treat a
+	// truncated response as complete.
+	FinishReason string
 }
 
 // Provider is the frozen model interface from G00 contract §A.9.1.
@@ -52,9 +56,13 @@ type ModeProvider interface {
 type ErrorCode string
 
 const (
-	CodeUnavailable     ErrorCode = "model_unavailable"
-	CodeTimeout         ErrorCode = "model_timeout"
-	CodeInvalidOutput   ErrorCode = "model_invalid_output"
+	CodeUnavailable   ErrorCode = "model_unavailable"
+	CodeTimeout       ErrorCode = "model_timeout"
+	CodeInvalidOutput ErrorCode = "model_invalid_output"
+	// CodeEmptyOutput means the provider returned a successful response with no
+	// text at all. It is distinct because Personal AI may retry once with a
+	// clean context; it is never used for a validation rejection.
+	CodeEmptyOutput     ErrorCode = "model_empty_output"
 	CodePayloadTooLarge ErrorCode = "payload_too_large"
 	CodeInvalidRequest  ErrorCode = "invalid_request"
 	// CodeRateLimited reports an upstream 429. It maps to the frozen 429

@@ -1,0 +1,16 @@
+{
+  "responses": [
+    {
+      "match": "院子再添两盏灯",
+      "reply": "{\"reply\":\"我把两盏灯和新的氛围合并成一份完整方案，确认后一次生效。\",\"proposed_actions\":[{\"capability_id\":\"object.propose_change\",\"input\":{\"action\":\"add_kind\",\"input\":{\"name\":\"屋檐灯\",\"hue\":42}}},{\"capability_id\":\"object.propose_change\",\"input\":{\"action\":\"add_kind\",\"input\":{\"name\":\"石灯\",\"hue\":48}}},{\"capability_id\":\"object.propose_change\",\"input\":{\"action\":\"set_premise\",\"input\":{\"premise\":\"夜里的小院，两盏灯慢慢亮起。\"}}}]}"
+    },
+    {
+      "match": "给院子加一条长椅",
+      "reply": "{\"reply\":\"我把长椅、树和新的名字合并成一份完整方案，确认后一次生效。\",\"proposed_actions\":[{\"capability_id\":\"object.propose_change\",\"input\":{\"action\":\"add_kind\",\"input\":{\"name\":\"长椅\",\"hue\":30}}},{\"capability_id\":\"object.propose_change\",\"input\":{\"action\":\"add_kind\",\"input\":{\"name\":\"树\",\"hue\":120}}},{\"capability_id\":\"object.propose_change\",\"input\":{\"action\":\"set_title\",\"input\":{\"title\":\"夜风小院\"}}}]}"
+    },
+    {
+      "match": "院子夜里更安静",
+      "reply": "{\"reply\":\"我把萤火虫、夜晚标签和新的氛围合并成一份完整方案，确认后一次生效。\",\"proposed_actions\":[{\"capability_id\":\"object.propose_change\",\"input\":{\"action\":\"add_kind\",\"input\":{\"name\":\"萤火虫\",\"hue\":60}}},{\"capability_id\":\"object.propose_change\",\"input\":{\"action\":\"add_tag\",\"input\":{\"tag\":\"夜晚\"}}},{\"capability_id\":\"object.propose_change\",\"input\":{\"action\":\"set_premise\",\"input\":{\"premise\":\"夜深了，院子里只剩风和虫鸣。\"}}}]}"
+    }
+  ]
+}

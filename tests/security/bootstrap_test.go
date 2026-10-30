@@ -49,8 +49,8 @@ func TestMigrationIdempotent(t *testing.T) {
 		"SELECT value FROM app_meta WHERE key = 'schema_version'").Scan(&schemaVersion); err != nil {
 		t.Fatalf("read app_meta: %v", err)
 	}
-	if schemaVersion != "5" {
-		t.Fatalf("schema_version = %q, want 5", schemaVersion)
+	if schemaVersion != "11" {
+		t.Fatalf("schema_version = %q, want 11", schemaVersion)
 	}
 
 	var migrationTableExists bool
@@ -105,6 +105,10 @@ func TestFrozenSchemaShape(t *testing.T) {
 		"derivation_edges", "capability_definitions", "capability_invocations",
 		"model_invocations", "audit_events", "idempotency_keys", "confirmations",
 		"object_proposals", "audit_actions",
+		"friendships", "user_blocks", "direct_messages", "object_discussions",
+		"publications", "publication_consents", "publication_derivations",
+		"publication_reports", "assets", "object_asset_refs",
+		"publication_asset_refs",
 	}
 	for _, table := range businessTables {
 		var exists bool
@@ -117,12 +121,57 @@ func TestFrozenSchemaShape(t *testing.T) {
 		}
 	}
 
+	var approvalLinkColumns int
+	if err := database.Pool().QueryRow(ctx, `
+SELECT count(*) FROM information_schema.columns
+ WHERE table_schema='public'
+   AND (
+        (table_name='confirmations' AND column_name IN ('conversation_id','message_id','result_object_id'))
+     OR (table_name='object_proposals' AND column_name IN ('conversation_id','source_message_id'))
+   )
+`).Scan(&approvalLinkColumns); err != nil {
+		t.Fatalf("check approval link columns: %v", err)
+	}
+	if approvalLinkColumns != 5 {
+		t.Fatalf("approval link columns = %d, want 5", approvalLinkColumns)
+	}
+	var approvalLinkNullable int
+	if err := database.Pool().QueryRow(ctx, `
+SELECT count(*) FROM information_schema.columns
+ WHERE table_schema='public' AND is_nullable='NO'
+   AND (
+        (table_name='confirmations' AND column_name IN ('conversation_id','message_id','result_object_id'))
+     OR (table_name='object_proposals' AND column_name IN ('conversation_id','source_message_id'))
+   )
+`).Scan(&approvalLinkNullable); err != nil {
+		t.Fatalf("check approval link nullability: %v", err)
+	}
+	if approvalLinkNullable != 0 {
+		t.Fatal("approval link columns must stay nullable for legacy rows")
+	}
+	var approvalLinkConstraints int
+	if err := database.Pool().QueryRow(ctx, `
+SELECT count(*) FROM pg_constraint
+ WHERE conname IN (
+   'confirmations_approval_link_pair',
+   'object_proposals_approval_link_pair',
+   'confirmations_message_conversation_fk',
+   'confirmations_result_object_fk',
+   'object_proposals_source_message_conversation_fk'
+ )
+`).Scan(&approvalLinkConstraints); err != nil {
+		t.Fatalf("check approval link constraints: %v", err)
+	}
+	if approvalLinkConstraints != 5 {
+		t.Fatalf("approval link constraints = %d, want 5", approvalLinkConstraints)
+	}
+
 	var auditActions int
 	if err := database.Pool().QueryRow(ctx, "SELECT count(*) FROM audit_actions").Scan(&auditActions); err != nil {
 		t.Fatalf("count audit actions: %v", err)
 	}
-	if auditActions != 49 {
-		t.Fatalf("audit_actions rows = %d, want 49", auditActions)
+	if auditActions != 66 {
+		t.Fatalf("audit_actions rows = %d, want 66", auditActions)
 	}
 
 	var sourceColumns int
@@ -183,10 +232,11 @@ SELECT count(*) FROM information_schema.columns
 		}
 	}
 	for table, privilege := range map[string]string{
-		"object_events":    "INSERT",
-		"audit_events":     "INSERT",
-		"living_objects":   "UPDATE",
-		"idempotency_keys": "UPDATE",
+		"object_events":      "INSERT",
+		"audit_events":       "INSERT",
+		"living_objects":     "UPDATE",
+		"user_world_layouts": "UPDATE",
+		"idempotency_keys":   "UPDATE",
 	} {
 		var allowed bool
 		query := "SELECT has_table_privilege('derive_world_app', $1, $2)"
@@ -206,7 +256,10 @@ SELECT pg_get_constraintdef(oid)
 `).Scan(&templateCheck); err != nil {
 		t.Fatalf("read template constraint: %v", err)
 	}
-	if !strings.Contains(templateCheck, "collaborative_v1") || !strings.Contains(templateCheck, "interactive_v1") {
+	if !strings.Contains(templateCheck, "collaborative_v1") ||
+		!strings.Contains(templateCheck, "interactive_v1") ||
+		!strings.Contains(templateCheck, "living_scene_v1") ||
+		!strings.Contains(templateCheck, "open_world_v1") {
 		t.Fatalf("template pairing constraint is incomplete: %s", templateCheck)
 	}
 

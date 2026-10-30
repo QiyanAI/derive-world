@@ -1,9 +1,9 @@
 # Limitations
 
-This is the `v0.1.0` public OSS MVP, the first public
-release. The approved two-call API-level dual Personal AI run (DeepSeek `deepseek-flash`) is **VERIFIED_REAL** for that
-exact scope; it was not re-run on the release SHA and is not a general
-model/provider acceptance. Digital Self sessions, Living Objects, object
+This is the `v0.2.0` public OSS release (the V2 product stage). Real-model
+evidence is scoped to the documented flows on DeepSeek `deepseek-flash`, on the
+release source tree; it is not a general model/provider acceptance. Digital
+Self sessions, Living Objects, object
 authorization, versioned actions, event history, Derive, Lineage, audit,
 idempotency, invitations and Derive Links, Handoff, Personal AI conversations,
 the Trust Kernel, AI proposals and human confirmations, PATs, self-only export,
@@ -11,6 +11,114 @@ the Capability Broker, all five first-release capabilities, the Open API, the
 TypeScript SDK, the independent `content.structure` Provider, response-signed
 Provider transport, verified TLS, HMAC key rotation, and model budgets are
 implemented. This is a self-hostable OSS MVP, not a production platform.
+
+## Account discovery and privacy defaults
+
+- Account discovery is **on by default**: a signed-in user can find another
+  account by exact handle or by a display-name substring, and can send a friend
+  request. Discovery never exposes email, account status or an unfiltered
+  directory; it is authenticated, query-scoped and rate-limited, and it can be
+  turned off in the friend-search dialog.
+- Turning discovery off does not erase the account's existence: an exact-handle
+  lookup can still reveal it, and an unsolicited friend request can still be
+  sent. Blocks and object permissions still apply. Making discovery strictly
+  opt-in and surfacing the control in Settings are V3 work.
+
+## Free worlds in v0.2.0
+
+- A free world's content is declarative data: creators define kinds, things,
+  relations, one-pass rules, and an optional composed experience. Content is
+  not selected from a fixed product taxonomy.
+- An experience is a bounded tree of registered capabilities: layout, text,
+  vector space with arbitrary SVG paths, repeating collections, data tables,
+  field editors, meters, buttons, choices, uploaded image/video, uploaded or
+  procedural audio, and a real 3D scene with camera movement, gravity and
+  collisions. Reusable behaviors cover state changes, numeric transfer and
+  event cues. `GET
+  /api/v1/world-capabilities` publishes the same catalog that drives the
+  product palette and generated forms.
+- Adding a capability is a module change (Go validator/executor plus its
+  client renderer and descriptor), not a change to the world protocol. Every
+  registered capability is available to every world. The classic scene,
+  stage, cards, and timeline remain selectable views for the same world; a
+  world does not become a different object type when its experience changes.
+- The server interprets every value. It never executes user code, loads an
+  external URL, font or script, or opens network access. Uploaded images,
+  video, audio and GLB models are validated by content, served from this
+  server under the world's own permissions, and referenced by opaque ids.
+  Images are decoded and re-encoded; GLB files may only use an embedded BIN
+  chunk. 3D rendering, camera control, gravity and simple collisions run in the
+  browser (three.js); physics transforms are ephemeral and only behavior-driven
+  state changes are persisted. Strings are rendered as text, vector paths use
+  a restricted drawing-command grammar, and all values are bounded.
+- Bounds: 64 static view nodes, depth 8, 24 children per node, 24 behaviors,
+  8 actions per behavior, 4 KiB of props per node (12 KiB for scene3d and
+  custom, 8 KiB for audio), 48 KiB per experience, 400 expanded render
+  instances, and the existing 64 KiB object-state cap. Actions remain
+  single-pass and never chain.
+- `set_experience` and `invoke_behavior` require `contribute`; a caller
+  without read permission still receives 404. Every change uses the existing
+  row lock, `expected_version`, idempotency, event and audit path.
+- Deriving with `structure` copies the experience, remaps kind/entity UUIDs in
+  declared reference fields and `{{entity.<id>...}}` template tokens, and keeps
+  local view/behavior ids, field keys and ordinary text stable. The child is
+  independent and revalidated; the parent is unchanged. Derivation is at the
+  whole object level: there is no per-entity, per-field or per-capability
+  derivation granularity yet.
+- A change that includes an experience block rebuilds the world's surfaces from
+  the new brief. Uploaded media/audio/GLB bindings and live props that the brief
+  does not restate may not be preserved; content-only changes keep the existing
+  experience. This is a known V3 follow-up, not a claim that every partial
+  presentation change keeps every asset.
+- A behavior that changes a thing runs one legacy rule pass for that thing,
+  matching `set_node_field` / `set_node_status` / `touch_node`. Rules still do
+  not chain and legacy rules cannot invoke behaviors.
+- The frozen `object.propose_change` capability keeps its published action
+  set. Experience editing is a human product path. An object-bound AI can
+  still propose the existing structural actions, and an unbound AI can propose
+  a complete world through `world.create`; both remain human-approved. Rich
+  AI-authored experience documents are **not yet** available through that
+  frozen schema, and the 8 KiB model-output limit is binding for such work.
+- Remaining capability boundaries, stated plainly: the initial module set has
+  no generic motion/ambient/horizon module (the classic scene still owns those
+  effects); `core.space` owns a bounded gradient/solid/none background rather
+  than a separate background capability; composite conditions and
+  `visible_when` are API-authorable but the visual editor only authors one
+  simple condition; `$event.value` is usable by API integrations but no
+  current product control supplies an event value; capability descriptors
+  carry a version but stored view nodes reference capability ids without an
+  embedded version; and the anonymous Explore preview shows a metadata
+  summary, not a live composed experience. Adding any of these is a new module
+  or a deliberate protocol extension, not a new fixed world category.
+- An unbound Personal AI can propose a complete world. The proposal is validated
+  before storage and creates nothing until a human approves the five-minute
+  confirmation.
+- Fixture output is deterministic demo data and is always labelled; real-model
+  output is a separate, operator-configured mode and is never implied by
+  fixture behaviour.
+
+
+## Multi-form worlds in v0.2.0
+
+- Creation is no longer a type choice. The user describes what they want; the Personal AI writes a compact world seed and a server-side composer expands it into real runnable content and experience. Ordinary users never see capabilities, fields, runtimes or JSON.
+- One world can carry several universal surfaces that share content, state, variables, permissions, versions and lineage:
+  - `core.live`: a time-based 2D world. With no avatar it genuinely plays an animation (timeline, particles, motion); with an avatar it is walkable, collidable and proximity-interactive; with a goal it is a collect/score/reach/survive game with win, loss and restart.
+  - `core.story`: chapters are real things, choices are real links, reading position is a shared variable; readable, choosable, extendable, rewritable and derivable.
+  - `core.workspace`: real things and fields as an editable table with row creation, status, actions and live summaries; a genuinely usable work environment.
+  - `core.space`: a static visual relation space.
+  - `core.media`: a real uploaded image or video with fit, controls, looping, muted/autoplay intent and world-variable visibility/playback control.
+  - `core.audio`: an ambient uploaded file or procedural tone plus bounded cues driven by world-variable transitions. The browser requires an explicit gesture before sound starts.
+  - `core.scene3d`: the same things as a real 3D scene. Kinds select a primitive or an uploaded GLB; the camera can orbit or follow a player; gravity, jumping and box/sphere collisions run client-side; clicking a thing runs its behavior.
+  - `core.custom`: a bounded declarative surface. The AI can define forms the fixed surfaces do not cover with shapes, text, inputs, keys, drag, conditions, actions, timelines and procedural tones; the server interprets it and the client renders it, never executing user code.
+  - `core.tabs`: combine any surfaces in one world; labels are world content, not product categories. An audio layer can sit outside the tabs so it keeps playing while the user switches surfaces.
+- Create bodies may use local `ref` slugs; the server mints UUIDs and remaps experience references, so a complete experience can be installed at creation.
+- World variables (<=128, <=8 KiB total) store game scores, novel reading positions and workspace state; they participate in versions, events, audit, snapshots and derivation.
+- A bound Personal AI uses `world.reimagine` to propose a merged change; the server runs `worldseed.Reshape` and creates a `reshape_world` proposal. Applying it atomically replaces the world. Content merges by name and keeps existing ids, behaviours, arbitrary forms and entity actions; the experience shell is rebuilt for the requested surfaces.
+- Complex worlds grow across turns: each model turn remains bounded at 8 KiB, but the world can keep gaining things, chapters, surfaces and custom nodes up to the hard state/experience ceilings.
+- Limits (stated honestly): declarative 2D and 3D surfaces; uploaded images/video/audio/GLB models; simple client physics; no network access, arbitrary code, live multiplayer sync, or arbitrary video generation. Uploads are capped per file (image 8 MiB, audio 16 MiB, GLB 32 MiB, video 40 MiB), per world (40 files / 64 MiB) and per user per UTC day (256 MiB). A custom surface holds at most 40 nodes and 12 KiB props; the whole experience is 48 KiB; object state is 64 KiB; variables are 128 / 8 KiB; one model output is 8 KiB; one creation confirmation is 12 KiB. A media file's bytes never enter object state. Anything beyond these is not pretended; new media or generation providers still require a validated universal module, never a per-world page.
+- Video and audio files are stored byte-for-byte; unlike images they are not re-encoded, so someone uploading media with embedded location/device metadata should strip it first. The product does not claim metadata removal for those containers.
+- `core.custom` is a composable safe extension path, not a claim that every medium is implemented. It can create forms the fixed surfaces do not cover; uploaded media, audio and 3D are provided by their own universal modules.
+- Fixture output remains deterministic demo data and is always labelled; real-model acceptance requires separate authorization and configuration.
 
 ## Implemented in v0.1.0
 
@@ -82,8 +190,11 @@ scope.
   deployment configuration are vendor-neutral, but choosing a different model
   still means changing deployment configuration, not running two providers at
   once.
-- No real-time collaboration; the object workspace polls every 10 seconds while
-  visible and offers explicit refresh.
+- No simultaneous co-editing. The object workspace uses an authenticated SSE
+  refresh signal with a polling fallback; stale writes return a version
+  conflict instead of overwriting.
+- Friends, direct messages, public worlds, and public derivation are scoped to
+  one instance. There is no cross-instance federation or public import.
 - No email, password reset, OAuth, email verification, or account deletion in
   `v0.1.0`.
 - No standalone product website or native mobile client is provided in `v0.1.0`.
@@ -103,21 +214,31 @@ scope.
   reservation counted, so a possible billable call is not forgotten. Multiple
   app replicas still do not share the in-memory concurrency/counter state; the
   durable rows prevent forgotten charges, not multi-replica coordination.
-- Historical object state has no read endpoint in `v0.1.0`; history is an event
-  and version summary, and derive-from-an-older-version uses immutable
-  snapshots.
-- GitHub Dependency Review runs on public pull requests as part of the
+- Historical object state can be read with `GET /api/v1/objects/{id}/versions/{version}`
+  only while the caller currently holds read permission. Derive-from-an-older-
+  version uses the same immutable snapshots.
+- Revoking a publication stops new public reads and derivations. It cannot
+  delete copies that were already downloaded, screenshotted, cached, or
+  independently derived.
+- GitHub Dependency Review runs on public pull requests as an auxiliary
   release gate. The required checks also cover govulncheck, gitleaks, npm
   audit, and License.
 - No prebuilt container images are published; Compose builds from source.
-- The `v0.1.0` release assets carry GitHub build-provenance attestations,
+- No cleanup worker runs in v0.2.0. Audit events, sessions, idempotency keys,
+  expired confirmations/proposals and model invocations grow until an operator
+  archives them; `CLEANUP_INTERVAL` and `AUDIT_RETENTION_DAYS` are parsed but
+  inert.
+- The `v0.2.0` release assets carry GitHub build-provenance attestations,
   generated by the public release workflow; verify them with
   `gh attestation verify` against this repository, tag, and workflow.
 
 ## Data limits
 
-- The frozen 22-table schema is unchanged. Capability definitions and
-  invocations are active.
+- `v0.2.0` has 36 tables at schema version 11. Migrations 4–11 append to the
+  published `v0.1.0` 22-table schema: social/publication/scene tables,
+  privacy-aware account discovery and user-private World Stage layout, open
+  worlds and world assets, AI message notices, and approval links. Earlier
+  migrations are not rewritten.
 - Object state is capped at 64 KiB; `shared_context` at 8 KiB.
 - AI proposal input storage is capped at 64 KiB.
   Proposal creation and apply have distinct limits: apply obeys the 64 KiB

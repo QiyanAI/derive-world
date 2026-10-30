@@ -43,7 +43,7 @@ the variables. The standalone binary reads process environment variables; it
 does not load `.env` itself:
 
 ```bash
-cd derive-world_0.1.0_linux_amd64
+cd derive-world_0.2.0_linux_amd64
 cp .env.example .env
 set -a; . ./.env; set +a
 ./derive-world migrate
@@ -65,6 +65,12 @@ All application configuration comes from environment variables. `.env` is read
 by Compose and is ignored by Git. Production requires HTTPS `PUBLIC_BASE_URL`,
 rejects `dw_dev_only_` secrets, rejects `sslmode=disable`, and rejects the
 `dw_local_only` database password.
+
+`ASSET_DIR` stores uploaded images, video, audio and GLB models outside
+PostgreSQL. It must be writable and must not live under `WEB_DIST_DIR`. Compose
+mounts the named volume `dw_assets` at `/app/var/assets`. Back up that volume
+together with the database; `pg_dump` alone does not include media bytes.
+Deleting the volume leaves asset metadata but makes existing media unavailable.
 
 `MODEL_MODE=fixture` needs no model account. `MODEL_MODE=real` requires
 `MODEL_BASE_URL`, `MODEL_NAME`, and `MODEL_API_KEY`, and fails at startup if any
@@ -117,7 +123,7 @@ the business modules. The architecture test
 `TestNoProviderVendorHardcodingOutsideModelAdapter` enforces this boundary.
 
 Concurrent multi-provider routing, per-Personal-AI model selection, and local
-model hosting are **not implemented** in `v0.1.0`. They remain future
+model hosting are **not implemented** in `v0.2.0`. They remain future
 versioned work, not a claim of this build.
 
 ## Provider transport and TLS
@@ -177,7 +183,7 @@ Restore into an empty database:
 docker compose exec -T db sh -c 'pg_restore --clean --if-exists -U "$POSTGRES_USER" -d "$POSTGRES_DB"' < backup.dump
 ```
 
-Backups contain user data. Store them encrypted and never commit them. `v0.1.0`
+Backups contain user data. Store them encrypted and never commit them. `v0.2.0`
 does not provide WAL archiving or point-in-time recovery.
 
 ## Upgrade
@@ -193,4 +199,4 @@ does not provide WAL archiving or point-in-time recovery.
 - Single instance only; do not put multiple `app` replicas behind a load
   balancer.
 - No production TLS termination is built in; use a trusted reverse proxy.
-- No email, OAuth, or password recovery in `v0.1.0`.
+- No email, OAuth, or password recovery in `v0.2.0`.

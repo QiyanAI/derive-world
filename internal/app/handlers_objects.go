@@ -233,6 +233,7 @@ func (a *App) createObject(w http.ResponseWriter, r *http.Request) {
 		a.writeDomainError(w, r, err)
 		return
 	}
+	a.notifyUser(principal.User.ID)
 	httpx.WriteJSON(w, http.StatusCreated, view)
 }
 
@@ -245,10 +246,33 @@ func (a *App) getObject(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	view := object.View()
-	lineage, err := a.objects.LineageForObject(r.Context(), principalFrom(r.Context()).User.ID, object.ID)
-	if err != nil {
-		a.writeDomainError(w, r, err)
-		return
+	var (
+		lineage *objects.DeriveLineage
+		err     error
+	)
+	publicDerived := false
+	if a.publication != nil {
+		var source *objects.PublicSource
+		source, err = a.publication.PublicSourceForChild(r.Context(), object.ID)
+		if err != nil {
+			a.writeDomainError(w, r, err)
+			return
+		}
+		publicDerived = source != nil
+		if source != nil && source.Active {
+			lineage, err = a.publication.PublicLineageForChild(r.Context(), object.ID)
+			if err != nil {
+				a.writeDomainError(w, r, err)
+				return
+			}
+		}
+	}
+	if !publicDerived {
+		lineage, err = a.objects.LineageForObject(r.Context(), principalFrom(r.Context()).User.ID, object.ID)
+		if err != nil {
+			a.writeDomainError(w, r, err)
+			return
+		}
 	}
 	view.Lineage = lineage
 	httpx.WriteJSON(w, http.StatusOK, view)
@@ -276,6 +300,7 @@ func (a *App) deleteObject(w http.ResponseWriter, r *http.Request) {
 		a.writeDomainError(w, r, err)
 		return
 	}
+	a.notifyObjectMembers(r.Context(), object.ID)
 	w.WriteHeader(http.StatusNoContent)
 }
 
@@ -411,6 +436,7 @@ func (a *App) postAction(w http.ResponseWriter, r *http.Request) {
 		a.writeDomainError(w, r, err)
 		return
 	}
+	a.notifyObjectMembers(r.Context(), object.ID)
 	httpx.WriteJSON(w, http.StatusOK, view)
 }
 
@@ -488,6 +514,8 @@ func (a *App) deriveObject(w http.ResponseWriter, r *http.Request) {
 		a.writeReplay(w, claim)
 		return
 	}
+	a.notifyUser(principal.User.ID)
+	a.notifyObjectMembers(r.Context(), object.ID)
 	httpx.WriteJSON(w, http.StatusCreated, view)
 }
 
@@ -512,6 +540,29 @@ func (a *App) getLineage(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		a.writeDomainError(w, r, err)
 		return
+	}
+	if a.publication != nil {
+		var source *objects.PublicSource
+		source, err = a.publication.PublicSourceForChild(r.Context(), object.ID)
+		if err != nil {
+			a.writeDomainError(w, r, err)
+			return
+		}
+		if source != nil {
+			// A public-derived child never projects its private parent, even
+			// when the viewer also has parent access or after withdrawal.
+			lineage.Ancestors = make([]objects.LineageAncestor, 0)
+			if source.Active {
+				publicLineage, publicErr := a.publication.PublicLineageForChild(r.Context(), object.ID)
+				if publicErr != nil {
+					a.writeDomainError(w, r, publicErr)
+					return
+				}
+				lineage.Source = publicLineage
+			} else {
+				lineage.Ancestors = append(lineage.Ancestors, objects.LineageAncestor{Depth: 1, Redacted: true})
+			}
+		}
 	}
 	httpx.WriteJSON(w, http.StatusOK, lineage)
 }

@@ -322,3 +322,33 @@ func TestG03ManageAloneDoesNotCreateInvitation(t *testing.T) {
 	requireStatus(t, inviteStatus, http.StatusForbidden, inviteBody)
 	requireCode(t, inviteBody, "forbidden")
 }
+
+// Removing a member must also invalidate invitation tokens that member minted.
+// Otherwise a removed member can recreate their own membership (and hand out
+// access) after the owner revoked it.
+func TestG03RemovedMemberCannotReuseOwnInvitation(t *testing.T) {
+	env := newTestEnv(t)
+	owner := env.register(t, "g03removed-owner")
+	member := env.register(t, "g03removed-member")
+
+	object := owner.createObject(t, "collaborative", "Removal object", map[string]any{
+		"body": "private body",
+	})
+	ownerInvite := owner.createInvitation(t, object.ID,
+		[]string{"read", "contribute", "invite"}, 1)
+	status, body := member.acceptInvitation(t, *ownerInvite.Token)
+	requireStatus(t, status, http.StatusOK, body)
+
+	ownInvite := member.createInvitation(t, object.ID, []string{"read", "contribute"}, 5)
+
+	removeStatus, removeBody, _ := owner.call(t, http.MethodDelete,
+		"/api/v1/objects/"+object.ID+"/members/"+member.id.String(), callOptions{})
+	requireStatus(t, removeStatus, http.StatusNoContent, removeBody)
+
+	status, body = member.acceptInvitation(t, *ownInvite.Token)
+	requireStatus(t, status, http.StatusNotFound, body)
+	requireCode(t, body, "invitation_invalid")
+
+	status, _, _ = member.call(t, http.MethodGet, "/api/v1/objects/"+object.ID, callOptions{})
+	requireStatus(t, status, http.StatusNotFound, nil)
+}

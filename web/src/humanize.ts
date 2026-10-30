@@ -13,7 +13,29 @@ const actionKeys: Record<string, MessageKey> = {
   remove_tag: "action.remove_tag",
   cast_vote: "action.cast_vote",
   close_poll: "action.close_poll",
-  set_shared_context: "action.set_shared_context"
+  set_shared_context: "action.set_shared_context",
+  set_premise: "action.set_premise",
+  set_purpose: "action.set_purpose",
+  add_element: "action.add_element",
+  update_element: "action.update_element",
+  remove_element: "action.remove_element",
+  move_element: "action.move_element",
+  add_kind: "action.add_kind",
+  update_kind: "action.update_kind",
+  remove_kind: "action.remove_kind",
+  add_node: "action.add_node",
+  update_node: "action.update_node",
+  remove_node: "action.remove_node",
+  move_node: "action.move_node",
+  set_node_field: "action.set_node_field",
+  set_node_status: "action.set_node_status",
+  touch_node: "action.touch_node",
+  add_link: "action.add_link",
+  remove_link: "action.remove_link",
+  add_rule: "action.add_rule",
+  remove_rule: "action.remove_rule",
+  set_views: "action.set_views",
+  reshape_world: "action.reshape_world"
 };
 
 const eventKeys: Record<string, MessageKey> = {
@@ -103,7 +125,15 @@ const fieldKeys = {
   tag: "workspace.tags",
   option: "object.create.options",
   shared_context: "workspace.sharedContext",
-  input: "workspace.eventPayload"
+  input: "workspace.eventPayload",
+  premise: "scene.premise",
+  kind: "scene.elements",
+  element: "scene.elements",
+  node_name: "openWorld.nodeName",
+  field: "openWorld.fieldKey",
+  status: "openWorld.statusField",
+  value: "openWorld.effectValue",
+  position: "scene.moveDown"
 } satisfies Record<string, MessageKey>;
 
 function field(label: keyof typeof fieldKeys, value: string) {
@@ -168,6 +198,140 @@ export function proposalPreview(proposal: Proposal, object: ObjectView | null): 
         action: proposal.action,
         fields: [field("shared_context", JSON.stringify(input.shared_context ?? {}))]
       };
+    case "set_premise":
+      return { action: proposal.action, fields: [field("premise", String(input.premise ?? ""))] };
+    case "add_element":
+      return {
+        action: proposal.action,
+        fields: [
+          field("kind", String(input.kind ?? "")),
+          field("text", String(input.text ?? ""))
+        ]
+      };
+    case "update_element":
+      return {
+        action: proposal.action,
+        fields: [
+          field("element", String(input.element_id ?? "")),
+          field("text", String(input.text ?? input.status ?? input.kind ?? ""))
+        ]
+      };
+    case "remove_element":
+      return {
+        action: proposal.action,
+        fields: [field("element", String(input.element_id ?? ""))]
+      };
+    case "move_element":
+      return {
+        action: proposal.action,
+        fields: [
+          field("element", String(input.element_id ?? "")),
+          field("position", String(input.position ?? ""))
+        ]
+      };
+    case "add_kind":
+      return {
+        action: proposal.action,
+        fields: [
+          field("node_name", String(input.name ?? "")),
+          field("field", Array.isArray(input.fields) ? `${input.fields.length}` : "0")
+        ]
+      };
+    case "update_kind":
+    case "remove_kind":
+      return { action: proposal.action, fields: [field("element", String(input.kind_id ?? ""))] };
+    case "add_node":
+      return {
+        action: proposal.action,
+        fields: [
+          field("node_name", String(input.name ?? "")),
+          field("premise", String(input.text ?? ""))
+        ]
+      };
+    case "update_node":
+    case "remove_node":
+    case "move_node":
+      return {
+        action: proposal.action,
+        fields: [
+          field("element", String(input.node_id ?? "")),
+          field("node_name", String(input.name ?? input.text ?? ""))
+        ]
+      };
+    case "set_node_field":
+      return {
+        action: proposal.action,
+        fields: [
+          field("field", String(input.field ?? "")),
+          field("value", String(input.value ?? ""))
+        ]
+      };
+    case "set_node_status":
+    case "touch_node":
+      return {
+        action: proposal.action,
+        fields: [
+          field("element", String(input.node_id ?? "")),
+          field("status", String(input.status ?? ""))
+        ]
+      };
+    case "add_link":
+      return {
+        action: proposal.action,
+        fields: [
+          field("premise", String(input.label ?? "")),
+          field("element", `${String(input.from ?? "")} → ${String(input.to ?? "")}`)
+        ]
+      };
+    case "remove_link":
+    case "remove_rule":
+      return { action: proposal.action, fields: [field("element", String(input.link_id ?? input.rule_id ?? ""))] };
+    case "add_rule":
+      return {
+        action: proposal.action,
+        fields: [
+          field("element", String(input.trigger_id ?? "")),
+          field("value", Array.isArray(input.effects) ? `${input.effects.length}` : "0")
+        ]
+      };
+    case "set_views":
+      return {
+        action: proposal.action,
+        fields: [field("value", Array.isArray(input.views) ? input.views.join(", ") : "")]
+      };
+    case "batch_change": {
+      const actions = Array.isArray(input.actions) ? input.actions.length : 0;
+      return {
+        action: proposal.action,
+        fields: [
+          field("summary", String(input.note ?? "")),
+          field("input", `${actions}`)
+        ]
+      };
+    }
+    case "reshape_world": {
+      const content =
+        input.content && typeof input.content === "object"
+          ? (input.content as Record<string, unknown>)
+          : {};
+      const kinds = Array.isArray(content.kinds) ? content.kinds.length : 0;
+      const nodes = Array.isArray(content.nodes) ? content.nodes.length : 0;
+      const variables =
+        content.variables && typeof content.variables === "object"
+          ? Object.keys(content.variables as Record<string, unknown>).length
+          : 0;
+      const experience = content.experience && typeof content.experience === "object";
+      return {
+        action: proposal.action,
+        fields: [
+          field("summary", String(input.note ?? "")),
+          field(
+            "input",
+            `${kinds} kinds · ${nodes} things · ${variables} variables${experience ? " · experience" : ""}`
+          )
+        ]
+      };
+    }
     default:
       return {
         action: proposal.action,

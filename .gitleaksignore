@@ -1,0 +1,5 @@
+# False positive: the launcher self-test creates a temporary .env containing a
+# deliberately fake marker to assert masking. It is not a credential and was
+# replaced with a non-secret concatenation in the next commit; this fingerprint
+# keeps the historical scan honest without rewriting Git history.
+84458b95fdb137f7251671f07f55d5f84f69b0ea:launcher/DeriveWorld.ps1:dw-model-key:1288

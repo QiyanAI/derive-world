@@ -2,11 +2,15 @@
 import { useCallback, useEffect, useState } from "react";
 import { Link } from "react-router";
 import {
+  checkModelConnection,
   createToken,
   exportMe,
+  getSystemStatus,
   listTokens,
   revokeToken,
   type CreatedToken,
+  type ModelCheck,
+  type SystemStatus,
   type TokenMetadata
 } from "../api";
 import { ErrorNotice, StatusNotice } from "../errors";
@@ -28,6 +32,9 @@ export default function SettingsPage() {
   const [busy, setBusy] = useState("");
   const [error, setError] = useState<unknown>(null);
   const [notice, setNotice] = useState("");
+  const [system, setSystem] = useState<SystemStatus | null>(null);
+  const [modelCheck, setModelCheck] = useState<ModelCheck | null>(null);
+  const [checkingModel, setCheckingModel] = useState(false);
 
   const loadTokens = useCallback(async () => {
     if (status !== "authenticated") {
@@ -44,6 +51,33 @@ export default function SettingsPage() {
   useEffect(() => {
     void loadTokens();
   }, [loadTokens]);
+
+  useEffect(() => {
+    if (status !== "authenticated") {
+      return;
+    }
+    const controller = new AbortController();
+    getSystemStatus(controller.signal)
+      .then((value) => {
+        if (!controller.signal.aborted) {
+          setSystem(value);
+        }
+      })
+      .catch(() => undefined);
+    return () => controller.abort();
+  }, [status]);
+
+  async function runModelCheck() {
+    setCheckingModel(true);
+    setModelCheck(null);
+    try {
+      setModelCheck(await checkModelConnection());
+    } catch (failure) {
+      setError(failure);
+    } finally {
+      setCheckingModel(false);
+    }
+  }
 
   function toggleScope(scope: string) {
     setScopes((previous) =>
@@ -136,6 +170,87 @@ export default function SettingsPage() {
             </button>
           ))}
         </div>
+      </section>
+
+      <section className="card system-status-card" id="ai-connection">
+        <h2>{t("settings.system")}</h2><p className="muted">{lang === "zh" ? "连接 AI：请通过实例本机的安全启动器设置 API Key；网页仅显示运行状态与连接检测，不读取或保存密钥。" : "Connect AI through the instance local secure launcher. This page only shows status and connection diagnostics; it never receives secrets."}</p>
+        <p className="muted">{t("settings.systemHint")}</p>
+        {system ? (
+          <>
+            <dl className="detail-list">
+              <div>
+                <dt>{t("system.modelMode")}</dt>
+                <dd>
+                  <span className={`mode-badge mode-${system.model_mode}`}>{system.model_mode.toUpperCase()}</span>
+                  {system.model_name ? <span className="mono"> {system.model_name}</span> : null}
+                </dd>
+              </div>
+              <div>
+                <dt>{t("system.database")}</dt>
+                <dd>{system.database_ok ? t("system.ok") : t("system.unavailable")}</dd>
+              </div>
+              <div>
+                <dt>{t("system.capabilities")}</dt>
+                <dd>{system.capabilities_ready ? t("system.ok") : t("system.unavailable")}</dd>
+              </div>
+              <div>
+                <dt>{t("system.publicBaseURL")}</dt>
+                <dd className="mono">{system.public_base_url}</dd>
+              </div>
+            </dl>
+            <div className="model-check-row">
+              <button
+                className="button button-ghost button-small"
+                type="button"
+                disabled={checkingModel}
+                onClick={() => void runModelCheck()}
+              >
+                {checkingModel ? t("system.checking") : t("system.checkModel")}
+              </button>
+              {modelCheck ? (
+                <span className={`model-check model-check-${modelCheck.status}`}>
+                  {t(`system.check.${modelCheck.status}`)} · {modelCheck.detail}
+                </span>
+              ) : null}
+            </div>
+            <h3>{t("system.quotas")}</h3>
+            <p className="form-hint">{t("system.quotaNote")}</p>
+            <dl className="detail-list">
+              <div>
+                <dt>{t("system.dailyCalls")}</dt>
+                <dd>{system.quota.daily_calls}</dd>
+              </div>
+              <div>
+                <dt>{t("system.dailyChars")}</dt>
+                <dd>{system.quota.daily_input_chars}</dd>
+              </div>
+              <div>
+                <dt>{t("system.concurrency")}</dt>
+                <dd>{system.quota.concurrency}</dd>
+              </div>
+              <div>
+                <dt>{t("system.hourly")}</dt>
+                <dd>
+                  {system.rate_limits.ai_per_hour} / {t("system.burst")} {system.rate_limits.ai_burst}
+                </dd>
+              </div>
+              <div>
+                <dt>{t("system.globalDaily")}</dt>
+                <dd>{system.quota.global_daily_calls}</dd>
+              </div>
+              <div>
+                <dt>{t("system.apiPerMinute")}</dt>
+                <dd>{system.rate_limits.api_per_minute}</dd>
+              </div>
+              <div>
+                <dt>{t("system.killSwitch")}</dt>
+                <dd>{system.quota.kill_switch ? t("system.on") : t("system.off")}</dd>
+              </div>
+            </dl>
+          </>
+        ) : (
+          <p className="muted">{t("system.unavailable")}</p>
+        )}
       </section>
 
       <section className="card">

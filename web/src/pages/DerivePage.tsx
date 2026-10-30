@@ -5,15 +5,29 @@ import { deriveObject, getObject, type ObjectView } from "../api";
 import { ErrorNotice } from "../errors";
 import { useAuth } from "../auth";
 import { useI18n } from "../i18n";
+import { branchTitle } from "../worldLabels";
 
-type Field = "summary" | "body" | "checklist" | "tags" | "prompt" | "options";
+type Field =
+  | "summary"
+  | "body"
+  | "checklist"
+  | "tags"
+  | "prompt"
+  | "options"
+  | "premise"
+  | "elements"
+  | "structure"
+  | "views";
 
 const collaborativeFields: Field[] = ["summary", "body", "checklist", "tags"];
 const interactiveFields: Field[] = ["prompt", "options"];
+const sceneFields: Field[] = ["premise", "elements", "tags"];
+const openWorldFields: Field[] = ["premise", "structure", "views", "tags"];
 
 export default function DerivePage() {
   const { id } = useParams();
-  const { t } = useI18n();
+  const { t, lang } = useI18n();
+  const zh = lang === "zh";
   const { status } = useAuth();
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
@@ -38,8 +52,16 @@ export default function DerivePage() {
         }
         setObject(loaded);
         const baseTitle = String(loaded.state.title ?? "");
-        setTitle(`${baseTitle} ${t("derive.defaultSuffix")}`.trim().slice(0, 200));
-        setFields(loaded.object_type === "interactive" ? ["prompt", "options"] : ["summary", "body"]);
+        setTitle(branchTitle(baseTitle, zh).slice(0, 200));
+        setFields(
+          loaded.object_type === "interactive"
+            ? ["prompt", "options"]
+            : loaded.object_type === "living_scene"
+              ? ["premise", "elements"]
+              : loaded.object_type === "open_world"
+                ? ["premise", "structure", "views"]
+                : ["summary", "body"]
+        );
       })
       .catch((failure) => {
         if (!controller.signal.aborted) {
@@ -112,7 +134,14 @@ export default function DerivePage() {
     );
   }
 
-  const available: Field[] = object.object_type === "interactive" ? interactiveFields : collaborativeFields;
+  const available: Field[] =
+    object.object_type === "interactive"
+      ? interactiveFields
+      : object.object_type === "living_scene"
+        ? sceneFields
+        : object.object_type === "open_world"
+          ? openWorldFields
+          : collaborativeFields;
   const selectedSource = sourceVersion === "" ? object.version : Number(sourceVersion);
   const historical = selectedSource !== object.version;
 
@@ -122,6 +151,19 @@ export default function DerivePage() {
     }
     if (field === "options") {
       return Array.isArray(object?.state.options) ? `${object.state.options.length}` : "0";
+    }
+    if (field === "elements") {
+      return Array.isArray(object?.state.elements) ? `${object.state.elements.length}` : "0";
+    }
+    if (field === "structure") {
+      const kinds = Array.isArray(object?.state.kinds) ? object.state.kinds.length : 0;
+      const nodes = Array.isArray(object?.state.nodes) ? object.state.nodes.length : 0;
+      return `${kinds} kinds · ${nodes} things`;
+    }
+    if (field === "views") {
+      return Array.isArray(object?.state.views)
+        ? (object.state.views as string[]).join(", ") || "—"
+        : "—";
     }
     if (field === "tags") {
       return Array.isArray(object?.state.tags) ? (object.state.tags as string[]).join(", ") || "—" : "—";
@@ -188,6 +230,13 @@ export default function DerivePage() {
             );
           })}
           <small>{t("derive.fieldsHint")}</small>
+          {object.object_type === "open_world" && !fields.includes("structure") ? (
+            <p className="form-error" role="status">
+              {zh
+                ? "不继承“结构”会丢弃这个世界现有的存在、关系与规则；新世界只会保留你勾选的内容。"
+                : "Without “structure”, the new world drops this world's things, links and rules and keeps only the fields you selected."}
+            </p>
+          ) : null}
         </fieldset>
 
         <div className="preview-box">

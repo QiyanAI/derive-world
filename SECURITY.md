@@ -9,7 +9,7 @@
 | 0.1.x | Yes |
 | < 0.1.0 | No |
 
-This is the `v0.1.0` public OSS MVP. It is not a production deployment and no
+This is the `v0.2.0` public OSS release. It is not a production deployment and no
 production use is supported or claimed.
 
 ## Reporting a vulnerability

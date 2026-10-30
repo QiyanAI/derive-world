@@ -101,6 +101,19 @@ export default function LineagePage() {
       {lineage.truncated ? <p className="notice notice-compact">{t("lineage.truncated")}</p> : null}
       {hasRedacted ? <p className="notice notice-compact">{t("lineage.redactedHint")}</p> : null}
 
+      {lineage.source && lineage.source.publication_id ? (
+        <section className="card">
+          <h2>{t("lineage.source")}</h2>
+          <p>
+            <Link to={`/explore/${lineage.source.publication_id}`}>
+              {lineage.source.publication_title || t("common.unknown")}
+            </Link>
+            <span className="mono"> · v{lineage.source.parent.version}</span>
+          </p>
+          <p className="muted">{t("lineage.publicSourceNote")}</p>
+        </section>
+      ) : null}
+
       <section className="card">
         <h2>{t("lineage.ancestors")}</h2>
         {lineage.ancestors.length === 0 ? (
