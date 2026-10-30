@@ -159,6 +159,16 @@ func normalizeImage(ctx context.Context, path string, limit int64,
 		}
 		mime = "image/jpeg"
 	case "gif":
+		// gif.DecodeAll decodes every frame before the frame and total-pixel
+		// caps below can run, so a small multi-frame file with large logical
+		// frames could exhaust memory. Walk the block structure first and
+		// reject impossible inputs without decoding them.
+		if err := checkGIFStructure(file); err != nil {
+			return inspection{}, "", err
+		}
+		if _, err := file.Seek(0, io.SeekStart); err != nil {
+			return inspection{}, "", ErrUnavailable
+		}
 		decoded, err := gif.DecodeAll(file)
 		if err != nil {
 			return inspection{}, "", ErrInvalidContent
@@ -204,6 +214,117 @@ func normalizeImage(ctx context.Context, path string, limit int64,
 	}
 	success = true
 	return inspection{MIME: mime, Width: width, Height: height, Size: info.Size()}, normalizedPath, nil
+}
+
+// checkGIFStructure walks the GIF block stream without decoding pixels. It
+// enforces the frame count, per-frame and total-pixel budgets up front so a
+// crafted animation cannot allocate gigabytes inside gif.DecodeAll before the
+// existing post-decode checks run.
+func checkGIFStructure(file *os.File) error {
+	if _, err := file.Seek(0, io.SeekStart); err != nil {
+		return ErrUnavailable
+	}
+	header := make([]byte, 13)
+	if _, err := io.ReadFull(file, header); err != nil {
+		return ErrInvalidContent
+	}
+	if string(header[:6]) != "GIF87a" && string(header[:6]) != "GIF89a" {
+		return ErrUnsupportedType
+	}
+	screenWidth := int(binary.LittleEndian.Uint16(header[6:8]))
+	screenHeight := int(binary.LittleEndian.Uint16(header[8:10]))
+	packed := header[10]
+	if screenWidth <= 0 || screenHeight <= 0 ||
+		screenWidth > maxImageDimension || screenHeight > maxImageDimension ||
+		int64(screenWidth)*int64(screenHeight) > maxImagePixels {
+		return ErrInvalidContent
+	}
+	if packed&0x80 != 0 {
+		if err := skipBytes(file, int64(3)<<((packed&0x07)+1)); err != nil {
+			return ErrInvalidContent
+		}
+	}
+
+	frames := 0
+	totalPixels := int64(0)
+	one := make([]byte, 1)
+	for {
+		if _, err := io.ReadFull(file, one); err != nil {
+			return ErrInvalidContent
+		}
+		switch one[0] {
+		case 0x3B: // trailer
+			if frames == 0 {
+				return ErrInvalidContent
+			}
+			return nil
+		case 0x21: // extension
+			if _, err := io.ReadFull(file, one); err != nil {
+				return ErrInvalidContent
+			}
+			if err := skipSubBlocks(file); err != nil {
+				return ErrInvalidContent
+			}
+		case 0x2C: // image descriptor
+			descriptor := make([]byte, 9)
+			if _, err := io.ReadFull(file, descriptor); err != nil {
+				return ErrInvalidContent
+			}
+			frameWidth := int(binary.LittleEndian.Uint16(descriptor[4:6]))
+			frameHeight := int(binary.LittleEndian.Uint16(descriptor[6:8]))
+			framePacked := descriptor[8]
+			if frameWidth <= 0 || frameHeight <= 0 ||
+				frameWidth > maxImageDimension || frameHeight > maxImageDimension ||
+				int64(frameWidth)*int64(frameHeight) > maxImagePixels {
+				return ErrInvalidContent
+			}
+			frames++
+			if frames > maxGIFFrames {
+				return ErrInvalidContent
+			}
+			totalPixels += int64(frameWidth) * int64(frameHeight)
+			if totalPixels > maxGIFPixels {
+				return ErrInvalidContent
+			}
+			if framePacked&0x80 != 0 {
+				if err := skipBytes(file, int64(3)<<((framePacked&0x07)+1)); err != nil {
+					return ErrInvalidContent
+				}
+			}
+			if _, err := io.ReadFull(file, one); err != nil {
+				return ErrInvalidContent
+			}
+			if err := skipSubBlocks(file); err != nil {
+				return ErrInvalidContent
+			}
+		default:
+			return ErrInvalidContent
+		}
+	}
+}
+
+func skipSubBlocks(file *os.File) error {
+	buffer := make([]byte, 1)
+	for {
+		if _, err := io.ReadFull(file, buffer); err != nil {
+			return err
+		}
+		length := int64(buffer[0])
+		if length == 0 {
+			return nil
+		}
+		if err := skipBytes(file, length); err != nil {
+			return err
+		}
+	}
+}
+
+func skipBytes(file *os.File, count int64) error {
+	if count < 0 {
+		return ErrInvalidContent
+	}
+	_, err := io.CopyN(io.Discard, file, count)
+	return err
 }
 
 func sniffVideo(header []byte) (string, bool) {
@@ -360,8 +481,17 @@ func validateGLB(path string, size int64) (string, error) {
 		if length < 0 || length > remaining-8 {
 			return "", ErrInvalidContent
 		}
-		if chunkType == 0x004e4942 {
+		switch chunkType {
+		case 0x004e4942: // BIN
+			if hasBIN {
+				return "", ErrInvalidContent
+			}
 			hasBIN = true
+		case 0x4e4f534a: // a second JSON chunk is not part of GLB 2.0 and
+			// would bypass every check applied to the first one.
+			return "", ErrInvalidContent
+		default:
+			return "", ErrInvalidContent
 		}
 		if _, err := file.Seek(length, io.SeekCurrent); err != nil {
 			return "", ErrInvalidContent

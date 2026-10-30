@@ -5,6 +5,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/binary"
+	"errors"
 	"image"
 	"image/color"
 	"image/jpeg"
@@ -167,5 +168,91 @@ func TestValidateGLBRequiresEmbeddedBIN(t *testing.T) {
 	path := writeTestFile(t, "nobin.glb", out)
 	if _, err := validateGLB(path, int64(len(out))); err == nil {
 		t.Fatal("GLB without embedded BIN was accepted")
+	}
+}
+
+func buildTestGIF(logicalWidth, logicalHeight, frames, frameWidth, frameHeight int) []byte {
+	var buffer bytes.Buffer
+	buffer.WriteString("GIF89a")
+	descriptor := make([]byte, 7)
+	binary.LittleEndian.PutUint16(descriptor[0:2], uint16(logicalWidth))
+	binary.LittleEndian.PutUint16(descriptor[2:4], uint16(logicalHeight))
+	buffer.Write(descriptor)
+	for index := 0; index < frames; index++ {
+		buffer.WriteByte(0x2C)
+		imageDescriptor := make([]byte, 9)
+		binary.LittleEndian.PutUint16(imageDescriptor[4:6], uint16(frameWidth))
+		binary.LittleEndian.PutUint16(imageDescriptor[6:8], uint16(frameHeight))
+		buffer.Write(imageDescriptor)
+		buffer.WriteByte(2)
+		buffer.WriteByte(1)
+		buffer.WriteByte(0)
+		buffer.WriteByte(0)
+	}
+	buffer.WriteByte(0x3B)
+	return buffer.Bytes()
+}
+
+func TestGIFStructureRejectsTooManyFramesBeforeDecoding(t *testing.T) {
+	path := writeTestFile(t, "many-frames.gif",
+		buildTestGIF(16, 16, maxGIFFrames+1, 16, 16))
+	file, err := os.Open(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = file.Close() }()
+	if err := checkGIFStructure(file); !errors.Is(err, ErrInvalidContent) {
+		t.Fatalf("checkGIFStructure = %v, want ErrInvalidContent", err)
+	}
+}
+
+func TestGIFStructureRejectsExcessiveTotalPixelsBeforeDecoding(t *testing.T) {
+	path := writeTestFile(t, "many-pixels.gif",
+		buildTestGIF(4000, 4000, 5, 4000, 4000))
+	file, err := os.Open(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = file.Close() }()
+	if err := checkGIFStructure(file); !errors.Is(err, ErrInvalidContent) {
+		t.Fatalf("checkGIFStructure = %v, want ErrInvalidContent", err)
+	}
+}
+
+func TestGIFStructureAcceptsSmallAnimation(t *testing.T) {
+	path := writeTestFile(t, "small.gif",
+		buildTestGIF(16, 16, 2, 16, 16))
+	file, err := os.Open(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = file.Close() }()
+	if err := checkGIFStructure(file); err != nil {
+		t.Fatalf("checkGIFStructure = %v, want nil", err)
+	}
+}
+
+func TestGLBRejectsSecondJSONChunk(t *testing.T) {
+	first := []byte(`{"asset":{"version":"2.0"}}`)
+	second := []byte(`{"buffers":[{"uri":"https://evil.example/x.bin"}]}`)
+	total := 12 + 8 + len(first) + 8 + len(second)
+	buffer := make([]byte, 0, total)
+	header := make([]byte, 12)
+	copy(header[0:4], "glTF")
+	binary.LittleEndian.PutUint32(header[4:8], 2)
+	binary.LittleEndian.PutUint32(header[8:12], uint32(total))
+	buffer = append(buffer, header...)
+	chunk := make([]byte, 8)
+	binary.LittleEndian.PutUint32(chunk[0:4], uint32(len(first)))
+	binary.LittleEndian.PutUint32(chunk[4:8], 0x4e4f534a)
+	buffer = append(buffer, chunk...)
+	buffer = append(buffer, first...)
+	binary.LittleEndian.PutUint32(chunk[0:4], uint32(len(second)))
+	buffer = append(buffer, chunk...)
+	buffer = append(buffer, second...)
+
+	path := writeTestFile(t, "second-json.glb", buffer)
+	if _, err := validateGLB(path, int64(len(buffer))); !errors.Is(err, ErrInvalidContent) {
+		t.Fatalf("validateGLB = %v, want ErrInvalidContent", err)
 	}
 }
