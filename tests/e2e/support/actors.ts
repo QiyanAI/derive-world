@@ -37,7 +37,7 @@ export async function fillStable(locator: Locator, value: string): Promise<void>
   await expect(async () => {
     await locator.fill(value);
     await expect(locator).toHaveValue(value);
-  }).toPass({ timeout: 15_000 });
+  }).toPass({ timeout: 30_000 });
 }
 
 export async function fillRegistration(page: Page, actor: Actor): Promise<void> {

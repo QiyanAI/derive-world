@@ -287,3 +287,25 @@ func TestRepairMismatchedClosersRejectsExtraClosers(t *testing.T) {
 		t.Fatal("an extra closer was treated as a mismatch")
 	}
 }
+
+// The model sometimes leaves an extra closer after an array element. Dropping
+// exactly that character is the only structural reading; the decoded payload
+// still passes the strict envelope checks.
+func TestParseModelOutputDropsAnExtraCloser(t *testing.T) {
+	payload := `{"reply":"x","proposed_actions":[{"capability_id":"world.create","input":{"title":"Room","content":{"premise":"x"}}}}]}`
+	reply, actions, status, err := parseModelOutput(payload)
+	if err != nil || status != "structured" || reply != "x" || len(actions) != 1 {
+		t.Fatalf("extra closer parse: reply=%q status=%q actions=%d err=%v", reply, status, len(actions), err)
+	}
+}
+
+// A provider sometimes lifts expected_version to the envelope. It is metadata;
+// the server still uses the object's real version for every action.
+func TestParseModelOutputAcceptsTopLevelExpectedVersion(t *testing.T) {
+	reply, actions, status, err := parseModelOutput(
+		`{"reply":"x","proposed_actions":[],"expected_version":1}`)
+	if err != nil || status != "structured" || reply != "x" || len(actions) != 0 {
+		t.Fatalf("expected_version echo parse: reply=%q status=%q actions=%d err=%v",
+			reply, status, len(actions), err)
+	}
+}

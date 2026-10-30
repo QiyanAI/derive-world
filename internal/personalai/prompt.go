@@ -537,6 +537,10 @@ type modelPayload struct {
 	// "type" field. It carries no action data; accept and ignore it while the
 	// strict decoder still rejects every other unknown field.
 	Type string `json:"type,omitempty"`
+	// A provider may also lift the action's expected_version to the envelope.
+	// It is metadata only: the server still binds every proposal to the current
+	// object version and never trusts a model-supplied version.
+	ExpectedVersion *int `json:"expected_version,omitempty"`
 }
 
 type proposalActionInput struct {
@@ -606,12 +610,17 @@ func parseModelOutput(text string) (string, []rawAction, string, error) {
 	// A provider can close an object with "]". The stack knows exactly which
 	// closer was required; replacing only the wrong character is a structural
 	// repair, and the decoded action input still passes every strict check.
-	if repaired, ok := repairMismatchedClosers(parseText); ok && len([]byte(repaired)) <= maxModelOutputBytes {
-		payload = modelPayload{}
-		if decodeSingleJSON(repaired, &payload) == nil &&
-			strings.TrimSpace(payload.Reply) != "" &&
-			len(payload.ProposedActions) <= 5 {
-			return payload.Reply, payload.ProposedActions, "structured", nil
+	// Two structural readings are possible for a wrong closer: substitute the
+	// one the stack expects, or drop it as an extra character. Try both; only a
+	// candidate that decodes and validates is accepted.
+	for _, dropExtra := range []bool{false, true} {
+		if repaired, ok := repairJSONClosers(parseText, dropExtra); ok && len([]byte(repaired)) <= maxModelOutputBytes {
+			payload = modelPayload{}
+			if decodeSingleJSON(repaired, &payload) == nil &&
+				strings.TrimSpace(payload.Reply) != "" &&
+				len(payload.ProposedActions) <= 5 {
+				return payload.Reply, payload.ProposedActions, "structured", nil
+			}
 		}
 	}
 	// A provider may prepend a sentence such as "Here is the plan:" or append
@@ -842,6 +851,10 @@ func modelOutputDecodeError(text string) string {
 // says the other delimiter was required, and appends closers left off at the
 // very end. It never moves content; a structurally ambiguous text is rejected.
 func repairMismatchedClosers(text string) (string, bool) {
+	return repairJSONClosers(text, false)
+}
+
+func repairJSONClosers(text string, dropExtra bool) (string, bool) {
 	var builder strings.Builder
 	builder.Grow(len(text) + 8)
 	stack := make([]byte, 0, 8)
@@ -870,6 +883,10 @@ func repairMismatchedClosers(text string) (string, bool) {
 			builder.WriteByte(char)
 		case '}', ']':
 			if len(stack) == 0 {
+				if dropExtra {
+					changed = true
+					continue
+				}
 				return "", false
 			}
 			open := stack[len(stack)-1]
@@ -878,11 +895,13 @@ func repairMismatchedClosers(text string) (string, bool) {
 				expected = ']'
 			}
 			if char != expected {
-				builder.WriteByte(expected)
 				changed = true
-			} else {
-				builder.WriteByte(char)
+				if dropExtra {
+					continue
+				}
+				char = expected
 			}
+			builder.WriteByte(char)
 			stack = stack[:len(stack)-1]
 		default:
 			builder.WriteByte(char)

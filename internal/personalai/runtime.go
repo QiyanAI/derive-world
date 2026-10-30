@@ -824,6 +824,12 @@ func (s *Service) applyGlobalModelAction(
 
 func (s *Service) recordProposalAction(ctx context.Context, tx pgx.Tx, input SendMessageInput,
 	effective *trust.Effective, action string, rawInput json.RawMessage) (uuid.UUID, bool, error) {
+	if resolved, changed := resolveChangeReferences(input.Object.State, rawInput, action); changed {
+		rawInput = resolved
+		if s.logger != nil {
+			s.logger.Info("personal_ai_reference_resolved", "action", action)
+		}
+	}
 	if s.capabilities != nil {
 		if !s.capabilities.AllowAI(input.UserID) {
 			return uuid.Nil, false, nil
@@ -831,12 +837,19 @@ func (s *Service) recordProposalAction(ctx context.Context, tx pgx.Tx, input Sen
 		_, proposalID, accepted, err := s.capabilities.ProposeAITx(ctx, tx,
 			input.UserID, effective.AIProfileID, input.Object.ObjectID,
 			action, rawInput, effective.ObjectVersion, input.RequestID, input.IPHash)
+		if !accepted {
+			s.logProposalNotAccepted(input, action, rawInput, "capability")
+		}
 		return proposalID, accepted, err
 	}
-	return s.proposals.CreateProposalTx(ctx, tx, input.Object.ObjectID, input.UserID,
+	proposalID, accepted, err := s.proposals.CreateProposalTx(ctx, tx, input.Object.ObjectID, input.UserID,
 		effective.AIProfileID, effective.DelegationID, "object.propose_change",
 		action, rawInput,
 		effective.ObjectVersion, input.RequestID, input.IPHash)
+	if !accepted {
+		s.logProposalNotAccepted(input, action, rawInput, "direct")
+	}
+	return proposalID, accepted, err
 }
 
 func (s *Service) recordDeriveConfirmation(ctx context.Context, tx pgx.Tx, input SendMessageInput,
