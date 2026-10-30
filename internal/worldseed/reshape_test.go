@@ -184,3 +184,38 @@ func TestExperienceBindingsUseUniqueTargets(t *testing.T) {
 		seen[target] = true
 	}
 }
+
+// A change that names an existing thing and provides only some of its values
+// must not erase the values the model did not mention. The approval card shows
+// only the proposed fields; silently zeroing the rest is data loss.
+func TestReshapePartialValuesKeepExistingValues(t *testing.T) {
+	state := composeState(t, `{
+		"premise":"A garden with one tree.",
+		"kinds":[{"name":"Tree","fields":[{"label":"Count","type":"number"},{"label":"Note","type":"text"}]}],
+		"things":[{"kind":0,"name":"The tree","values":{"Count":2,"Note":"sturdy"}}]
+	}`, "Garden")
+	current, err := json.Marshal(state)
+	if err != nil {
+		t.Fatal(err)
+	}
+	brief := decodeBrief(t, `{
+		"premise":"A garden with one taller tree.",
+		"kinds":[{"name":"Tree","fields":[{"label":"Count","type":"number"},{"label":"Note","type":"text"}]}],
+		"things":[{"kind":0,"name":"The tree","values":{"Count":9}}]
+	}`)
+	result, err := Reshape(current, brief)
+	if err != nil {
+		t.Fatalf("reshape: %v", err)
+	}
+	var fieldKeys map[string]string = map[string]string{}
+	for _, field := range result.State.Kinds[0].Fields {
+		fieldKeys[field.Label] = field.Key
+	}
+	node := result.State.Nodes[0]
+	if node.Values[fieldKeys["Count"]] != float64(9) {
+		t.Fatalf("Count not updated: %#v", node.Values)
+	}
+	if node.Values[fieldKeys["Note"]] != "sturdy" {
+		t.Fatalf("omitted value was erased: %#v", node.Values)
+	}
+}

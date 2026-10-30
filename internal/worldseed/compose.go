@@ -257,7 +257,15 @@ func mergeBrief(world *authoredWorld, brief *Brief) error {
 			if existing.Values == nil {
 				existing.Values = map[string]any{}
 			}
-			for key, value := range values {
+			// Only fields the change actually provides may change. A brief
+			// re-declares its kind's fields, but an omitted value is not a
+			// request to clear it: applying a default here would silently
+			// erase user-entered text, numbers and flags.
+			for label, value := range seed.Values {
+				key, exists := fieldKeys[label]
+				if !exists {
+					continue
+				}
 				existing.Values[key] = value
 			}
 			if seed.X != nil {
