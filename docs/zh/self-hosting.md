@@ -33,7 +33,7 @@ docker compose down -v
 发布时，各平台归档包含服务端二进制（`derive-world` 或 `derive-world.exe`）、构建后的 Web 客户端 `web/dist`、`capabilities.yaml`、确定性 Fixture 数据 `tests/fixtures/model`、`.env.example`、许可证与声明文件、锁定的依赖清单，以及双语文档。解压归档并进入顶层目录，把 `.env.example` 复制为 `.env` 并导出变量。独立二进制只读取进程环境变量，不会自动加载 `.env`：
 
 ```bash
-cd derive-world_0.1.0_linux_amd64
+cd derive-world_0.2.0_linux_amd64
 cp .env.example .env
 set -a; . ./.env; set +a
 ./derive-world migrate

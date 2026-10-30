@@ -65,8 +65,14 @@ provider with the operator's key. The operator bears the provider's costs.
 Fixture mode calls no model and is always labelled `FIXTURE`; fixture output is
 not real AI.
 
-The principal real-model evidence for this release's source tree
-(commit `4962b9b`, tree `7c1bb11`, the same tree shipped in `v0.2.0`) is:
+The principal real-model evidence was recorded on the release candidate
+commit `4962b9b` (tree `7c1bb11`). The tagged `v0.2.0` tree differs from that
+candidate by documentation updates and release fixes (a publication-consent
+check for privately derived content, bounded GIF/GLB validation, preservation of
+omitted values in a partial world change, and invitation revocation when a
+member is removed); the real-model flows were **not** re-run on the exact
+tagged commit, and the Release page names the shipped commit and tree. The
+evidence is:
 
 - **Three consecutive natural-language modifications in one world**, each
   producing one proposal, human approval, exactly one version increment,

@@ -63,7 +63,7 @@ Windows 自托管管理员可以使用本地启动器，无需输入 Compose 命
 1. 安装并启动 Docker Desktop（含 Compose v2）。
 2. 双击 **`Start Derive World.cmd`**。
 
-启动器检查 Docker、Docker Engine、Compose、8080 端口、实例目录、`.env`、数据库卷和产品健康状态；随后启动服务、等待 `/readyz` 就绪并打开浏览器。同一菜单可停止和重启（保留数据）、打开并应用 AI 设置，以及查看已脱敏的诊断信息。详见 [launcher/README.md](launcher/README.md) 和 [Windows 自托管指南](docs/zh/windows.md)。启动器不开放网络监听、不通过命令行传递密钥、不删除数据库卷。其他系统继续使用上文的 Compose 方式。
+启动器检查 Docker、Docker Engine、Compose、8080 端口、实例目录、`.env`、数据库卷和产品健康状态；随后启动服务、等待 `/readyz` 就绪并打开浏览器。同一菜单可停止和重启（保留数据）、打开并应用 AI 设置，以及查看已脱敏的诊断信息。详见 [launcher/README.md](launcher/README.md) 和 [Windows 自托管指南](docs/zh/windows.md)。启动器不开放网络监听、不通过命令行传递密钥、不删除数据库卷。启动器与 Compose 栈位于源码检出中；Windows 发行 zip 只包含服务器二进制与资源，不包含 PostgreSQL、Compose 栈或启动器。其他系统继续使用上文的 Compose 方式。
 
 停止：
 

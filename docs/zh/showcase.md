@@ -32,7 +32,7 @@ Living Object 是版本化协作文档或互动投票。每次被接受的操作
 
 **试一试：** 用两个浏览器配置，邀请第二个人，打开 **AI collaboration**，应用一个提议，再批准一次衍生并查看新的子对象。见[双人演示指南](demo-guide.md)。
 
-**准确标签：** 这些截图与演示是 **Fixture 模式**——确定性演示输出，不是真实模型智能。`v0.1.0` 中唯一的 Real AI 验收证据是已批准的双 Personal AI 两次 API 级 DeepSeek `deepseek-flash` 调用。它不是浏览器演示，未在发布 SHA 上重跑，也不构成普遍 Provider 声明。
+**准确标签：** 这些截图与演示是 **Fixture 模式**——确定性演示输出，不是真实模型智能。`v0.2.0` 的真实模型证据仅针对 DeepSeek `deepseek-flash` 上有记录的流程（见[发行说明](release-notes.md)），不构成普遍 Provider 声明。
 
 ### 3. 安全、可复现的开源基础
 
@@ -93,14 +93,14 @@ Fixture 模式不需要模型账户。若要真实模型，设置 `MODEL_MODE=re
 - 准确标注 Fixture/Real AI。
 - 打开公开 Showcase Issue 即表示你同意维护者从项目链接到该 Issue。内容仍归你所有；仓库的 Apache-2.0 只覆盖软件，不覆盖你的投稿。
 
-项目**不会**自动采集或发布私人对象、会话、Handoff 投影或 AI 上下文。`v0.1.0` 不为展示新增公开对象 API、跨部署导入或云分享服务。
+项目**不会**自动采集或发布私人对象、会话、Handoff 投影或 AI 上下文。`v0.2.0` 不为展示新增公开对象 API、跨部署导入或云分享服务。
 
 ## 诚实标签
 
 | 标签 | 含义 |
 |---|---|
 | **Fixture** | 确定性演示数据，不调用模型，不是真实 AI。 |
-| **Real AI** | 用户配置 OpenAI-compatible 端点与 Key，并自行承担 Provider 费用。`v0.1.0` 的验收证据是上述限定的两轮 API 级调用。 |
-| **非生产** | `v0.1.0` 是 OSS MVP。不声称生产就绪、安全认证、用户采用、Star、下载量或融资。 |
+| **Real AI** | 用户配置 OpenAI-compatible 端点与 Key，并自行承担 Provider 费用。`v0.2.0` 的证据是上述有范围的真实模型流程。 |
+| **非生产** | `v0.2.0` 是 OSS 发行版。不声称生产就绪、安全认证、用户采用、Star、下载量或融资。 |
 
 完整限制见[限制](limitations.md)。

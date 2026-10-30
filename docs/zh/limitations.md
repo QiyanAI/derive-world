@@ -102,8 +102,9 @@ TLS 校验、HMAC 密钥轮换与模型预算控制已实现。这是可自托�
 - 旧 `http_hmac` 传输不签名响应，仅为内部兼容保留。
 - 模型预算使用单实例内存计数，在每个 UTC 日首次调用时从 `model_invocations` 重新载入。实际尝试 Provider 调用前会写入持久预占行并计入预算；进程崩溃、业务回滚或最终更新失败都不会漏记可能产生费用的调用。多个 app 副本仍不共享内存并发/计数状态；持久行防止漏记费用，但不提供多副本协调。
 - 历史对象状态可在 `GET /api/v1/objects/{id}/versions/{version}` 读取，但仅当调用者当前仍持有读取权限；撤销立即生效。
-- GitHub Dependency Review 在公开 Pull Request 上运行，是发布门禁的一部分；要求的检查同时覆盖 govulncheck、gitleaks、npm audit 与 License。
+- GitHub Dependency Review 在公开 Pull Request 上运行，作为辅助检查运行；发布门禁要求的检查覆盖 govulncheck、gitleaks、npm audit 与 License。
 - 不发布预构建容器镜像；Compose 从源码构建。
+- `v0.2.0` 没有清理工作进程。审计事件、会话、幂等键、过期确认/提议与模型调用记录会持续增长，需运营者自行归档；`CLEANUP_INTERVAL` 与 `AUDIT_RETENTION_DAYS` 会被解析但当前不生效。
 - `v0.2.0` 发行资产由公开发布工作流生成 GitHub 构建来源证明；请使用 `gh attestation verify` 针对本仓库、Tag 与工作流验签。
 
 ## 数据限制

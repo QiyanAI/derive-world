@@ -129,7 +129,9 @@ diagnostics with secrets redacted. See
 [launcher/README.md](launcher/README.md) and the
 [Windows self-hosting guide](docs/en/windows.md). It opens no network listener,
 passes no secret on a command line, and never deletes the database volume.
-Other platforms keep the Compose path above.
+The launcher and the Compose stack live in the source checkout; the Windows
+release zip contains the server binary and assets only, not PostgreSQL, the
+Compose stack, or the launcher. Other platforms keep the Compose path above.
 
 ### Who needs what
 

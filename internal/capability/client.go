@@ -256,7 +256,7 @@ func (c *ExternalClient) Invoke(ctx context.Context, invocationID, capabilityID 
 	if c.responseSigning {
 		request.Header.Set("X-DW-Response-Signature-Version", ResponseSignatureVersion)
 	}
-	request.Header.Set("User-Agent", "derive-world-broker/0.1.0")
+	request.Header.Set("User-Agent", "derive-world-broker/0.2.0")
 
 	var wroteRequest, firstByte bool
 	trace := &httptrace.ClientTrace{
