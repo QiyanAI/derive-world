@@ -192,6 +192,11 @@ func (s *Service) Create(ctx context.Context, publisherID, objectID uuid.UUID, i
 		}
 		contributors = unionContributors(contributors, assetCreators, publisherID)
 	}
+	ancestors, err := s.ancestorContributors(ctx, tx, objectID, publisherID)
+	if err != nil {
+		return nil, err
+	}
+	contributors = unionContributors(contributors, ancestors, publisherID)
 	status := "active"
 	if len(contributors) > 0 {
 		status = "pending_consent"
@@ -870,6 +875,77 @@ func buildSnapshot(objectType, template string, state json.RawMessage) (json.Raw
 		return nil, "", "", fmt.Errorf("%w: snapshot", ErrInvalidRequest)
 	}
 	return encoded, title, summary, nil
+}
+
+// ancestorContributors returns the people whose content was copied into this
+// object by a chain of private derivations. Deriving always copies at least one
+// source field, so publishing a private-derived child would otherwise expose the
+// source author's private text without their consent: contributorIDs only sees
+// events on the child itself, and the deriver is the publisher. A derivation
+// made from an active public snapshot is excluded, because that content is
+// already public under the publisher's license.
+func (s *Service) ancestorContributors(ctx context.Context, tx pgx.Tx, objectID, publisherID uuid.UUID) ([]uuid.UUID, error) {
+	seen := make(map[uuid.UUID]bool)
+	current := objectID
+	contributors := make([]uuid.UUID, 0)
+	for depth := 0; depth < 64; depth++ {
+		if seen[current] {
+			break
+		}
+		seen[current] = true
+
+		var publicDerived bool
+		if err := tx.QueryRow(ctx, `
+SELECT EXISTS (SELECT 1 FROM publication_derivations WHERE child_object_id = $1)`,
+			current.String()).Scan(&publicDerived); err != nil {
+			return nil, err
+		}
+		if publicDerived {
+			// The inherited content came from a public snapshot. Any private
+			// edits made to this object are covered by its own event actors,
+			// which contributorIDs already collected.
+			return contributors, nil
+		}
+
+		var (
+			parentID      uuid.UUID
+			parentVersion int
+			inherited     []string
+		)
+		err := tx.QueryRow(ctx, `
+SELECT parent_object_id, parent_version, inherited_fields
+  FROM derivation_edges
+ WHERE child_object_id = $1`, current.String()).Scan(
+			&parentID, &parentVersion, &inherited)
+		if errors.Is(err, pgx.ErrNoRows) {
+			return contributors, nil
+		}
+		if err != nil {
+			return nil, err
+		}
+		if len(inherited) == 0 {
+			return contributors, nil
+		}
+
+		var ownerID uuid.UUID
+		if err := tx.QueryRow(ctx, `
+SELECT owner_id FROM living_objects WHERE id = $1`, parentID.String()).Scan(&ownerID); err != nil {
+			if errors.Is(err, pgx.ErrNoRows) {
+				return contributors, nil
+			}
+			return nil, err
+		}
+		if ownerID != publisherID {
+			contributors = append(contributors, ownerID)
+		}
+		ids, err := contributorIDs(ctx, tx, parentID, parentVersion, publisherID)
+		if err != nil {
+			return nil, err
+		}
+		contributors = append(contributors, ids...)
+		current = parentID
+	}
+	return contributors, nil
 }
 
 func contributorIDs(ctx context.Context, tx pgx.Tx, objectID uuid.UUID, sourceVersion int, publisherID uuid.UUID) ([]uuid.UUID, error) {
