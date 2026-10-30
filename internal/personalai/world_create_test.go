@@ -384,3 +384,30 @@ func TestWorldCreationPromptRequiresStrictActionShape(t *testing.T) {
 		}
 	}
 }
+
+// A provider commonly writes a flag value as "true" instead of true. The
+// representation is fitted to the declared field type, the strict compiler
+// still runs, and the user sees the ordinary "nearest usable form" notice.
+func TestWorldCreateFitsInteractionScalarRepresentations(t *testing.T) {
+	brief := `{
+		"premise":"A lamp you can switch on.",
+		"kinds":[{"name":"Lamp","fields":[{"label":"Lit","type":"flag"}]}],
+		"things":[{"kind":0,"name":"Lamp"}],
+		"interactions":[{"from":0,"verb":"Flip","field":"Lit","op":"set","value":"true"}]
+	}`
+	content, repair, rejection := buildWorldCreate(worldCreateActionInput{
+		Title: "Lamp", Brief: json.RawMessage(brief),
+	})
+	if rejection != nil {
+		t.Fatalf("benign scalar representation was rejected at %s: %s", rejection.Stage, rejection.Detail)
+	}
+	if repair == nil || !repair.Coerced {
+		t.Fatal("interaction value coercion was not recorded")
+	}
+	if notice := seedRepairNotice(repair, false); notice == "" {
+		t.Fatal("a coerced plan did not produce a user-visible notice")
+	}
+	if len(content) == 0 {
+		t.Fatal("coerced world content is empty")
+	}
+}

@@ -171,23 +171,12 @@ func (s *Service) SendMessage(ctx context.Context, input SendMessageInput) (*Sen
 	if err != nil {
 		return nil, err
 	}
-	release, err := s.quota.Reserve(ctx, input.UserID, inputChars)
-	if err != nil {
-		s.recordQuotaDenial(ctx, input, err)
-		return nil, err
-	}
-	defer release(inputChars)
-
-	// Reserve a durable one-call slot before any provider request. The row is
-	// counted by the day-usage queries, so a crash, a rollback of the business
-	// transaction, or a failed final update cannot make a possible billable
-	// call disappear. If this insert fails, no provider call is made.
+	// A provider can return a successful response with no text at all. That
+	// leaves the turn unusable even though the request and the stored world
+	// context are valid. One bounded retry with the same world context but no
+	// conversation history recovers without asking the user to clear the chat.
+	// The first attempt is still recorded as a billable failed invocation.
 	mode := s.providerMode()
-	invocationID, err := uuid.NewV7()
-	if err != nil {
-		release(inputChars)
-		return nil, fmt.Errorf("model invocation id: %w", err)
-	}
 	reservedModel := s.modelName
 	if reservedModel == "" {
 		reservedModel = "unknown"
@@ -195,40 +184,105 @@ func (s *Service) SendMessage(ctx context.Context, input SendMessageInput) (*Sen
 	if runes := []rune(reservedModel); len(runes) > 120 {
 		reservedModel = string(runes[:120])
 	}
-	if err := s.recorder.Reserve(ctx, s.db, model.Invocation{
-		ID: invocationID, UserID: input.UserID,
-		ConversationID: &input.ConversationID,
-		Provider:       mode, Model: reservedModel, InputChars: inputChars,
-		OutputChars: 0, DurationMS: 0, Status: "failed", ErrorCode: "in_flight",
-	}); err != nil {
-		release(inputChars)
-		return nil, fmt.Errorf("model invocation reservation: %w", err)
-	}
+	attemptSystem, attemptMessages, attemptChars := system, messages, inputChars
+	for attempt := 0; attempt < 2; attempt++ {
+		release, reserveErr := s.quota.Reserve(ctx, input.UserID, attemptChars)
+		if reserveErr != nil {
+			s.recordQuotaDenial(ctx, input, reserveErr)
+			return nil, reserveErr
+		}
+		invocationID, idErr := uuid.NewV7()
+		if idErr != nil {
+			release(attemptChars)
+			return nil, fmt.Errorf("model invocation id: %w", idErr)
+		}
+		if err := s.recorder.Reserve(ctx, s.db, model.Invocation{
+			ID: invocationID, UserID: input.UserID,
+			ConversationID: &input.ConversationID,
+			Provider:       mode, Model: reservedModel, InputChars: attemptChars,
+			OutputChars: 0, DurationMS: 0, Status: "failed", ErrorCode: "in_flight",
+		}); err != nil {
+			release(attemptChars)
+			return nil, fmt.Errorf("model invocation reservation: %w", err)
+		}
 
-	started := time.Now()
-	response, callErr := s.provider.Complete(ctx, model.Request{
-		Model: s.modelName, System: system, Messages: messages,
-		Temperature: 0.2,
-	})
-	duration := int(time.Since(started).Milliseconds())
-	if callErr != nil {
-		s.recordFailure(ctx, input, mode, inputChars, duration, callErr, invocationID)
-		return nil, callErr
+		started := time.Now()
+		response, callErr := s.provider.Complete(ctx, model.Request{
+			Model: s.modelName, System: attemptSystem, Messages: attemptMessages,
+			Temperature: 0.2,
+		})
+		duration := int(time.Since(started).Milliseconds())
+		if callErr != nil {
+			s.recordFailure(ctx, input, mode, attemptChars, duration, callErr, invocationID)
+			release(attemptChars)
+			if attempt == 0 && isEmptyModelOutput(callErr) {
+				if retrySystem, retryMessages, retryChars, ok := s.cleanRetryPrompt(profile,
+					private, projection, input, inputBudget); ok {
+					if s.logger != nil {
+						s.logger.Error("personal_ai_empty_output_retry",
+							"conversation_id", input.ConversationID.String(),
+							"first_input_chars", attemptChars)
+					}
+					attemptSystem, attemptMessages, attemptChars = retrySystem, retryMessages, retryChars
+					continue
+				}
+			}
+			return nil, callErr
+		}
+		reply, actions, parseStatus, parseErr := parseModelOutput(response.Text)
+		if parseErr != nil {
+			s.recordFailure(ctx, input, mode, attemptChars, duration, parseErr, invocationID)
+			release(attemptChars)
+			if attempt == 0 && isEmptyModelOutput(parseErr) {
+				if retrySystem, retryMessages, retryChars, ok := s.cleanRetryPrompt(profile,
+					private, projection, input, inputBudget); ok {
+					if s.logger != nil {
+						s.logger.Error("personal_ai_empty_output_retry",
+							"conversation_id", input.ConversationID.String(),
+							"first_input_chars", attemptChars)
+					}
+					attemptSystem, attemptMessages, attemptChars = retrySystem, retryMessages, retryChars
+					continue
+				}
+			}
+			return nil, parseErr
+		}
+		turn := &aiTurn{
+			inputChars: attemptChars, prompt: attemptSystem, messages: attemptMessages,
+			reply: reply, actions: actions, parseStatus: parseStatus,
+			rawOutput: response.Text, mode: mode, response: response,
+			durationMS: duration, invocationID: invocationID,
+			requestedCreation: input.Object == nil && input.Intent == "create",
+			requestedChange:   input.Object != nil && input.Intent == "change",
+		}
+		result, persistErr := s.persistTurn(ctx, input, conversation, profile, turn)
+		release(attemptChars)
+		return result, persistErr
 	}
-	reply, actions, parseStatus, err := parseModelOutput(response.Text)
+	return nil, &model.Error{Code: model.CodeEmptyOutput, Message: "model response is empty"}
+}
+
+// cleanRetryPrompt rebuilds the turn without conversation history. The current
+// user message and the full world context stay; only prior turns are removed.
+func (s *Service) cleanRetryPrompt(profile *Profile, private *PrivateContext,
+	projection *handoff.Projection, input SendMessageInput,
+	budget int) (string, []model.Message, int, bool) {
+	system, messages, chars, err := buildPromptWithin(profile, private, projection, nil,
+		input.Content, input.Intent, budget)
 	if err != nil {
-		s.recordFailure(ctx, input, mode, inputChars, duration, err, invocationID)
-		return nil, err
+		return "", nil, 0, false
 	}
-	turn := &aiTurn{
-		inputChars: inputChars, prompt: system, messages: messages,
-		reply: reply, actions: actions, parseStatus: parseStatus,
-		rawOutput: response.Text, mode: mode, response: response,
-		durationMS: duration, invocationID: invocationID,
-		requestedCreation: input.Object == nil && input.Intent == "create",
-		requestedChange:   input.Object != nil && input.Intent == "change",
+	const notice = "\nThe previous attempt returned no text. Return exactly one json object now, with a non-empty reply and, when appropriate, proposed_actions."
+	if len([]byte(system))+len([]byte(notice)) <= budget {
+		system += notice
+		chars += utf8.RuneCountInString(notice)
 	}
-	return s.persistTurn(ctx, input, conversation, profile, turn)
+	return system, messages, chars, true
+}
+
+func isEmptyModelOutput(err error) bool {
+	var modelErr *model.Error
+	return errors.As(err, &modelErr) && modelErr.Code == model.CodeEmptyOutput
 }
 
 func (s *Service) persistTurn(
@@ -282,6 +336,12 @@ SELECT id, user_id, object_id, title, created_at, updated_at, deleted_at
 	zh := containsCJK(input.Content)
 	fallbackReason := ""
 	if turn.parseStatus == "fallback" && looksLikeModelJSON(turn.reply) {
+		if s.logger != nil {
+			s.logger.Error("personal_ai_output_unparseable",
+				"detail", modelOutputDecodeError(turn.rawOutput),
+				"output_bytes", len(turn.rawOutput),
+				"finish_reason", turn.response.FinishReason)
+		}
 		turn.reply, fallbackReason = fallbackReply(zh, turn.response.FinishReason)
 	}
 	notices := make([]string, 0, 4)
@@ -332,6 +392,7 @@ UPDATE ai_conversations SET updated_at = GREATEST(now(), updated_at) WHERE id = 
 	}
 
 	accepted := make([]AcceptedAction, 0)
+	groupedAway := 0
 	if !contextStale && turn.parseStatus == "structured" &&
 		(input.Object != nil || len(turn.actions) > 0) {
 		if err := s.trust.LockAIActionBudgetTx(ctx, tx, input.UserID); err != nil {
@@ -344,7 +405,12 @@ UPDATE ai_conversations SET updated_at = GREATEST(now(), updated_at) WHERE id = 
 		}
 		acceptedWorldCreate := false
 		repairs := make([]*seedRepair, 0, 1)
-		for _, action := range turn.actions {
+		actions := turn.actions
+		if input.Object != nil {
+			actions, groupedAway = groupTurnActions(turn.actions,
+				input.Object.ObjectID, effective.ObjectVersion, zh)
+		}
+		for _, action := range actions {
 			// One assistant reply may prepare at most one world. A second
 			// world.create would render a duplicate confirm button with the same
 			// meaning, so it is rejected before any confirmation row exists.
@@ -431,7 +497,7 @@ UPDATE ai_conversations SET updated_at = GREATEST(now(), updated_at) WHERE id = 
 	}
 	rejected := 0
 	if turn.parseStatus == "structured" {
-		rejected = len(turn.actions) - len(accepted)
+		rejected = len(turn.actions) - groupedAway - len(accepted)
 		if rejected < 0 {
 			rejected = 0
 		}
@@ -589,10 +655,11 @@ type actionRejection struct {
 type seedRepair struct {
 	Dropped []string
 	Clamped bool
+	Coerced bool
 }
 
 func (repair *seedRepair) empty() bool {
-	return repair == nil || (len(repair.Dropped) == 0 && !repair.Clamped)
+	return repair == nil || (len(repair.Dropped) == 0 && !repair.Clamped && !repair.Coerced)
 }
 
 func mergeRepairs(repairs []*seedRepair) *seedRepair {
@@ -603,6 +670,7 @@ func mergeRepairs(repairs []*seedRepair) *seedRepair {
 		}
 		merged.Dropped = append(merged.Dropped, repair.Dropped...)
 		merged.Clamped = merged.Clamped || repair.Clamped
+		merged.Coerced = merged.Coerced || repair.Coerced
 	}
 	return merged
 }
@@ -617,6 +685,14 @@ func repairingSeedBrief(raw json.RawMessage) (json.RawMessage, *seedRepair) {
 	if clamped, changed := worldseed.ClampBriefNumbers(normalized); changed {
 		normalized = clamped
 		repair.Clamped = true
+	}
+	if coerced, changed := worldseed.CoerceInteractionValues(normalized); changed {
+		normalized = coerced
+		repair.Coerced = true
+	}
+	if named, changed := worldseed.NormalizeVariableNames(normalized); changed {
+		normalized = named
+		repair.Coerced = true
 	}
 	return normalized, repair
 }
@@ -828,7 +904,40 @@ SELECT id, conversation_id, role, content, model_mode, parse_status, notice, cre
 	for left, right := 0, len(items)-1; left < right; left, right = left+1, right-1 {
 		items[left], items[right] = items[right], items[left]
 	}
-	return items, nil
+	return filterUnreadableTurns(items), nil
+}
+
+// filterUnreadableTurns removes a fallback assistant message and the user
+// message that caused it from the prompt history. A fallback means the model
+// did not produce a readable answer; replaying it as normal conversation gives
+// the next turn a misleading precedent and can anchor the provider on an empty
+// response. Structured refusals and repaired plans are kept because they carry
+// actionable server-written notices.
+func filterUnreadableTurns(items []Message) []Message {
+	filtered := make([]Message, 0, len(items))
+	for _, item := range items {
+		if isUnreadableFallback(item) {
+			if len(filtered) > 0 && filtered[len(filtered)-1].Role == "user" {
+				filtered = filtered[:len(filtered)-1]
+			}
+			continue
+		}
+		filtered = append(filtered, item)
+	}
+	return filtered
+}
+
+// isUnreadableFallback distinguishes the server-authored fallback for a
+// JSON-looking but unparseable reply from a legitimate plain-prose answer,
+// which also carries parse_status=fallback but has no fallback notice.
+func isUnreadableFallback(item Message) bool {
+	if item.Role != "assistant" || item.ParseStatus == nil ||
+		*item.ParseStatus != "fallback" || item.Notice == nil {
+		return false
+	}
+	notice := *item.Notice
+	return strings.Contains(notice, "Nothing was created or changed") ||
+		strings.Contains(notice, "没有创建或修改任何东西")
 }
 
 // linkTurnApprovalsTx records which conversation turn produced each accepted

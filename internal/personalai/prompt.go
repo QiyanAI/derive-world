@@ -573,24 +573,18 @@ type worldReimagineInput struct {
 const maxModelOutputBytes = 8 * 1024
 
 func parseModelOutput(text string) (string, []rawAction, string, error) {
-	trimmed := strings.TrimSpace(text)
-	// Real providers often wrap JSON in a Markdown fence or add a short
-	// sentence before/after it even when asked for JSON only. Strip one leading
-	// fence; the payload extraction below also accepts prose around one
-	// complete object, and the decoded payload still passes every strict check.
-	if strings.HasPrefix(trimmed, "```") {
-		if newline := strings.IndexByte(trimmed, '\n'); newline >= 0 {
-			body := strings.TrimSpace(trimmed[newline+1:])
-			body = strings.TrimSuffix(body, "```")
-			trimmed = strings.TrimSpace(body)
-		}
-	}
+	trimmed := stripOutputFence(strings.TrimSpace(text))
 	if trimmed == "" {
-		return "", nil, "", &model.Error{Code: model.CodeInvalidOutput, Message: "model response is empty"}
+		return "", nil, "", &model.Error{Code: model.CodeEmptyOutput, Message: "model response is empty"}
 	}
+	// A provider can put a literal newline or tab inside a JSON string, or
+	// leave a trailing comma. Those are representation errors with one
+	// unambiguous reading; they are escaped/removed before strict decoding.
+	// Action content is still decoded and validated exactly as before.
+	parseText := sanitizeJSONText(trimmed)
 	var payload modelPayload
-	if len([]byte(trimmed)) <= maxModelOutputBytes &&
-		decodeSingleJSON(trimmed, &payload) == nil &&
+	if len([]byte(parseText)) <= maxModelOutputBytes &&
+		decodeSingleJSON(parseText, &payload) == nil &&
 		strings.TrimSpace(payload.Reply) != "" &&
 		len(payload.ProposedActions) <= 5 {
 		return payload.Reply, payload.ProposedActions, "structured", nil
@@ -601,7 +595,18 @@ func parseModelOutput(text string) (string, []rawAction, string, error) {
 	// Providers occasionally stop one or two closing delimiters early. Append
 	// only the matching closers, then parse again; the repaired payload still
 	// passes through the strict decoder and full server-side action validation.
-	if repaired, ok := completeTruncatedJSON(trimmed); ok && len([]byte(repaired)) <= maxModelOutputBytes {
+	if repaired, ok := completeTruncatedJSON(parseText); ok && len([]byte(repaired)) <= maxModelOutputBytes {
+		payload = modelPayload{}
+		if decodeSingleJSON(repaired, &payload) == nil &&
+			strings.TrimSpace(payload.Reply) != "" &&
+			len(payload.ProposedActions) <= 5 {
+			return payload.Reply, payload.ProposedActions, "structured", nil
+		}
+	}
+	// A provider can close an object with "]". The stack knows exactly which
+	// closer was required; replacing only the wrong character is a structural
+	// repair, and the decoded action input still passes every strict check.
+	if repaired, ok := repairMismatchedClosers(parseText); ok && len([]byte(repaired)) <= maxModelOutputBytes {
 		payload = modelPayload{}
 		if decodeSingleJSON(repaired, &payload) == nil &&
 			strings.TrimSpace(payload.Reply) != "" &&
@@ -613,7 +618,7 @@ func parseModelOutput(text string) (string, []rawAction, string, error) {
 	// a closing remark. Use the first complete object that decodes to the
 	// documented payload; the reply field is what the user sees, so no raw
 	// JSON leaks into chat. Validation of every action is unchanged.
-	if payload, ok := firstStructuredPayload(trimmed); ok {
+	if payload, ok := firstStructuredPayload(parseText); ok {
 		return payload.Reply, payload.ProposedActions, "structured", nil
 	}
 	return trimmed, nil, "fallback", nil
@@ -622,6 +627,7 @@ func parseModelOutput(text string) (string, []rawAction, string, error) {
 // firstStructuredPayload scans text for complete JSON objects and returns the
 // first one that decodes to a non-empty reply with at most five actions.
 func firstStructuredPayload(text string) (modelPayload, bool) {
+	text = sanitizeJSONText(text)
 	search := text
 	for {
 		start := strings.IndexByte(search, '{')
@@ -728,6 +734,177 @@ func completeTruncatedJSON(text string) (string, bool) {
 	return builder.String(), true
 }
 
+// stripOutputFence removes one surrounding Markdown fence, if present.
+func stripOutputFence(text string) string {
+	if !strings.HasPrefix(text, "```") {
+		return text
+	}
+	newline := strings.IndexByte(text, '\n')
+	if newline < 0 {
+		return text
+	}
+	body := strings.TrimSpace(text[newline+1:])
+	body = strings.TrimSuffix(body, "```")
+	return strings.TrimSpace(body)
+}
+
+// sanitizeJSONText fixes only representation details that have one reading:
+// control characters inside a string become their JSON escapes, and a comma
+// directly before a closing brace/bracket is removed. It never reorders,
+// invents or deletes content; the strict decoder still validates the payload.
+func sanitizeJSONText(text string) string {
+	var builder strings.Builder
+	builder.Grow(len(text) + 16)
+	inString := false
+	escaped := false
+	for index := 0; index < len(text); index++ {
+		char := text[index]
+		if inString {
+			if escaped {
+				builder.WriteByte(char)
+				escaped = false
+				continue
+			}
+			switch char {
+			case '\\':
+				builder.WriteByte(char)
+				escaped = true
+			case '"':
+				builder.WriteByte(char)
+				inString = false
+			case '\n':
+				builder.WriteString(`\n`)
+			case '\r':
+				builder.WriteString(`\r`)
+			case '\t':
+				builder.WriteString(`\t`)
+			default:
+				if char < 0x20 {
+					fmt.Fprintf(&builder, `\u%04x`, char)
+				} else {
+					builder.WriteByte(char)
+				}
+			}
+			continue
+		}
+		switch char {
+		case '"':
+			inString = true
+			builder.WriteByte(char)
+		case ',':
+			next := index + 1
+			for next < len(text) {
+				switch text[next] {
+				case ' ', '\n', '\r', '\t':
+					next++
+					continue
+				}
+				break
+			}
+			if next < len(text) && (text[next] == '}' || text[next] == ']') {
+				continue
+			}
+			builder.WriteByte(char)
+		default:
+			builder.WriteByte(char)
+		}
+	}
+	return builder.String()
+}
+
+// modelOutputDecodeError reports why a JSON-looking output did not decode. It
+// returns only structural detail (a decoder error or an empty-reply marker),
+// never model-authored content, so it is safe to log.
+func modelOutputDecodeError(text string) string {
+	trimmed := stripOutputFence(strings.TrimSpace(text))
+	if trimmed == "" {
+		return "empty output"
+	}
+	parseText := sanitizeJSONText(trimmed)
+	var payload modelPayload
+	if err := decodeSingleJSON(parseText, &payload); err != nil {
+		message := err.Error()
+		if len(message) > 200 {
+			message = message[:200]
+		}
+		return message
+	}
+	if strings.TrimSpace(payload.Reply) == "" {
+		return "decoded payload has an empty reply"
+	}
+	if len(payload.ProposedActions) > 5 {
+		return "decoded payload has more than five actions"
+	}
+	return ""
+}
+
+// repairMismatchedClosers replaces a closing bracket/brace only when the stack
+// says the other delimiter was required, and appends closers left off at the
+// very end. It never moves content; a structurally ambiguous text is rejected.
+func repairMismatchedClosers(text string) (string, bool) {
+	var builder strings.Builder
+	builder.Grow(len(text) + 8)
+	stack := make([]byte, 0, 8)
+	inString := false
+	escaped := false
+	changed := false
+	for index := 0; index < len(text); index++ {
+		char := text[index]
+		if inString {
+			builder.WriteByte(char)
+			if escaped {
+				escaped = false
+			} else if char == '\\' {
+				escaped = true
+			} else if char == '"' {
+				inString = false
+			}
+			continue
+		}
+		switch char {
+		case '"':
+			inString = true
+			builder.WriteByte(char)
+		case '{', '[':
+			stack = append(stack, char)
+			builder.WriteByte(char)
+		case '}', ']':
+			if len(stack) == 0 {
+				return "", false
+			}
+			open := stack[len(stack)-1]
+			expected := byte('}')
+			if open == '[' {
+				expected = ']'
+			}
+			if char != expected {
+				builder.WriteByte(expected)
+				changed = true
+			} else {
+				builder.WriteByte(char)
+			}
+			stack = stack[:len(stack)-1]
+		default:
+			builder.WriteByte(char)
+		}
+	}
+	if inString {
+		return "", false
+	}
+	for index := len(stack) - 1; index >= 0; index-- {
+		if stack[index] == '{' {
+			builder.WriteByte('}')
+		} else {
+			builder.WriteByte(']')
+		}
+		changed = true
+	}
+	if !changed {
+		return text, false
+	}
+	return builder.String(), true
+}
+
 func decodeSingleJSON(text string, destination any) error {
 	decoder := json.NewDecoder(strings.NewReader(text))
 	decoder.DisallowUnknownFields()
@@ -775,8 +952,8 @@ A minimal runnable brief is {"premise":"...","kinds":[{"name":"..."}],"things":[
 const worldSeedGuide = `A world brief has this shape (omit what does not apply):
 {"premise":"...","atmosphere":"...","kinds":[{"name":"...","hue":200,"motion":"none|pulse|float|sway|flicker|breathe|orbit","form":"M 0 -24 A 24 24 0 1 1 0 24 A 24 24 0 1 1 0 -24 Z","solid":false,"fields":[{"label":"...","type":"text|number|flag"}]}],"things":[{"kind":0,"name":"...","text":"...","x":0.4,"y":0.5}],"relations":[{"from":0,"to":1,"label":"..."}],"interactions":[{"from":0,"verb":"...","to":1,"field":"label","op":"set|add|toggle","value":"..."}],"experience":{"surfaces":["live","story","workspace","space","custom","scene3d","media"],"primary":"live","live":{"avatar":0,"speed":1.8,"timer":60,"particles":{"kind":"rain|motes|stars|snow","count":40},"goal":{"type":"collect|score|reach|survive","kind":1,"count":3,"entity":0,"field":"...","variable":"score","target":5,"label":"..."},"timeline":{"duration":12,"loop":true,"tracks":[{"entity":0,"property":"x|y|scale|opacity|rotate|hue","keys":[{"t":0,"v":400},{"t":6,"v":800}]}]}},"story":{"title":"...","kind":"篇章","chapters":[{"title":"...","text":"...","choices":[{"label":"...","to":1}]}]},"workspace":{"title":"...","kind":0,"columns":["..."],"actions":[{"label":"...","type":"create|done|progress","field":"..."}]},"custom":{"title":"...","width":1200,"height":800,"vars":{"a":0},"nodes":[{"id":"n1","type":"box|dot|path|text|input","x":100,"y":100,"w":80,"h":40,"r":20,"hue":200,"text":"...","path":"M 0 -20 L 20 0 L 0 20 Z","size":20,"bindings":[{"prop":"opacity","var":"a","in_min":0,"in_max":1,"out_min":0.3,"out_max":1}],"bind_text":{"var":"a"},"input":{"var":"a","type":"text|number"},"drag":{"var":"a","min":0,"max":100,"axis":"x"},"on_click":[{"type":"set_var|add_var","name":"a","value":1},{"type":"toggle_var","name":"b"},{"type":"if","cond":{"var":"a","op":"gt","value":2},"then":[],"else":[]},{"type":"sound","freq":440,"duration":0.2,"wave":"sine"}]}],"keys":[{"key":"ArrowRight","actions":[]}],"timeline":{"duration":8,"loop":true,"tracks":[{"node_id":"n1","property":"x|y|w|h|r|rotate|scale|opacity|hue","keys":[{"t":0,"v":0}]}]}},"scene3d":{"title":"...","sky_hue":220,"ground_hue":140,"fog":0.02,"camera":"orbit|follow","distance":14,"player":0,"speed":4,"gravity":20,"views":[{"kind":0,"primitive":"sphere|box|cylinder|cone|torus","scale":1,"elevation":0,"collider":"none|box|sphere","hide_done":true}]},"audio":{"title":"...","tone":{"frequency":220,"wave":"sine|square|triangle|sawtooth","volume":0.06,"pulse":0.2},"volume":0.35,"cues":[{"variable":"signals","mode":"truthy|falsy|change|increase|decrease","tone":{"frequency":440,"wave":"sine","volume":0.12}}]},"media":{"title":"...","kind":"image|video","caption":"...","show_variable":"...","play_variable":"..."}}}
 live.goal is optional and only for a concrete objective: goal.kind is an existing kind index, goal.entity is an existing thing index (0..len(things)-1), never a kind index.
-Every field initial, thing value and interaction value must match its field type: text uses a string, number uses a number, flag uses true/false; omit initial to use the default. Unknown enum values reject the seed.
-Surface choice is by intent, never a product category: live = time, movement, play or watching; story = readable chapters and choices; workspace = real tables, editing and operations; space = a visual map of things; scene3d = the same things as a real three-dimensional scene with camera, gravity and collisions; media = a real image or video slot; custom = a safe declarative surface for forms the others do not cover. Combine surfaces in one world when the idea needs it; all share one state. A scene3d player is a thing index; colliders make a kind solid; physics is simulated by the browser and only behavior-driven changes are persisted. An audio cue watches a world variable; increase/decrease requires a number, truthy/falsy requires a flag. Media seeds reserve an empty slot: never invent an asset id or URL, because a human uploads the bytes in the world editor. Procedural tones are generated by the browser; uploaded audio can be attached later.
+Every field initial, thing value and interaction value must match its field type: text uses a string, number uses a number, flag uses true/false; status set uses only "open"/"done"; add uses a number; toggle omits value. Unknown enum values reject the seed.
+Surface choice is by intent, never a product category: live = time, movement, play or watching; story = readable chapters and choices; workspace = real tables, editing and operations; space = a visual map of things; scene3d = the same things as a real three-dimensional scene with camera, gravity and collisions; media = a real image or video slot; custom = a safe declarative surface for forms the others do not cover. Combine surfaces in one world when the idea needs it; all share one state. A scene3d player is a thing index; colliders make a kind solid; physics is simulated by the browser and only behavior-driven changes are persisted. An audio cue watches a world variable; increase/decrease requires a number, truthy/falsy requires a flag. Media seeds reserve an empty slot; never invent an asset id or URL (a human uploads the bytes). Procedural tones are browser-generated; uploaded audio can be attached later.
 Custom values can be literals, "$event.value", or {"expr":"$a + $b"} (numbers, + - * /, parentheses). Conditions use {var|entity_id,field,op eq|ne|gt|gte|lt|lte|truthy|falsy,value,all,any,not}. Nodes may use text/inputs/keys/drag/conditions/actions/timelines/tones. Custom programs can be extended in later turns; keep the first one small.
-A first plan should stay small enough to run: a handful of kinds and things, plus only the surfaces the idea needs. Later turns extend the same world, so do not try to author everything at once.
+Keep the first plan small: a handful of kinds and things, only the surfaces it needs; later turns extend the same world.
 Never present module names, schema or code to the user. Never claim network access, arbitrary user code, live multiplayer sync, or media you did not receive; state the concrete gap if the idea needs one. You may truthfully say the world has a 3D scene, gravity, collisions, procedural sound and media slots, and that a human can upload real images, video, audio or a GLB model afterwards.`

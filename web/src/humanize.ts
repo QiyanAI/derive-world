@@ -299,6 +299,16 @@ export function proposalPreview(proposal: Proposal, object: ObjectView | null): 
         action: proposal.action,
         fields: [field("value", Array.isArray(input.views) ? input.views.join(", ") : "")]
       };
+    case "batch_change": {
+      const actions = Array.isArray(input.actions) ? input.actions.length : 0;
+      return {
+        action: proposal.action,
+        fields: [
+          field("summary", String(input.note ?? "")),
+          field("input", `${actions}`)
+        ]
+      };
+    }
     case "reshape_world": {
       const content =
         input.content && typeof input.content === "object"

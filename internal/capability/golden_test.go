@@ -18,7 +18,7 @@ var frozenSchemaSHA256 = map[string]string{
 	"object.context.output.json":        "8276cc9b09cb2b71deded3c143c6ec610ebd4f38b0f6e2daa59cc5cc79b99c43",
 	"object.derive.input.json":          "4bcf95752ea102924e5d1198203231da51dcb071f595e84b557449242099e32a",
 	"object.derive.output.json":         "4f25af988b607d7069b60ea9cba828866040434cda93883ae69c47f12b51bba8",
-	"object.propose_change.input.json":  "5569124947d34f759e636e55723b3a37365ea29ae1febdfc684d209939633099",
+	"object.propose_change.input.json":  "9b7d6dfded9afbc4061e775861be84a9f130c43e1404adcd43c338dba6cfbdbf",
 	"object.propose_change.output.json": "25fe62327a9b5e555e20034bef34334458cb55f13844591a871f869b7922c88d",
 	"object.read.input.json":            "116a4e65a91b420567f86d0ce972c4963f71ea1f8f32ece2f0881334a1a1b4a2",
 	"object.read.output.json":           "0989cc54811980ba959315c30a8dfd39d41792e3401b5d7d5a0208eab195af55",

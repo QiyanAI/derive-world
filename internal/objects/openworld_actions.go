@@ -2,6 +2,7 @@
 package objects
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
 	"sort"
@@ -26,6 +27,22 @@ type OpenWorldAppliedEffect struct {
 	Value  any    `json:"value,omitempty"`
 }
 
+// batchableOpenWorldAction reports the plain edits that can share one batch.
+// Whole-state, program-execution and nested batch actions are excluded.
+func batchableOpenWorldAction(action string) bool {
+	switch action {
+	case "set_title", "set_premise", "add_tag", "remove_tag",
+		"add_kind", "update_kind", "remove_kind",
+		"add_node", "update_node", "remove_node", "move_node",
+		"set_node_field", "set_node_status", "touch_node",
+		"add_link", "remove_link", "add_rule", "remove_rule",
+		"set_views", "set_presentation", "set_experience":
+		return true
+	default:
+		return false
+	}
+}
+
 func isOpenWorldAction(action string) bool {
 	switch action {
 	case "add_kind", "update_kind", "remove_kind",
@@ -33,7 +50,7 @@ func isOpenWorldAction(action string) bool {
 		"set_node_field", "set_node_status", "touch_node",
 		"add_link", "remove_link", "add_rule", "remove_rule", "set_views",
 		"set_presentation", "set_experience", "invoke_behavior", "reshape_world",
-		"custom_action":
+		"custom_action", "batch_change":
 		return true
 	default:
 		return false
@@ -111,6 +128,21 @@ type touchOpenWorldNodeInput struct {
 type reshapeOpenWorldInput struct {
 	Note    string         `json:"note"`
 	Content OpenWorldState `json:"content"`
+}
+
+// batchChangeInput is one complete plan made of several compatible open-world
+// modifications. The server applies them in order against one state and one
+// version. A batch cannot contain another batch, a whole-world reshape, a
+// custom program event or a behavior invocation: those either replace the
+// state or execute a program, and are not composable with plain edits.
+type batchChangeInput struct {
+	Note    string                   `json:"note"`
+	Actions []batchChangeActionInput `json:"actions"`
+}
+
+type batchChangeActionInput struct {
+	Action string          `json:"action"`
+	Input  json.RawMessage `json:"input"`
 }
 
 type customActionInput struct {
@@ -265,6 +297,49 @@ func validateEffectInput(input openWorldEffectInput) error {
 func planOpenWorldAction(action string, raw json.RawMessage, plan *ActionPlan) error {
 	plan.Permission = PermContribute
 	switch action {
+	case "batch_change":
+		if err := validateInputKeys(raw, []string{"actions"},
+			[]string{"actions", "note"}); err != nil {
+			return err
+		}
+		var input batchChangeInput
+		if err := decodeOpenWorldInput(raw, &input); err != nil {
+			return err
+		}
+		note := strings.TrimSpace(input.Note)
+		if runeLength(note) > 500 {
+			return fmt.Errorf("%w: input.note", ErrInvalidRequest)
+		}
+		if len(input.Actions) < 1 || len(input.Actions) > 8 {
+			return fmt.Errorf("%w: input.actions", ErrInvalidRequest)
+		}
+		batch := make([]*ActionPlan, 0, len(input.Actions))
+		normalized := make([]map[string]any, 0, len(input.Actions))
+		for index, sub := range input.Actions {
+			if !batchableOpenWorldAction(sub.Action) {
+				return fmt.Errorf("%w: input.actions/%d/action", ErrInvalidRequest, index)
+			}
+			if len(bytes.TrimSpace(sub.Input)) == 0 {
+				return fmt.Errorf("%w: input.actions/%d/input", ErrInvalidRequest, index)
+			}
+			subPlan, err := PlanAction(TypeOpenWorld, sub.Action, sub.Input)
+			if err != nil {
+				return fmt.Errorf("%w: input.actions/%d", ErrInvalidRequest, index)
+			}
+			if subPlan.Permission != PermContribute {
+				return fmt.Errorf("%w: input.actions/%d/permission", ErrInvalidRequest, index)
+			}
+			batch = append(batch, subPlan)
+			normalized = append(normalized, map[string]any{
+				"action": sub.Action, "input": sub.Input,
+			})
+		}
+		plan.Batch = batch
+		plan.Input["note"] = note
+		plan.Input["actions"] = normalized
+		plan.EventInput = map[string]any{
+			"note": note, "action_count": len(batch),
+		}
 	case "add_kind":
 		if err := validateInputKeys(raw, []string{"name"},
 			[]string{"name", "hue", "fields", "appearance", "bindings"}); err != nil {
@@ -1414,6 +1489,20 @@ func applyOpenWorldAction(stateRaw, sharedRaw json.RawMessage, plan *ActionPlan)
 			return nil, nil, "", err
 		}
 		state.Experience = input.Experience
+	case "batch_change":
+		if len(plan.Batch) == 0 {
+			return nil, nil, "", fmt.Errorf("%w: input.actions", ErrInvalidRequest)
+		}
+		currentState := stateRaw
+		for _, sub := range plan.Batch {
+			nextState, _, _, err := applyOpenWorldAction(currentState, sharedRaw, sub)
+			if err != nil {
+				return nil, nil, "", err
+			}
+			plan.Effects = append(plan.Effects, sub.Effects...)
+			currentState = nextState
+		}
+		return currentState, sharedRaw, "", nil
 	case "reshape_world":
 		var input reshapeOpenWorldInput
 		if err := decodeOpenWorldInput(plan.RawInput, &input); err != nil {

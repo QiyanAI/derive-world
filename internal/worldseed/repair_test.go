@@ -179,3 +179,159 @@ func TestClampBriefNumbersKeepsAbsentNumbersAbsent(t *testing.T) {
 		t.Fatalf("clamping invented values: %s", clamped)
 	}
 }
+
+// A provider may write an interaction value as a JSON string even when the
+// target field is a number or flag (and vice versa). Those representations are
+// unambiguous, so they are fitted to the declared type before strict decoding.
+func TestCoerceInteractionValuesFitsScalarRepresentations(t *testing.T) {
+	raw := json.RawMessage(`{
+		"premise":"Two lamps and a switch.",
+		"kinds":[
+			{"name":"Lamp","fields":[
+				{"label":"Lit","type":"flag"},
+				{"label":"Glow","type":"number"},
+				{"label":"Mood","type":"text"}
+			]},
+			{"name":"Switch","fields":[{"label":"Count","type":"number"}]}
+		],
+		"things":[{"kind":0,"name":"Lamp"},{"kind":1,"name":"Switch"}],
+		"interactions":[
+			{"from":1,"to":0,"verb":"Flip","field":"Lit","op":"set","value":"true"},
+			{"from":1,"to":0,"verb":"Switch","field":"Lit","op":"set","value":1},
+			{"from":1,"to":0,"verb":"Dim","field":"Glow","op":"set","value":"2.5"},
+			{"from":1,"to":0,"verb":"Label","field":"Mood","op":"set","value":3},
+			{"from":1,"verb":"Count","field":"Count","op":"add","value":"1"}
+		]
+	}`)
+	coerced, changed := CoerceInteractionValues(raw)
+	if !changed {
+		t.Fatal("scalar string values were not fitted to their field types")
+	}
+	brief, err := Decode(coerced)
+	if err != nil {
+		t.Fatalf("coerced seed still fails strict decode: %v", err)
+	}
+	if brief.Interactions[0].Value != true {
+		t.Fatalf("flag value = %#v, want true", brief.Interactions[0].Value)
+	}
+	if brief.Interactions[1].Value != true {
+		t.Fatalf("numeric flag value = %#v, want true", brief.Interactions[1].Value)
+	}
+	if brief.Interactions[2].Value != 2.5 {
+		t.Fatalf("number value = %#v, want 2.5", brief.Interactions[2].Value)
+	}
+	if brief.Interactions[3].Value != "3" {
+		t.Fatalf("text value = %#v, want \"3\"", brief.Interactions[3].Value)
+	}
+	if brief.Interactions[4].Value != 1.0 {
+		t.Fatalf("add value = %#v, want 1", brief.Interactions[4].Value)
+	}
+}
+
+// Status values and toggle semantics stay strict: an "on" status or a value on
+// a toggle is a different meaning, not a JSON representation detail.
+func TestCoerceInteractionValuesLeavesAmbiguousValuesRejected(t *testing.T) {
+	raw := json.RawMessage(`{
+		"premise":"A lamp.",
+		"kinds":[{"name":"Lamp"}],
+		"things":[{"kind":0,"name":"Lamp"}],
+		"interactions":[
+			{"from":0,"verb":"Light","op":"set","value":"on"},
+			{"from":0,"verb":"Flip","op":"toggle","value":true}
+		]
+	}`)
+	coerced, changed := CoerceInteractionValues(raw)
+	if changed {
+		t.Fatal("an ambiguous status/toggle value was rewritten")
+	}
+	if _, err := Decode(coerced); err == nil {
+		t.Fatal("an ambiguous status/toggle value was accepted")
+	}
+}
+
+func TestCoerceInteractionValuesLeavesTypedSeedAlone(t *testing.T) {
+	raw := json.RawMessage(`{
+		"premise":"A lamp.",
+		"kinds":[{"name":"Lamp","fields":[{"label":"Lit","type":"flag"}]}],
+		"things":[{"kind":0,"name":"Lamp"}],
+		"interactions":[{"from":0,"verb":"Flip","field":"Lit","op":"set","value":true}]
+	}`)
+	coerced, changed := CoerceInteractionValues(raw)
+	if changed {
+		t.Fatal("an already typed seed was reported as changed")
+	}
+	if string(coerced) != string(raw) {
+		t.Fatalf("an already typed seed was rewritten: %s", coerced)
+	}
+}
+
+// A provider may use a human label ("LampLit") or a non-ASCII word as an
+// opaque variable key. The runtime requires lowercase ASCII names; renaming
+// the key consistently does not change what the cue or goal watches.
+func TestNormalizeVariableNamesFitsOpaqueKeys(t *testing.T) {
+	raw := json.RawMessage(`{
+		"premise":"A lamp that answers the rain.",
+		"kinds":[{"name":"Lamp"}],
+		"things":[{"kind":0,"name":"Lamp"}],
+		"experience":{
+			"surfaces":["live"],
+			"audio":{"cues":[{"variable":"LampLit","mode":"change"}]},
+			"live":{"goal":{"type":"score","variable":"LampLit","target":1}}
+		}
+	}`)
+	normalized, changed := NormalizeVariableNames(raw)
+	if !changed {
+		t.Fatal("an invalid variable key was not normalized")
+	}
+	text := string(normalized)
+	if strings.Contains(text, `"LampLit"`) {
+		t.Fatalf("invalid key survived: %s", text)
+	}
+	if !strings.Contains(text, `"lamplit"`) {
+		t.Fatalf("readable slug missing: %s", text)
+	}
+	if _, err := Decode(normalized); err != nil {
+		t.Fatalf("normalized seed still fails strict decode: %v", err)
+	}
+}
+
+func TestNormalizeVariableNamesHashesNonASCIIKeys(t *testing.T) {
+	raw := json.RawMessage(`{
+		"premise":"A lamp.",
+		"kinds":[{"name":"Lamp"}],
+		"things":[{"kind":0,"name":"Lamp"}],
+		"experience":{
+			"surfaces":["live"],
+			"audio":{"cues":[{"variable":"灯亮","mode":"change"}]}
+		}
+	}`)
+	normalized, changed := NormalizeVariableNames(raw)
+	if !changed {
+		t.Fatal("a non-ASCII variable key was not normalized")
+	}
+	if !strings.Contains(string(normalized), `"v_`) {
+		t.Fatalf("hashed key missing: %s", normalized)
+	}
+	if _, err := Decode(normalized); err != nil {
+		t.Fatalf("normalized seed still fails strict decode: %v", err)
+	}
+}
+
+func TestNormalizeVariableNamesLeavesValidKeysAlone(t *testing.T) {
+	raw := json.RawMessage(`{
+		"premise":"A lamp.",
+		"kinds":[{"name":"Lamp"}],
+		"things":[{"kind":0,"name":"Lamp"}],
+		"experience":{
+			"surfaces":["live"],
+			"audio":{"cues":[{"variable":"lamp_lit","mode":"change"}]}
+		}
+	}`)
+	normalized, changed := NormalizeVariableNames(raw)
+	if changed {
+		t.Fatal("a valid variable key was reported as changed")
+	}
+	if string(normalized) != string(raw) {
+		t.Fatalf("a valid variable key was rewritten: %s", normalized)
+	}
+}

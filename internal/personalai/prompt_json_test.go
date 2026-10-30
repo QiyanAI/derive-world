@@ -218,3 +218,72 @@ func TestDeepSeekJSONWireProfileAndResponseParsing(t *testing.T) {
 		t.Fatalf("parsed = reply %q status %q actions %d", reply, status, len(actions))
 	}
 }
+
+// A provider can put a literal newline/tab inside a JSON string or leave a
+// trailing comma. Both have one reading; the sanitizer fixes only those
+// representations and the strict decoder still runs on the result.
+func TestParseModelOutputRepairsControlCharactersAndTrailingCommas(t *testing.T) {
+	cases := []struct {
+		name string
+		text string
+		want string
+	}{
+		{"literal newline", "{\"reply\":\"line one\nline two\",\"proposed_actions\":[]}", "line one\nline two"},
+		{"literal tab", "{\"reply\":\"a\tb\",\"proposed_actions\":[]}", "a\tb"},
+		{"trailing comma", `{"reply":"hello","proposed_actions":[],}`, "hello"},
+	}
+	for _, testCase := range cases {
+		reply, actions, status, err := parseModelOutput(testCase.text)
+		if err != nil || status != "structured" || len(actions) != 0 || reply != testCase.want {
+			t.Fatalf("%s: reply=%q status=%q actions=%d err=%v", testCase.name, reply, status, len(actions), err)
+		}
+	}
+}
+
+func TestSanitizeJSONTextLeavesValidJSONAlone(t *testing.T) {
+	valid := `{"reply":"hello","proposed_actions":[]}`
+	if sanitized := sanitizeJSONText(valid); sanitized != valid {
+		t.Fatalf("valid JSON was rewritten: %s", sanitized)
+	}
+}
+
+func TestModelOutputDecodeErrorReportsStructureOnly(t *testing.T) {
+	if detail := modelOutputDecodeError(`{"reply":"x","proposed_actions":[]}`); detail != "" {
+		t.Fatalf("valid payload reported an error: %s", detail)
+	}
+	if detail := modelOutputDecodeError(`{"reply":"","proposed_actions":[]}`); !strings.Contains(detail, "empty reply") {
+		t.Fatalf("empty reply detail = %q", detail)
+	}
+	if detail := modelOutputDecodeError(`{"reply":"x","proposed_actions":[],"extra":1}`); !strings.Contains(detail, "unknown field") {
+		t.Fatalf("unknown field detail = %q", detail)
+	}
+}
+
+// The model sometimes closes an action object with "]". The stack identifies
+// the one required closer; replacing only that character makes the payload
+// decodable without changing any content.
+func TestParseModelOutputRepairsMismatchedClosers(t *testing.T) {
+	valid := `{"reply":"hello","proposed_actions":[{"capability_id":"world.create","input":{"title":"Room","brief":` +
+		validWorldCreateBrief + `}}]}`
+	mismatched := strings.Replace(valid, "}}]}", "}]]}", 1)
+	if mismatched == valid {
+		t.Fatal("test fixture was not made mismatched")
+	}
+	reply, actions, status, err := parseModelOutput(mismatched)
+	if err != nil || status != "structured" || reply != "hello" || len(actions) != 1 {
+		t.Fatalf("repaired parse: reply=%q status=%q actions=%d err=%v", reply, status, len(actions), err)
+	}
+	var create worldCreateActionInput
+	if err := json.Unmarshal(actions[0].Input, &create); err != nil {
+		t.Fatalf("action input: %v", err)
+	}
+	if _, rejection := buildWorldCreateContent(create); rejection != nil {
+		t.Fatalf("repaired action rejected at %s: %s", rejection.Stage, rejection.Detail)
+	}
+}
+
+func TestRepairMismatchedClosersRejectsExtraClosers(t *testing.T) {
+	if _, ok := repairMismatchedClosers(`{"reply":"x","proposed_actions":[]}}`); ok {
+		t.Fatal("an extra closer was treated as a mismatch")
+	}
+}

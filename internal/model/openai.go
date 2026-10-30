@@ -327,7 +327,7 @@ func (o *OpenAICompatible) Complete(ctx context.Context, req Request) (Response,
 		return Response{}, &Error{Code: CodeInvalidOutput, Message: "model response content has an unsupported shape", Err: err}
 	}
 	if strings.TrimSpace(text) == "" {
-		return Response{}, &Error{Code: CodeInvalidOutput, Message: "model response is empty"}
+		return Response{}, &Error{Code: CodeEmptyOutput, Message: "model response is empty"}
 	}
 	if len(text) > maxOutputBytes {
 		return Response{}, &Error{Code: CodeInvalidOutput, Message: "model response exceeds 8 KiB"}

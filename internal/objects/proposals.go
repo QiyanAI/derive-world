@@ -222,6 +222,21 @@ SELECT id, object_id, actor_user_id, ai_profile_id, delegation_id,
 // ListProposals returns only the caller's proposals for the object. Pending
 // proposals older than 24 hours are presented as expired.
 func (s *Service) ListProposals(ctx context.Context, actorID, objectID uuid.UUID) ([]Proposal, error) {
+	// A version change or the 24-hour lifetime makes a pending proposal
+	// unusable. Persist that clear state here so the browser does not have to
+	// discover the conflict by clicking an already-stale card.
+	if _, err := s.db.Exec(ctx, `
+UPDATE object_proposals p
+   SET status = 'expired', decided_at = COALESCE(p.decided_at, now())
+  FROM living_objects o
+ WHERE p.object_id = o.id
+   AND p.object_id = $1
+   AND p.actor_user_id = $2
+   AND p.status = 'pending'
+   AND (p.base_version < o.version OR p.created_at + interval '24 hours' <= now())`,
+		objectID.String(), actorID.String()); err != nil {
+		return nil, err
+	}
 	rows, err := s.db.Query(ctx, `
 SELECT id, object_id, actor_user_id, ai_profile_id, delegation_id,
        capability_id, action, input, base_version, status, created_at,
@@ -410,6 +425,16 @@ UPDATE object_proposals
 		proposalID.String(), stateEventID.String()); err != nil {
 		return nil, nil, err
 	}
+	// Any other pending plan prepared for an older version can no longer run.
+	// Expire it in the same transaction instead of leaving a card the user has
+	// to discover, click, and then close manually.
+	if _, err := tx.Exec(ctx, `
+UPDATE object_proposals
+   SET status = 'expired', decided_at = GREATEST(now(), created_at)
+ WHERE object_id = $1 AND status = 'pending' AND id <> $2 AND base_version < $3`,
+		objectID.String(), proposalID.String(), newVersion); err != nil {
+		return nil, nil, err
+	}
 	if err := s.audit.Write(ctx, tx, audit.Event{
 		Actor:        audit.UserActor(actorID),
 		Action:       audit.ActionObjectProposalApply,
@@ -593,6 +618,23 @@ func ReferencesExist(objectType string, state json.RawMessage, plan *ActionPlan)
 			}
 		}
 		return false
+	}
+	if plan.Action == "batch_change" {
+		if len(plan.Batch) == 0 {
+			return false
+		}
+		current := state
+		for _, sub := range plan.Batch {
+			if !ReferencesExist(objectType, current, sub) {
+				return false
+			}
+			next, _, _, err := applyOpenWorldAction(current, json.RawMessage(`{}`), sub)
+			if err != nil {
+				return false
+			}
+			current = next
+		}
+		return true
 	}
 	if objectType != TypeOpenWorld || !isOpenWorldAction(plan.Action) {
 		return true

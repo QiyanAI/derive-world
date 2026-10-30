@@ -430,6 +430,9 @@ type ActionPlan struct {
 	Permission string
 	Input      map[string]any
 	RawInput   json.RawMessage
+	// Batch holds the validated sub-actions of one batch_change plan. They are
+	// applied sequentially to the same state inside one version increment.
+	Batch []*ActionPlan
 	// EventInput optionally replaces Input in the state-changed event. It lets
 	// a bulk reshape record a human-readable summary instead of duplicating a
 	// full 64 KiB state inside the event.
@@ -543,7 +546,7 @@ func RequiredPermission(objectType, action string) (string, bool) {
 		"set_node_field", "set_node_status", "touch_node",
 		"add_link", "remove_link", "add_rule", "remove_rule", "set_views",
 		"set_presentation", "set_experience", "invoke_behavior",
-		"reshape_world", "custom_action":
+		"reshape_world", "custom_action", "batch_change":
 		if objectType == TypeOpenWorld {
 			return PermContribute, true
 		}

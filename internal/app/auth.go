@@ -770,7 +770,7 @@ func modelErrorCode(err error) httpx.ErrorCode {
 		return httpx.CodeModelUnavailable
 	case model.CodeTimeout:
 		return httpx.CodeModelTimeout
-	case model.CodeInvalidOutput:
+	case model.CodeInvalidOutput, model.CodeEmptyOutput:
 		return httpx.CodeModelInvalidOutput
 	case model.CodeRateLimited:
 		return httpx.CodeRateLimited

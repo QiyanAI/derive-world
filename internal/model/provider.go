@@ -56,9 +56,13 @@ type ModeProvider interface {
 type ErrorCode string
 
 const (
-	CodeUnavailable     ErrorCode = "model_unavailable"
-	CodeTimeout         ErrorCode = "model_timeout"
-	CodeInvalidOutput   ErrorCode = "model_invalid_output"
+	CodeUnavailable   ErrorCode = "model_unavailable"
+	CodeTimeout       ErrorCode = "model_timeout"
+	CodeInvalidOutput ErrorCode = "model_invalid_output"
+	// CodeEmptyOutput means the provider returned a successful response with no
+	// text at all. It is distinct because Personal AI may retry once with a
+	// clean context; it is never used for a validation rejection.
+	CodeEmptyOutput     ErrorCode = "model_empty_output"
 	CodePayloadTooLarge ErrorCode = "payload_too_large"
 	CodeInvalidRequest  ErrorCode = "invalid_request"
 	// CodeRateLimited reports an upstream 429. It maps to the frozen 429

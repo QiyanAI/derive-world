@@ -966,6 +966,19 @@ function humanProposalPreview(
   t: (key: MessageKey) => string
 ): { title: string; summary?: string; fields: Array<{ label: string; value: string }> } {
   const input = item.input ?? {};
+  if (item.action === "batch_change") {
+    const note =
+      typeof input.note === "string" && input.note.trim()
+        ? input.note.trim()
+        : zh
+          ? "AI 准备了一次包含多项修改的完整方案。"
+          : "The AI prepared one complete plan with several changes.";
+    return {
+      title: zh ? "一次应用多项修改" : "Apply several changes",
+      summary: note,
+      fields: []
+    };
+  }
   if (item.action === "reshape_world") {
     const note =
       typeof input.note === "string" && input.note.trim()
@@ -996,6 +1009,7 @@ function humanProposalPreview(
 }
 
 const ACTION_LABELS: Record<string, { en: string; zh: string }> = {
+  batch_change: { en: "Apply several changes", zh: "一次应用多项修改" },
   set_title: { en: "Rename this world", zh: "重命名这个世界" },
   set_premise: { en: "Change the premise", zh: "改变世界的前提" },
   set_summary: { en: "Change the summary", zh: "修改摘要" },
