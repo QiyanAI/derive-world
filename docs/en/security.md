@@ -142,15 +142,14 @@ and process.
   object, derive, Handoff, capability, or audit code. The default
   OpenAI-compatible request is unchanged when the optional profile is not
   enabled. Concurrent multi-provider routing and per-Personal-AI model
-  selection are future work, not claimed in `v0.1.0`.
+  selection are future work, not claimed in `v0.2.0`.
 
 ## Not yet implemented
 
-`v0.1.0` is the first public release. The approved
-two-call API-level dual Personal AI run (DeepSeek
-`deepseek-flash`) completed and Real AI is **VERIFIED_REAL** for that exact
-scope; it was not re-run on the release SHA and no general model/provider
-acceptance is claimed. The legacy `http_hmac` transport remains available only
+`v0.2.0` is the V2 product-stage public release. Real-model evidence is scoped
+to the documented flows on DeepSeek `deepseek-flash`, recorded on the release
+source tree (see the [release notes](release-notes.md)); no general
+model/provider acceptance is claimed. The legacy `http_hmac` transport remains available only
 for internal compatibility; it does not sign responses and must not be used for
 a public Provider.
 

@@ -238,8 +238,9 @@ event history, Derive, Lineage, invitations/Derive Links, Handoff, Personal AI
 conversations, proposals, confirmations, PATs, the Capability Broker, all five
 capabilities, the Open API, the TypeScript SDK, the independent Provider, the
 bilingual Reference World, and the Chromium + Firefox acceptance suite are
-implemented. `v0.1.0` is the first public release.
-Real AI is VERIFIED_REAL only for the approved two-call API-level run (DeepSeek `deepseek-flash`), not for every model or
-provider; it was not re-run on the release SHA. No route fabricates success.
+implemented. `v0.2.0` is the V2 product-stage public release.
+Real AI is verified only for the documented flows on DeepSeek `deepseek-flash`,
+not for every model or provider; see the [release notes](release-notes.md).
+No route fabricates success.
 See [Showcase and sharing](../../SHOWCASE.md) for the three launch examples and
 how to share your own Living Object.

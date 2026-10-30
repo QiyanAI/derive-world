@@ -46,11 +46,11 @@ GitHub 私密漏洞报告已对本公开仓库启用。请在仓库的 Security 
 - HMAC 轮换支持当前 key id 与可选的旧密钥 RFC3339 截止时间。旧密钥只在截止前被接受，截止后无需重启即失效。旧密钥与当前密钥相同、key id 重复或截止时间已过都会导致启动失败。
 - 模型调用在 Provider 调用之前受单次输入上限、每用户每日调用/字符预算、部署级每日调用/字符硬上限与运维停止开关约束。Real 模式强制正的全局调用上限。配额拒绝以 `rate.limit_hit` 与原因写入审计，不发起 Provider 调用；内存计数在重启后从 `model_invocations` 重新计数。实际尝试 Provider 调用前，运行时会先写入持久预占行；即使进程崩溃、业务事务回滚或最终更新失败，该行仍被计入，不会漏记可能产生费用的调用。冻结的 status 域用 `failed`/`in_flight` 表示进行中的预占，结果确定后替换为最终状态。
 - 模型适配器禁用环境代理、HTTPS 要求 TLS 1.2、响应体上限 1 MiB、输出 Token 限制在配置上限内、上游 429 映射为 `rate_limited`，且绝不自动重试。
-- 模型厂商中立性由结构约束与架构测试共同保证：业务层只依赖 `Provider` 接口，可选的请求路径/JSON/Thinking 设置只存在于部署配置；Personal AI、信任、对象、Derive、Handoff、能力与审计代码中不编译任何厂商主机、模型 ID 或 API Key。未启用可选配置时，默认 OpenAI-compatible 请求保持不变。多 Provider 并发路由与按 Personal AI 独立选择模型属于后续工作，`v0.1.0` 不作此声明。
+- 模型厂商中立性由结构约束与架构测试共同保证：业务层只依赖 `Provider` 接口，可选的请求路径/JSON/Thinking 设置只存在于部署配置；Personal AI、信任、对象、Derive、Handoff、能力与审计代码中不编译任何厂商主机、模型 ID 或 API Key。未启用可选配置时，默认 OpenAI-compatible 请求保持不变。多 Provider 并发路由与按 Personal AI 独立选择模型属于后续工作，`v0.2.0` 不作此声明。
 
 ## 尚未实现
 
-`v0.1.0` 是首个公开版本。已批准的双 Personal AI 两次 API 级调用（DeepSeek `deepseek-flash`）已完成，Real AI 仅对该范围记为 **VERIFIED_REAL**；未在发布 SHA 上重跑，不构成普遍模型/Provider 验收。旧 `http_hmac` 传输仅保留用于内部兼容，不签名响应，不得用于公网 Provider。
+`v0.2.0` 是 V2 产品阶段公开版本。真实模型证据仅针对 DeepSeek `deepseek-flash` 上有记录的流程与发布源码树（见[发行说明](release-notes.md)），不构成普遍模型/Provider 验收。旧 `http_hmac` 传输仅保留用于内部兼容，不签名响应，不得用于公网 Provider。
 
 ## 能力安全控制
 

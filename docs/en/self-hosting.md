@@ -123,7 +123,7 @@ the business modules. The architecture test
 `TestNoProviderVendorHardcodingOutsideModelAdapter` enforces this boundary.
 
 Concurrent multi-provider routing, per-Personal-AI model selection, and local
-model hosting are **not implemented** in `v0.1.0`. They remain future
+model hosting are **not implemented** in `v0.2.0`. They remain future
 versioned work, not a claim of this build.
 
 ## Provider transport and TLS
@@ -183,7 +183,7 @@ Restore into an empty database:
 docker compose exec -T db sh -c 'pg_restore --clean --if-exists -U "$POSTGRES_USER" -d "$POSTGRES_DB"' < backup.dump
 ```
 
-Backups contain user data. Store them encrypted and never commit them. `v0.1.0`
+Backups contain user data. Store them encrypted and never commit them. `v0.2.0`
 does not provide WAL archiving or point-in-time recovery.
 
 ## Upgrade
@@ -199,4 +199,4 @@ does not provide WAL archiving or point-in-time recovery.
 - Single instance only; do not put multiple `app` replicas behind a load
   balancer.
 - No production TLS termination is built in; use a trusted reverse proxy.
-- No email, OAuth, or password recovery in `v0.1.0`.
+- No email, OAuth, or password recovery in `v0.2.0`.

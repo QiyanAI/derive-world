@@ -4,8 +4,8 @@
 
 Derive World is an open-source foundation for *Living Objects*: shared,
 versioned objects that people and their personal AI can read, contribute to,
-derive from, and trace through an explicit lineage. This development branch
-adds a World Stage, living scenes, and free creation and derivation: the user
+derive from, and trace through an explicit lineage. `v0.2.0` adds a World
+Stage, living scenes, and free creation and derivation: the user
 describes a world in their own words, the Personal AI writes a compact world
 brief, and a server-side composer expands it into a real runnable world — a
 time-based animation, a walkable space or playable game, a readable interactive
@@ -32,20 +32,16 @@ and lineage, and an interactive poll. The full recording is
 [Showcase](SHOWCASE.md) has three launch examples and a voluntary way to share
 what you build.
 
-> **Status: unreleased development branch on top of public OSS MVP `v0.1.0`.**
-> The published `v0.1.0` remains the 22-table, two-object foundation described
-> in its [release notes](docs/en/release-notes.md). This branch adds a
-> version-9 migration (34 tables), a fourth object type, a composable
-> world-experience capability runtime, real uploaded image/video/audio/GLB
-> media with permission-scoped storage, a 3D surface with client camera,
-> gravity and collisions, event-linked audio, social discovery, publication,
-> user-private world layout, the V2 World Stage client, and a universal
-> Personal AI that can propose a real first world. It is
-> reviewable code, not a released
-> version. **Real AI is VERIFIED_REAL only for the approved two-call API-level
-> run (DeepSeek `deepseek-flash`, synthetic data); it was not re-run on this
-> branch, and no general model/provider claim is made. Fixture mode calls no
-> model and is not real AI.** See [CHANGELOG](CHANGELOG.md).
+> **Status: released as `v0.2.0` (V2 product stage).** `v0.2.0` adds schema 11
+> (36 tables): free-intent world creation, blank-world bootstrap, continuous
+> natural-language modification, derivation, multi-form worlds (2D live,
+> story, workspace, space, image/video, audio, 3D and a bounded custom
+> surface), permission-scoped media, the V2 World Stage, friends and direct
+> messages, opt-in publication and public derivation, and one universal
+> Personal AI. **Real AI is verified only for the documented flows on DeepSeek
+> `deepseek-flash`; the release makes no general provider claim. Fixture mode
+> calls no model and is not real AI.** See
+> [release notes](docs/en/release-notes.md) and [CHANGELOG](CHANGELOG.md).
 
 ## The Reference World
 
@@ -105,7 +101,7 @@ docker compose ps
 curl -fsS http://127.0.0.1:8080/readyz
 ```
 
-The Compose build identifies as `0.1.0`; `DW_COMMIT` and `DW_BUILD_TIME`
+The Compose build identifies as `0.2.0`; `DW_COMMIT` and `DW_BUILD_TIME`
 remain `unknown` unless you set them. Release archives inject the tagged commit
 and commit-derived build time.
 
@@ -341,7 +337,7 @@ issue.
 ## Limitations
 
 - Single instance only; rate limiting and scheduling are in-process.
-- No email, password reset, OAuth, or account deletion in `v0.1.0`.
+- No email, password reset, OAuth, or account deletion in `v0.2.0`.
 - No simultaneous co-editing. The object workspace uses an authenticated SSE
   refresh signal with a polling fallback, and version conflicts are reported
   instead of silently overwriting. Public worlds, friends, and publications are
@@ -353,9 +349,11 @@ issue.
   `content.structure` Provider runs as a separate process on an internal
   network. There is no runtime capability registration or arbitrary provider
   URL.
-- Real AI is VERIFIED_REAL only for the approved two-call API-level run (DeepSeek `deepseek-flash`, synthetic data). It was not
-  re-run on the release SHA and is not a general claim that every model
-  or provider is accepted. One adapter is active per deployment.
+- Real AI is verified only for the documented flows on DeepSeek
+  `deepseek-flash` (see the [release notes](docs/en/release-notes.md)). It is
+  not a general claim that every model or provider is accepted. Strict
+  validation may refuse a malformed plan; the refusal is safe and retryable.
+  One adapter is active per deployment.
 - Fixture mode does not call a model. Deterministic structured fixture replies
   are demo data, never real AI.
 - The reference Compose stack uses the v2 signed-response transport over its
@@ -366,11 +364,11 @@ issue.
   actual Personal AI projection is further limited by the caller's delegation.
 - A legal object can exceed the 32 KiB Handoff budget; the AI tab reports that
   specific capacity failure instead of claiming an action.
-- Historical object state has no read endpoint in `v0.1.0`; history is an event
-  and version summary, and derive-from-an-older-version uses immutable
-  snapshots. The UI states this limitation.
+- Historical object state is readable at
+  `GET /api/v1/objects/{id}/versions/{version}` only while the caller currently
+  holds read permission. Revocation is immediate.
 - Compose is a reference deployment, not a production orchestrator.
-- `v0.1.0` is the first public OSS MVP release. It is not a production
+- `v0.2.0` is the V2 product-stage OSS release. It is not a production
   platform, and no production use is supported or claimed.
 
 ## Documentation

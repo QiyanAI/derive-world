@@ -24,7 +24,7 @@ services:
       target: server
       args:
         GOPROXY: ${GOPROXY:-https://proxy.golang.org,direct}
-        VERSION: ${DW_VERSION:-0.1.0}
+        VERSION: ${DW_VERSION:-0.2.0}
         COMMIT: ${DW_COMMIT:-unknown}
         BUILD_TIME: ${DW_BUILD_TIME:-unknown}
     command: ["migrate"]
@@ -45,7 +45,7 @@ services:
       target: server
       args:
         GOPROXY: ${GOPROXY:-https://proxy.golang.org,direct}
-        VERSION: ${DW_VERSION:-0.1.0}
+        VERSION: ${DW_VERSION:-0.2.0}
         COMMIT: ${DW_COMMIT:-unknown}
         BUILD_TIME: ${DW_BUILD_TIME:-unknown}
     command: ["serve"]

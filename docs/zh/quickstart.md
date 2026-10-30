@@ -155,4 +155,4 @@ npm run -w web dev
 
 ## 范围与后续版本
 
-账号、会话、Living Object、对象授权、版本化动作、事件历史、Derive、来源链、邀请/Derive Link、Handoff、Personal AI 会话、提议、确认、PAT、Capability Broker、五项能力、Open API、TypeScript SDK、独立 Provider、响应签名传输、TLS 校验、模型预算控制、双语参考世界与 Chromium + Firefox 验收套件已实现。`v0.1.0` 是首个公开版本。Real AI 仅对已批准的双 Personal AI 两次 API 级调用（DeepSeek `deepseek-flash`）记为 VERIFIED_REAL；未在发布 SHA 上重跑，不代表所有模型或 Provider。没有路由伪造成功。作品展示与分享见[展示页](../../SHOWCASE.md)。
+账号、会话、Living Object、对象授权、版本化动作、事件历史、Derive、来源链、邀请/Derive Link、Handoff、Personal AI 会话、提议、确认、PAT、Capability Broker、五项能力、Open API、TypeScript SDK、独立 Provider、响应签名传输、TLS 校验、模型预算控制、双语参考世界与 Chromium + Firefox 验收套件已实现。`v0.2.0` 是 V2 产品阶段公开版本。真实 AI 仅对 DeepSeek `deepseek-flash` 上有记录的流程与发布源码树验证（见[发行说明](release-notes.md)），不代表所有模型或 Provider。没有路由伪造成功。作品展示与分享见[展示页](../../SHOWCASE.md)。

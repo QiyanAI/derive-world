@@ -34,7 +34,7 @@ audit -> store
 
 ## 能力范围
 
-本范围保留已发布 `v0.1.0` 的 22 表 Schema，并追加版本 6 迁移以支持活场景对象、社交与公开领域，版本 7 的账号发现与私人世界布局状态，版本 8 的自由世界对象类型与 `world.create` 确认域，以及版本 9 的权限隔离世界媒体资源、三维/音频能力和审计动作。它激活 Capability Broker、五项冻结能力、`capability_definitions` 同步、调用记录、Open API、TypeScript SDK 与独立 `content.structure` Provider。Broker 复用对象、Handoff、提议、Derive、Trust Kernel 与确认路径，不建立第二套授权、对象写入、衍生或确认机制。
+本范围保留已发布 `v0.1.0` 的 22 表 Schema，并追加迁移 4–11：活场景对象、社交与公开领域，账号可发现性与私人世界布局状态，自由世界对象类型与 `world.create` 确认域，权限隔离的世界媒体资源、三维/音频能力与审计动作，AI 消息提示与批准链接（版本 11，共 36 表）。它激活 Capability Broker、五项冻结能力、`capability_definitions` 同步、调用记录、Open API、TypeScript SDK 与独立 `content.structure` Provider。Broker 复用对象、Handoff、提议、Derive、Trust Kernel 与确认路径，不建立第二套授权、对象写入、衍生或确认机制。
 
 本开发分支新增三个边界，且不建立第二套对象存储：`internal/social` 拥有好友、屏蔽、人与人直接消息与对象讨论，但不授予对象权限；`internal/publication` 拥有发布记录、净化后的版本快照、贡献者同意、公开衍生关系与举报，匿名读取绝不使用私人对象接口；`internal/world` 是面向世界舞台与世界脉搏的只读投影；`internal/stream` 只发送认证刷新信号，不携带对象状态或消息正文。
 
@@ -62,4 +62,4 @@ Trust Kernel 是唯一 AI 授权裁定者。领域模块不写彼此拥有的表
 
 ## 运维假设
 
-`v0.1.0` 仅支持单实例。限流、清理与调度在进程内；正确性依赖数据库约束（幂等、版本检查）。不支持水平扩展。
+`v0.2.0` 仅支持单实例。限流、清理与调度在进程内；正确性依赖数据库约束（幂等、版本检查）。不支持水平扩展。

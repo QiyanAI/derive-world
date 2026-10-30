@@ -49,9 +49,11 @@ registered client modes.
 
 ## Capability scope
 
-This scope keeps the published `v0.1.0` 22-table schema intact and appends a
-version-6 migration for the living-scene object, social, and publication
-domains. It activates the Capability Broker, the five frozen capabilities,
+This scope keeps the published `v0.1.0` 22-table schema intact and appends
+migrations 4–11 for the living-scene object, social and publication domains,
+privacy-aware account discovery and user-private World Stage layout, open
+worlds and world assets, AI message notices, and approval links (36 tables at
+schema version 11). It activates the Capability Broker, the five frozen capabilities,
 `capability_definitions` synchronization, invocation recording, Open API
 endpoints, the TypeScript SDK, and the independent `content.structure`
 Provider. The Broker composes the object, Handoff,

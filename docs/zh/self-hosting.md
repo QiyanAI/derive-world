@@ -86,7 +86,7 @@ Windows 下二进制为 `derive-world.exe`；请用 PowerShell 或 cmd 导出 `.
 JSON/Thinking 参数，只需部署配置即可接入；业务模块不编译任何厂商主机或模型 ID。
 架构测试 `TestNoProviderVendorHardcodingOutsideModelAdapter` 强制该边界。
 
-`v0.1.0` **未实现**多 Provider 并发路由、按 Personal AI 独立选择模型或本地模型
+`v0.2.0` **未实现**多 Provider 并发路由、按 Personal AI 独立选择模型或本地模型
 托管；这些属于后续版本工作，不是本构建已实现的能力。
 
 ## Provider 传输与 TLS
@@ -129,7 +129,7 @@ docker compose exec db sh -c 'pg_dump -Fc -U "$POSTGRES_USER" -d "$POSTGRES_DB"'
 docker compose exec -T db sh -c 'pg_restore --clean --if-exists -U "$POSTGRES_USER" -d "$POSTGRES_DB"' < backup.dump
 ```
 
-备份含用户数据。请加密存储，绝不提交到仓库。`v0.1.0` 不提供 WAL 归档或时间点恢复。
+备份含用户数据。请加密存储，绝不提交到仓库。`v0.2.0` 不提供 WAL 归档或时间点恢复。
 
 ## 升级
 
@@ -142,4 +142,4 @@ docker compose exec -T db sh -c 'pg_restore --clean --if-exists -U "$POSTGRES_US
 
 - 仅支持单实例；不要把多个 `app` 副本放在负载均衡后面。
 - 不内置生产 TLS 终止；请使用可信反向代理。
-- `v0.1.0` 不发邮件、不做 OAuth、不提供密码找回。
+- `v0.2.0` 不发邮件、不做 OAuth、不提供密码找回。
