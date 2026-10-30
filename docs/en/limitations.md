@@ -65,6 +65,11 @@ implemented. This is a self-hostable OSS MVP, not a production platform.
   independent and revalidated; the parent is unchanged. Derivation is at the
   whole object level: there is no per-entity, per-field or per-capability
   derivation granularity yet.
+- A change that includes an experience block rebuilds the world's surfaces from
+  the new brief. Uploaded media/audio/GLB bindings and live props that the brief
+  does not restate may not be preserved; content-only changes keep the existing
+  experience. This is a known V3 follow-up, not a claim that every partial
+  presentation change keeps every asset.
 - A behavior that changes a thing runs one legacy rule pass for that thing,
   matching `set_node_field` / `set_node_status` / `touch_node`. Rules still do
   not chain and legacy rules cannot invoke behaviors.
