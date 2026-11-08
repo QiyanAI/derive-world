@@ -1,0 +1,102 @@
+{
+  "schema_version": 1,
+  "tool_version": "1.0.0",
+  "repo": "QiyanAI/derive-world",
+  "visibility": "public",
+  "captured_at": "2026-11-07T06:48:25Z",
+  "changes": null,
+  "open_issues": 3,
+  "open_pull_requests": 8,
+  "releases": [
+    {
+      "tag": "v0.2.0",
+      "published_at": "2026-10-30T04:13:46Z",
+      "assets": [
+        {
+          "name": "ATTESTATION.json",
+          "download_count": 2
+        },
+        {
+          "name": "BUILD-MANIFEST.json",
+          "download_count": 2
+        },
+        {
+          "name": "derive-world_0.2.0_darwin_arm64.tar.gz",
+          "download_count": 2
+        },
+        {
+          "name": "derive-world_0.2.0_linux_amd64.tar.gz",
+          "download_count": 2
+        },
+        {
+          "name": "derive-world_0.2.0_source.tar.gz",
+          "download_count": 3
+        },
+        {
+          "name": "derive-world_0.2.0_windows_amd64.zip",
+          "download_count": 2
+        },
+        {
+          "name": "SHA256SUMS",
+          "download_count": 2
+        }
+      ]
+    },
+    {
+      "tag": "v0.1.0",
+      "published_at": "2026-10-24T19:40:31Z",
+      "assets": [
+        {
+          "name": "ATTESTATION.json",
+          "download_count": 3
+        },
+        {
+          "name": "BUILD-MANIFEST.json",
+          "download_count": 2
+        },
+        {
+          "name": "derive-world_0.1.0_darwin_arm64.tar.gz",
+          "download_count": 2
+        },
+        {
+          "name": "derive-world_0.1.0_linux_amd64.tar.gz",
+          "download_count": 2
+        },
+        {
+          "name": "derive-world_0.1.0_source.tar.gz",
+          "download_count": 3
+        },
+        {
+          "name": "derive-world_0.1.0_windows_amd64.zip",
+          "download_count": 4
+        },
+        {
+          "name": "SHA256SUMS",
+          "download_count": 4
+        }
+      ]
+    }
+  ],
+  "downloads_total": 35,
+  "engagement": {
+    "captured_at": "2026-11-08T03:26:14Z",
+    "meaningful_external_issues": 0,
+    "merged_external_pull_requests": 0,
+    "showcase_submissions": 0,
+    "showcase_issue_numbers": [],
+    "external_contributors": 0,
+    "unavailable": [
+      "no external contributor is visible in the supplied engagement window; this is not evidence that none exist"
+    ]
+  },
+  "traffic_quality": "UNKNOWN",
+  "unavailable": [
+    "traffic views and clones: UNKNOWN (requires repository administration read)"
+  ],
+  "caveats": [
+    "Stars, forks, watchers and downloads are public signals, not active users or adoption.",
+    "Maintainer and CI downloads cannot be excluded from public download totals.",
+    "An absent value is UNKNOWN; it is never estimated.",
+    "Correlation in a short window is not causation; every experiment needs a stated counterfactual."
+  ]
+}

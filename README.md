@@ -1,6 +1,8 @@
 # Derive World
 
-**Everything Can Derive. The First Living Web.**
+**Create a world. Change it together. Derive something new.**
+
+Everything can derive. The first living web.
 
 Derive World is an open-source foundation for *Living Objects*: shared,
 versioned objects that people and their personal AI can read, contribute to,
@@ -17,10 +19,19 @@ Real-model acceptance is still a separate gate; fixture output is always
 labelled demo data.
 
 **Why it is different:** most AI tools treat chat as the product. Derive World
-treats the *object* as the product: a Living Object has versions, members,
-permissions, and a traceable lineage. A Personal AI can propose changes and
-derive children, but only a human can approve; derived objects are independent,
-not live pointers. The result is a small, auditable world you can run yourself.
+treats the *object* as the product. Three differences:
+
+1. **A human and a Personal AI create together.** The AI can propose a change
+   or a derive; only a human can approve, and the AI never authorizes itself.
+2. **A world keeps changing, in any form.** Animation, game, story, workbench,
+   visual space, 3D and a bounded custom surface share one content, state,
+   variable, permission, version and lineage model. A world does not become a
+   different product category when its form changes.
+3. **Derivation keeps independent provenance.** A derived world is an
+   independent child from an immutable snapshot, with a recorded ancestry that
+   is permission-clipped.
+
+The result is a small, auditable world you can run yourself.
 
 ## See it in action
 
@@ -31,6 +42,15 @@ and lineage, and an interactive poll. The full recording is
 [`demo-17s.webm`](docs/assets/demo-17s.webm). Fixture mode, no model API key.
 [Showcase](SHOWCASE.md) has three launch examples and a voluntary way to share
 what you build.
+
+**No Docker?** Take the [five-step offline tour](showcase/tour/README.md).
+It is a static page built from real product screenshots and one clearly
+labelled simulation. It is not a live AI service, it calls no model, and it
+creates nothing.
+
+**Build a branch:** [Derive Relay](examples/worlds/README.md) is a voluntary
+derivation challenge that starts from one reproducible base world and uses the
+publication and derivation paths already in `v0.2.0`.
 
 > **Status: released as `v0.2.0` (V2 product stage).** `v0.2.0` adds schema 11
 > (36 tables): free-intent world creation, blank-world bootstrap, continuous

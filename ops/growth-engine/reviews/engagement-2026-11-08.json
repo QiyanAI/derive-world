@@ -1,0 +1,275 @@
+{
+  "schema_version": 1,
+  "captured_at": "2026-11-08T03:26:14Z",
+  "issues": [
+    {
+      "number": 11,
+      "title": "Docs: add a PowerShell walkthrough for the Windows archive",
+      "author": "QiyanNarantsogt",
+      "author_association": "MEMBER",
+      "state": "open",
+      "created_at": "2026-10-24T19:41:51Z",
+      "comments": 0,
+      "body_length": 523,
+      "labels": [
+        "documentation",
+        "good first issue"
+      ]
+    },
+    {
+      "number": 10,
+      "title": "Examples: add a minimal Python Open API client",
+      "author": "QiyanNarantsogt",
+      "author_association": "MEMBER",
+      "state": "open",
+      "created_at": "2026-10-24T19:41:48Z",
+      "comments": 0,
+      "body_length": 633,
+      "labels": [
+        "enhancement",
+        "good first issue"
+      ]
+    },
+    {
+      "number": 9,
+      "title": "Docs: add Mermaid architecture diagrams in English and Chinese",
+      "author": "QiyanNarantsogt",
+      "author_association": "MEMBER",
+      "state": "open",
+      "created_at": "2026-10-24T19:41:46Z",
+      "comments": 0,
+      "body_length": 752,
+      "labels": [
+        "documentation",
+        "good first issue"
+      ]
+    }
+  ],
+  "pull_requests": [
+    {
+      "number": 23,
+      "title": "feat(growth): implement DGE growth engine and native growth surfaces",
+      "author": "QiyanNarantsogt",
+      "author_association": "MEMBER",
+      "state": "open",
+      "merged": false,
+      "created_at": "2026-11-08T02:31:53Z",
+      "body_length": 2909,
+      "labels": []
+    },
+    {
+      "number": 21,
+      "title": "release: Derive World v0.2.0",
+      "author": "QiyanNarantsogt",
+      "author_association": "MEMBER",
+      "state": "closed",
+      "merged": true,
+      "created_at": "2026-10-30T03:00:08Z",
+      "body_length": 6620,
+      "labels": []
+    },
+    {
+      "number": 20,
+      "title": "feat(v2): world manipulation and opt-in real friend discovery",
+      "author": "QiyanNarantsogt",
+      "author_association": "MEMBER",
+      "state": "closed",
+      "merged": false,
+      "created_at": "2026-10-27T05:34:06Z",
+      "body_length": 1447,
+      "labels": []
+    },
+    {
+      "number": 19,
+      "title": "feat(v2): real world-stage arrangement and friend handle usability",
+      "author": "QiyanNarantsogt",
+      "author_association": "MEMBER",
+      "state": "closed",
+      "merged": false,
+      "created_at": "2026-10-27T05:18:18Z",
+      "body_length": 151,
+      "labels": []
+    },
+    {
+      "number": 18,
+      "title": "test(e2e): align V2 UI regression tests with disclosure-based flows",
+      "author": "QiyanNarantsogt",
+      "author_association": "MEMBER",
+      "state": "closed",
+      "merged": false,
+      "created_at": "2026-10-27T05:10:53Z",
+      "body_length": 258,
+      "labels": []
+    },
+    {
+      "number": 17,
+      "title": "feat(world): composable world experience capabilities",
+      "author": "QiyanNarantsogt",
+      "author_association": "MEMBER",
+      "state": "closed",
+      "merged": false,
+      "created_at": "2026-10-27T02:34:35Z",
+      "body_length": 2866,
+      "labels": []
+    },
+    {
+      "number": 16,
+      "title": "build(deps): bump github.com/getkin/kin-openapi from 0.151.0 to 0.152.0 in the go-minor-patch group across 1 directory",
+      "author": "dependabot[bot]",
+      "author_association": "NONE",
+      "state": "open",
+      "merged": false,
+      "created_at": "2026-10-26T19:57:10Z",
+      "body_length": 9578,
+      "labels": [
+        "dependencies",
+        "go"
+      ]
+    },
+    {
+      "number": 15,
+      "title": "build(deps): bump the base-images group across 1 directory with 3 updates",
+      "author": "dependabot[bot]",
+      "author_association": "NONE",
+      "state": "open",
+      "merged": false,
+      "created_at": "2026-10-26T19:57:06Z",
+      "body_length": 213,
+      "labels": [
+        "dependencies",
+        "docker"
+      ]
+    },
+    {
+      "number": 14,
+      "title": "Living world: scenes, friends, public derivation, and World Stage",
+      "author": "QiyanNarantsogt",
+      "author_association": "MEMBER",
+      "state": "closed",
+      "merged": false,
+      "created_at": "2026-10-26T07:14:58Z",
+      "body_length": 6045,
+      "labels": []
+    },
+    {
+      "number": 13,
+      "title": "docs: keep public product scope self-contained",
+      "author": "QiyanNarantsogt",
+      "author_association": "MEMBER",
+      "state": "closed",
+      "merged": true,
+      "created_at": "2026-10-26T04:34:35Z",
+      "body_length": 508,
+      "labels": []
+    },
+    {
+      "number": 8,
+      "title": "v0.1.0 public launch: documentation, demos, and showcase",
+      "author": "QiyanNarantsogt",
+      "author_association": "MEMBER",
+      "state": "closed",
+      "merged": true,
+      "created_at": "2026-10-24T19:11:34Z",
+      "body_length": 1959,
+      "labels": []
+    },
+    {
+      "number": 7,
+      "title": "build(deps-dev): bump typescript from 5.9.3 to 7.0.2",
+      "author": "dependabot[bot]",
+      "author_association": "NONE",
+      "state": "open",
+      "merged": false,
+      "created_at": "2026-10-24T19:07:26Z",
+      "body_length": 5868,
+      "labels": [
+        "dependencies",
+        "javascript"
+      ]
+    },
+    {
+      "number": 6,
+      "title": "build(deps-dev): bump @types/node from 24.19.2 to 26.6.5",
+      "author": "dependabot[bot]",
+      "author_association": "NONE",
+      "state": "open",
+      "merged": false,
+      "created_at": "2026-10-24T19:07:16Z",
+      "body_length": 311,
+      "labels": [
+        "dependencies",
+        "javascript"
+      ]
+    },
+    {
+      "number": 5,
+      "title": "build(deps-dev): bump vite from 7.3.7 to 8.3.5",
+      "author": "dependabot[bot]",
+      "author_association": "NONE",
+      "state": "open",
+      "merged": false,
+      "created_at": "2026-10-24T19:07:07Z",
+      "body_length": 20345,
+      "labels": [
+        "dependencies",
+        "javascript"
+      ]
+    },
+    {
+      "number": 4,
+      "title": "build(deps-dev): bump @vitejs/plugin-react from 5.2.0 to 6.1.2",
+      "author": "dependabot[bot]",
+      "author_association": "NONE",
+      "state": "open",
+      "merged": false,
+      "created_at": "2026-10-24T19:06:56Z",
+      "body_length": 10165,
+      "labels": [
+        "dependencies",
+        "javascript"
+      ]
+    },
+    {
+      "number": 3,
+      "title": "build(deps): bump react-router from 7.18.4 to 8.5.0 in the react group across 1 directory",
+      "author": "dependabot[bot]",
+      "author_association": "NONE",
+      "state": "open",
+      "merged": false,
+      "created_at": "2026-10-24T19:06:33Z",
+      "body_length": 12673,
+      "labels": [
+        "dependencies",
+        "javascript"
+      ]
+    },
+    {
+      "number": 2,
+      "title": "build(deps): bump actions/upload-artifact from 4.6.2 to 7.0.2 in the actions group across 1 directory",
+      "author": "dependabot[bot]",
+      "author_association": "NONE",
+      "state": "open",
+      "merged": false,
+      "created_at": "2026-10-24T19:06:26Z",
+      "body_length": 6986,
+      "labels": [
+        "dependencies",
+        "github_actions"
+      ]
+    },
+    {
+      "number": 1,
+      "title": "Bump node from 24-alpine to 25-alpine in the base-images group",
+      "author": "dependabot[bot]",
+      "author_association": "NONE",
+      "state": "closed",
+      "merged": false,
+      "created_at": "2026-10-24T19:06:08Z",
+      "body_length": 2058,
+      "labels": [
+        "dependencies",
+        "docker"
+      ]
+    }
+  ]
+}

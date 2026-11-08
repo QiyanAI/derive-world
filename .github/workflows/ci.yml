@@ -40,6 +40,7 @@ jobs:
         run: |
           (cd examples/capability-provider && go test ./... -count=1 && go test -list '.*' ./... | grep -q '^Test')
           (cd ops/github-metrics && go test ./... -count=1 && go test -list '.*' ./... | grep -q '^Test')
+          (cd ops/growth-engine && go test ./... -count=1 && go test -list '.*' ./... | grep -q '^Test')
       - name: pin-check
         run: |
           set -euo pipefail

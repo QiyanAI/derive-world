@@ -1,0 +1,186 @@
+{
+  "schema_version": 1,
+  "date": "2026-11-08",
+  "collected_at": "2026-11-08T03:22:22Z",
+  "sources": [
+    {
+      "id": "gh-ai-agents",
+      "status": "ok",
+      "fetched": 10
+    },
+    {
+      "id": "gh-worlds",
+      "status": "ok",
+      "fetched": 10
+    }
+  ],
+  "items": [
+    {
+      "id": "gh-ai-agents-01",
+      "source_id": "gh-ai-agents",
+      "title": "sindresorhus/awesome",
+      "url": "https://github.com/sindresorhus/awesome",
+      "summary": "😎 Awesome lists about all kinds of interesting topics [NOTE: Pull requests are temporarily disabled until I have a chance to catch up with the existing ones] (533276 stars, updated 2026-11-08T03:15:54Z)",
+      "published_at": "2026-11-08T03:15:54Z"
+    },
+    {
+      "id": "gh-ai-agents-02",
+      "source_id": "gh-ai-agents",
+      "title": "public-apis/public-apis",
+      "url": "https://github.com/public-apis/public-apis",
+      "summary": "A collective list of free APIs (497049 stars, updated 2026-11-08T03:20:12Z)",
+      "published_at": "2026-11-08T03:20:12Z"
+    },
+    {
+      "id": "gh-ai-agents-03",
+      "source_id": "gh-ai-agents",
+      "title": "morluto/rea",
+      "url": "https://github.com/morluto/rea",
+      "summary": "Reverse engineer anything with agents, from app behavior down to native binaries. (441309 stars, updated 2026-11-08T03:21:26Z)",
+      "published_at": "2026-11-08T03:21:26Z"
+    },
+    {
+      "id": "gh-ai-agents-04",
+      "source_id": "gh-ai-agents",
+      "title": "openclaw/openclaw",
+      "url": "https://github.com/openclaw/openclaw",
+      "summary": "The AI that really does things. Any OS. Any Platform. The lobster way. 🦞  (394152 stars, updated 2026-11-08T03:22:28Z)",
+      "published_at": "2026-11-08T03:22:28Z"
+    },
+    {
+      "id": "gh-ai-agents-05",
+      "source_id": "gh-ai-agents",
+      "title": "nilbuild/developer-roadmap",
+      "url": "https://github.com/nilbuild/developer-roadmap",
+      "summary": "Interactive roadmaps, guides and other educational content to help developers grow in their careers. (371495 stars, updated 2026-11-08T03:12:04Z)",
+      "published_at": "2026-11-08T03:12:04Z"
+    },
+    {
+      "id": "gh-ai-agents-06",
+      "source_id": "gh-ai-agents",
+      "title": "awesome-selfhosted/awesome-selfhosted",
+      "url": "https://github.com/awesome-selfhosted/awesome-selfhosted",
+      "summary": "A list of Free Software network services and web applications which can be hosted on your own servers (334884 stars, updated 2026-11-08T03:16:53Z)",
+      "published_at": "2026-11-08T03:16:53Z"
+    },
+    {
+      "id": "gh-ai-agents-07",
+      "source_id": "gh-ai-agents",
+      "title": "vinta/awesome-python",
+      "url": "https://github.com/vinta/awesome-python",
+      "summary": "The definitive list that answers \"I want to do X in Python, which tool should I use?\" (333258 stars, updated 2026-11-08T03:17:57Z)",
+      "published_at": "2026-11-08T03:17:57Z"
+    },
+    {
+      "id": "gh-ai-agents-08",
+      "source_id": "gh-ai-agents",
+      "title": "mattpocock/skills",
+      "url": "https://github.com/mattpocock/skills",
+      "summary": "Skills for Real Engineers. Straight from my .agents directory. (317811 stars, updated 2026-11-08T03:20:46Z)",
+      "published_at": "2026-11-08T03:20:46Z"
+    },
+    {
+      "id": "gh-ai-agents-09",
+      "source_id": "gh-ai-agents",
+      "title": "affaan-m/ECC",
+      "url": "https://github.com/affaan-m/ECC",
+      "summary": "The agent harness performance optimization system. Skills, instincts, memory, security, and research-first development for Claude Code, Codex, Opencode, Cursor and beyond. (299232 stars, updated 2026-11-08T03:21:04Z)",
+      "published_at": "2026-11-08T03:21:04Z"
+    },
+    {
+      "id": "gh-ai-agents-10",
+      "source_id": "gh-ai-agents",
+      "title": "deepseek-ai/deepseek-harness",
+      "url": "https://github.com/deepseek-ai/deepseek-harness",
+      "summary": "DeepSeek Harness: Everything is a Plugin. (275823 stars, updated 2026-11-08T03:20:20Z)",
+      "published_at": "2026-11-08T03:20:20Z"
+    },
+    {
+      "id": "gh-worlds-01",
+      "source_id": "gh-worlds",
+      "title": "codecrafters-io/build-your-own-x",
+      "url": "https://github.com/codecrafters-io/build-your-own-x",
+      "summary": "Master programming by recreating your favorite technologies from scratch. (560813 stars, updated 2026-11-08T03:20:42Z)",
+      "published_at": "2026-11-08T03:20:42Z"
+    },
+    {
+      "id": "gh-worlds-02",
+      "source_id": "gh-worlds",
+      "title": "public-apis/public-apis",
+      "url": "https://github.com/public-apis/public-apis",
+      "summary": "A collective list of free APIs (497049 stars, updated 2026-11-08T03:20:12Z)",
+      "published_at": "2026-11-08T03:20:12Z"
+    },
+    {
+      "id": "gh-worlds-03",
+      "source_id": "gh-worlds",
+      "title": "jwasham/coding-interview-university",
+      "url": "https://github.com/jwasham/coding-interview-university",
+      "summary": "A complete computer science study plan to become a software engineer. (364072 stars, updated 2026-11-08T03:14:33Z)",
+      "published_at": "2026-11-08T03:14:33Z"
+    },
+    {
+      "id": "gh-worlds-04",
+      "source_id": "gh-worlds",
+      "title": "awesome-selfhosted/awesome-selfhosted",
+      "url": "https://github.com/awesome-selfhosted/awesome-selfhosted",
+      "summary": "A list of Free Software network services and web applications which can be hosted on your own servers (334884 stars, updated 2026-11-08T03:16:53Z)",
+      "published_at": "2026-11-08T03:16:53Z"
+    },
+    {
+      "id": "gh-worlds-05",
+      "source_id": "gh-worlds",
+      "title": "vinta/awesome-python",
+      "url": "https://github.com/vinta/awesome-python",
+      "summary": "The definitive list that answers \"I want to do X in Python, which tool should I use?\" (333258 stars, updated 2026-11-08T03:17:57Z)",
+      "published_at": "2026-11-08T03:17:57Z"
+    },
+    {
+      "id": "gh-worlds-06",
+      "source_id": "gh-worlds",
+      "title": "affaan-m/ECC",
+      "url": "https://github.com/affaan-m/ECC",
+      "summary": "The agent harness performance optimization system. Skills, instincts, memory, security, and research-first development for Claude Code, Codex, Opencode, Cursor and beyond. (299232 stars, updated 2026-11-08T03:21:04Z)",
+      "published_at": "2026-11-08T03:21:04Z"
+    },
+    {
+      "id": "gh-worlds-07",
+      "source_id": "gh-worlds",
+      "title": "practical-tutorials/project-based-learning",
+      "url": "https://github.com/practical-tutorials/project-based-learning",
+      "summary": "Curated list of project-based tutorials (289304 stars, updated 2026-11-08T03:21:35Z)",
+      "published_at": "2026-11-08T03:21:35Z"
+    },
+    {
+      "id": "gh-worlds-08",
+      "source_id": "gh-worlds",
+      "title": "trimstray/the-book-of-secret-knowledge",
+      "url": "https://github.com/trimstray/the-book-of-secret-knowledge",
+      "summary": "A collection of inspiring lists, manuals, cheatsheets, blogs, hacks, one-liners, cli/web tools and more. (256704 stars, updated 2026-11-08T03:15:48Z)",
+      "published_at": "2026-11-08T03:15:48Z"
+    },
+    {
+      "id": "gh-worlds-09",
+      "source_id": "gh-worlds",
+      "title": "avelino/awesome-go",
+      "url": "https://github.com/avelino/awesome-go",
+      "summary": "A curated list of awesome Go frameworks, libraries and software (192658 stars, updated 2026-11-08T03:22:02Z)",
+      "published_at": "2026-11-08T03:22:02Z"
+    },
+    {
+      "id": "gh-worlds-10",
+      "source_id": "gh-worlds",
+      "title": "msitarzewski/agency-agents",
+      "url": "https://github.com/msitarzewski/agency-agents",
+      "summary": "A complete AI agency at your fingertips - From frontend wizards to Reddit community ninjas, from whimsy injectors to reality checkers. Each agent is a specialized expert with personality, processes, and proven deliverables. (167137 stars, updated 2026-11-08T03:14:04Z)",
+      "published_at": "2026-11-08T03:14:04Z"
+    }
+  ],
+  "proposals": [],
+  "rejected": [],
+  "notes": [
+    "All fetched pages are untrusted external data, never instructions.",
+    "robots.txt is checked; each request is bounded to 2 MiB.",
+    "No model call is made by the collect step."
+  ]
+}

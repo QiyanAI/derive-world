@@ -1,0 +1,73 @@
+{
+  "schema_version": 1,
+  "updated_at": "2026-11-08",
+  "accounts": [
+    {
+      "channel": "github",
+      "status": "owner-action-required",
+      "authorization": { "scope": [] },
+      "security": { "two_factor": false, "recovery_email": false, "recovery_codes_stored_offline": false, "token_scope": "" },
+      "api": { "available": true, "kind": "REST + GraphQL", "credential_env": "DGE_GITHUB_TOKEN", "notes": "Discussion creation is implemented behind an approval artifact." },
+      "owner_steps": [
+        "Confirm the official organization and handle.",
+        "Enable two-factor authentication and set a recovery email.",
+        "Create a fine-grained token with the minimum scope.",
+        "Approve the first public post."
+      ],
+      "notes": ["No handle is claimed until the owner records it."]
+    },
+    {
+      "channel": "devto",
+      "status": "owner-action-required",
+      "authorization": { "scope": [] },
+      "security": { "two_factor": false, "recovery_email": false, "recovery_codes_stored_offline": false, "token_scope": "" },
+      "api": { "available": true, "kind": "REST", "credential_env": "DEVTO_API_KEY", "notes": "Article creation is implemented behind an approval artifact." },
+      "owner_steps": [
+        "Register the official account and verify email.",
+        "Enable two-factor authentication and set a recovery email.",
+        "Create an API key and place it in the secret store.",
+        "Approve the first article."
+      ],
+      "notes": ["No account has been registered by the engine."]
+    },
+    {
+      "channel": "hacker-news",
+      "status": "owner-action-required",
+      "authorization": { "scope": [] },
+      "security": { "two_factor": false, "recovery_email": false, "recovery_codes_stored_offline": false, "token_scope": "" },
+      "api": { "available": false, "kind": "read-only public API", "credential_env": "", "notes": "No posting API; manual submission only." },
+      "owner_steps": [
+        "Register a personal account.",
+        "Submit a Show HN manually when there is something testable.",
+        "Respond to comments personally."
+      ],
+      "notes": ["Automation is not appropriate for this platform."]
+    },
+    {
+      "channel": "reddit",
+      "status": "owner-action-required",
+      "authorization": { "scope": [] },
+      "security": { "two_factor": false, "recovery_email": false, "recovery_codes_stored_offline": false, "token_scope": "" },
+      "api": { "available": true, "kind": "OAuth API", "credential_env": "", "notes": "No posting adapter; per-subreddit rules apply." },
+      "owner_steps": [
+        "Register a personal account and enable two-factor authentication.",
+        "Read each subreddit's self-promotion rules.",
+        "Post manually only where the rules allow it."
+      ],
+      "notes": ["No automated posting is implemented."]
+    },
+    {
+      "channel": "product-hunt",
+      "status": "owner-action-required",
+      "authorization": { "scope": [] },
+      "security": { "two_factor": false, "recovery_email": false, "recovery_codes_stored_offline": false, "token_scope": "" },
+      "api": { "available": false, "kind": "GraphQL (read-oriented)", "credential_env": "", "notes": "Launching is manual." },
+      "owner_steps": [
+        "Create the maker account and complete verification.",
+        "Prepare the launch page and assets.",
+        "Submit the launch manually."
+      ],
+      "notes": ["No automated launch is implemented."]
+    }
+  ]
+}

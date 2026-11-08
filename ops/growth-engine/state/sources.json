@@ -1,0 +1,41 @@
+{
+  "schema_version": 1,
+  "sources": [
+    {
+      "id": "github-ai-agents",
+      "name": "GitHub repository search: AI agents",
+      "kind": "github_search",
+      "query": "ai agents in:name,description,readme",
+      "audience": "Developers building agent runtimes and tools",
+      "why": "Adjacent open-source projects whose maintainers and users may evaluate a world/object runtime.",
+      "enabled": false
+    },
+    {
+      "id": "github-personal-ai",
+      "name": "GitHub repository search: personal AI",
+      "kind": "github_search",
+      "query": "personal ai in:name,description,readme",
+      "audience": "Developers researching Personal AI and consenting delegation",
+      "why": "A research community with a direct conceptual overlap, not a keyword-only audience.",
+      "enabled": false
+    },
+    {
+      "id": "devto-ai",
+      "name": "DEV Community AI tag",
+      "kind": "html",
+      "url": "https://dev.to/t/ai",
+      "audience": "Developers and technical writers",
+      "why": "A publishing community where a path-cited technical article can be legitimately submitted.",
+      "enabled": false
+    },
+    {
+      "id": "hn-newest",
+      "name": "Hacker News newest",
+      "kind": "html",
+      "url": "https://news.ycombinator.com/newest",
+      "audience": "Engineers and founders",
+      "why": "Read-only signal of current technical discussion; posting remains manual and owner-only.",
+      "enabled": false
+    }
+  ]
+}

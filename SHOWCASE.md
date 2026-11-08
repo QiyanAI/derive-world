@@ -16,6 +16,27 @@ reference world: a Living Object, its version history and lineage, and an
 interactive poll. It runs in **Fixture mode** — deterministic demo
 data, no model call, no API key.
 
+## Try it without Docker
+
+The [five-step offline tour](showcase/tour/README.md) is a static page built
+from real product screenshots. It walks through create, change, derive, approve
+and share, and includes a small derivation panel that is explicitly a
+**simulation**. It is not a live AI service, it calls no model, and it creates
+nothing. Every screenshot is labelled Fixture.
+
+## Derive Relay — One World. Infinite Possibilities.
+
+[Derive Relay](examples/worlds/README.md) is a voluntary derivation challenge.
+Start from one reproducible base world, derive in any direction — game, story,
+workbench, visual space, 3D or a custom surface — and share only what you
+choose to make public. The challenge uses the publication and derivation paths
+that already exist in `v0.2.0`. It adds no federation, no public content
+network and no automatic collection.
+
+The base world is a real `POST /api/v1/objects` body validated in CI. The
+prompts are starters, not promises: results depend on the mode and model, and
+Fixture output is deterministic demo data, not real AI.
+
 ## Three ways to see what is different
 
 ### 1. A Living Object keeps its history and can derive

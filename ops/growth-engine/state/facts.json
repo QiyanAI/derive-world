@@ -1,0 +1,86 @@
+{
+  "schema_version": 1,
+  "facts": [
+    {
+      "id": "what-it-is",
+      "statement": "Derive World is an open-source foundation for Living Objects: shared, versioned objects that people and their Personal AI can read, contribute to, derive from, and trace through an explicit lineage.",
+      "audience": "both",
+      "sources": [
+        { "path": "README.md", "contains": "Derive World is an open-source foundation" },
+        { "path": "README.md", "contains": "explicit lineage" }
+      ]
+    },
+    {
+      "id": "human-approval",
+      "statement": "A Personal AI can propose changes and derive children, but only a human can approve; a derived world is an independent child from an immutable snapshot.",
+      "audience": "both",
+      "sources": [
+        { "path": "README.md", "contains": "only a human can approve" },
+        { "path": "README.md", "contains": "independent child from an immutable snapshot" }
+      ]
+    },
+    {
+      "id": "lineage",
+      "statement": "Derive creates an independent child from an immutable snapshot of the source; later edits to the parent do not propagate and the ancestry is recorded.",
+      "audience": "both",
+      "sources": [
+        { "path": "SHOWCASE.md", "contains": "creates an independent child" },
+        { "path": "SHOWCASE.md", "contains": "Lineage is permission-clipped" }
+      ]
+    },
+    {
+      "id": "open-source",
+      "statement": "The project is licensed under Apache-2.0.",
+      "audience": "developer",
+      "sources": [
+        { "path": "LICENSE", "contains": "Apache License" },
+        { "path": "SHOWCASE.md", "contains": "The project is Apache-2.0." }
+      ]
+    },
+    {
+      "id": "fixture-not-real-ai",
+      "statement": "Fixture mode is a deterministic demo: it calls no model and is not real AI.",
+      "audience": "both",
+      "sources": [
+        { "path": "README.md", "contains": "Fixture mode is a deterministic demo" },
+        { "path": "docs/en/limitations.md", "contains": "Fixture mode is deterministic demo output" }
+      ]
+    },
+    {
+      "id": "real-ai-scope",
+      "statement": "Real-model evidence is scoped to the documented flows on DeepSeek deepseek-flash; the release makes no general provider claim.",
+      "audience": "developer",
+      "sources": [
+        { "path": "docs/en/limitations.md", "contains": "DeepSeek `deepseek-flash`" },
+        { "path": "README.md", "contains": "makes no general provider claim" }
+      ]
+    },
+    {
+      "id": "single-instance",
+      "statement": "Publication, derivation and social features are scoped to one instance; there is no cross-instance federation or public import.",
+      "audience": "developer",
+      "sources": [
+        { "path": "docs/en/limitations.md", "contains": "Single instance; no horizontal scaling." },
+        { "path": "docs/en/limitations.md", "contains": "There is no cross-instance federation or public import." }
+      ]
+    },
+    {
+      "id": "not-production",
+      "statement": "This is a self-hostable OSS MVP, not a production platform, and no certification or adoption is claimed.",
+      "audience": "both",
+      "sources": [
+        { "path": "docs/en/limitations.md", "contains": "not a production platform" },
+        { "path": "SHOWCASE.md", "contains": "No production readiness, security certification, user adoption" }
+      ]
+    },
+    {
+      "id": "release",
+      "statement": "The current public release is v0.2.0.",
+      "audience": "both",
+      "sources": [
+        { "path": "CHANGELOG.md", "contains": "## [0.2.0]" },
+        { "path": "README.md", "contains": "released as `v0.2.0`" }
+      ]
+    }
+  ]
+}

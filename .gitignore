@@ -30,6 +30,10 @@ Thumbs.db
 tmp/
 var/
 
+# Growth engine scheduled-run workspace
+ops/growth-engine/.artifacts/
+ops/growth-engine/reports/weekly/
+
 # Playwright session material
 tests/.auth/
 *.storageState.json
@@ -41,3 +45,13 @@ tests/.auth/
 # Python bytecode
 __pycache__/
 *.pyc
+
+# Growth engine local build output
+ops/growth-engine/growth-engine
+ops/growth-engine/growth-engine.exe
+
+# Growth engine runtime state and scheduled outputs
+ops/growth-engine/var/
+ops/growth-engine/runs/
+ops/growth-engine/state/providers.generated.json
+ops/growth-engine/.state/

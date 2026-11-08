@@ -1,0 +1,165 @@
+{
+  "schema_version": 1,
+  "updated_at": "2026-11-08",
+  "platforms": [
+    {
+      "id": "github",
+      "name": "GitHub",
+      "registration": "A human owner creates or uses an organization/personal account. Email verification and two-factor authentication are required for contributors in many repositories.",
+      "automation_policy": "api_with_approval",
+      "api_kind": "REST + GraphQL",
+      "posting_api": true,
+      "credential_env": "DGE_GITHUB_TOKEN",
+      "content_rules": [
+        "Follow the Acceptable Use Policies and repository contribution rules.",
+        "No spam, bulk comments, unrelated pull requests or promotional issues.",
+        "Never ask for stars, votes or coordinated engagement.",
+        "Release notes must describe only the tagged tree."
+      ],
+      "security_requirements": [
+        "Enable two-factor authentication.",
+        "Use a fine-grained token with the minimum repository scope.",
+        "Store the token only in the owner's secret store."
+      ],
+      "owner_only_steps": [
+        "Create or select the official account/organization.",
+        "Verify email and enable two-factor authentication.",
+        "Create the minimum-scope token and place it in the secret store.",
+        "Review and approve the first public post."
+      ],
+      "source_urls": [
+        "https://docs.github.com/en/site-policy/acceptable-use-policies/github-acceptable-use-policies",
+        "https://docs.github.com/en/authentication/securing-your-account-with-two-factor-authentication-2fa",
+        "https://docs.github.com/en/rest"
+      ],
+      "retrieved_at": "2026-11-08",
+      "notes": "Repository-native actions are maintainer-controlled. A Discussion adapter is implemented but live use requires an approval artifact."
+    },
+    {
+      "id": "devto",
+      "name": "DEV Community",
+      "registration": "A human owner creates an account (email or GitHub sign-in) and completes platform onboarding.",
+      "automation_policy": "api_with_approval",
+      "api_kind": "REST",
+      "posting_api": true,
+      "credential_env": "DEVTO_API_KEY",
+      "content_rules": [
+        "Publish technical, original material; no duplicate cross-posting of identical text.",
+        "Disclose authorship and affiliation.",
+        "Follow the DEV code of conduct and content policy.",
+        "Never buy or coordinate engagement."
+      ],
+      "security_requirements": [
+        "Enable two-factor authentication where available.",
+        "Set a recovery email.",
+        "Keep the API key out of source control."
+      ],
+      "owner_only_steps": [
+        "Register the account and complete email verification.",
+        "Enable two-factor authentication and set a recovery email.",
+        "Generate an API key and place it in the secret store.",
+        "Review and approve the first article."
+      ],
+      "source_urls": [
+        "https://developers.forem.com/api",
+        "https://dev.to/code-of-conduct"
+      ],
+      "retrieved_at": "2026-11-08",
+      "notes": "Article creation is implemented behind an approval artifact. The engine never registers the account."
+    },
+    {
+      "id": "hacker-news",
+      "name": "Hacker News",
+      "registration": "A human owner creates an account; posting is through the web interface. There is no public submission API.",
+      "automation_policy": "manual_only",
+      "api_kind": "read-only public API",
+      "posting_api": false,
+      "credential_env": "",
+      "content_rules": [
+        "Post as a real person and disclose that you maintain the project.",
+        "No vote requests, repost spam or marketing copy.",
+        "Show HN requires something people can actually try.",
+        "Answer technical questions directly."
+      ],
+      "security_requirements": [
+        "Protect the account with a unique password in a password manager.",
+        "Do not share the account or session."
+      ],
+      "owner_only_steps": [
+        "Register and verify the account as a real person.",
+        "Write and submit the Show HN manually.",
+        "Respond to comments personally."
+      ],
+      "source_urls": [
+        "https://news.ycombinator.com/newsguidelines.html",
+        "https://news.ycombinator.com/showhn.html"
+      ],
+      "retrieved_at": "2026-11-08",
+      "notes": "No automated publisher is implemented or appropriate. The AI prepares material only."
+    },
+    {
+      "id": "reddit",
+      "name": "Reddit",
+      "registration": "A human owner creates an account; third-party API access requires an OAuth application and compliance with the developer terms.",
+      "automation_policy": "manual_only",
+      "api_kind": "OAuth API",
+      "posting_api": false,
+      "credential_env": "",
+      "content_rules": [
+        "Read and obey each subreddit's self-promotion rules; some forbid promotion entirely.",
+        "Disclose affiliation in the post body.",
+        "Participate in existing threads before posting a standalone link.",
+        "Never cross-post identical text or coordinate votes."
+      ],
+      "security_requirements": [
+        "Enable two-factor authentication.",
+        "Set a recovery email.",
+        "Never share the OAuth client secret."
+      ],
+      "owner_only_steps": [
+        "Register and verify the account.",
+        "Enable two-factor authentication and set a recovery email.",
+        "Review each subreddit's rules before posting.",
+        "Post manually where the rules allow it."
+      ],
+      "source_urls": [
+        "https://www.reddit.com/wiki/selfpromotion",
+        "https://www.reddit.com/wiki/api",
+        "https://www.redditinc.com/policies/user-agreement"
+      ],
+      "retrieved_at": "2026-11-08",
+      "notes": "No posting adapter is implemented. Per-community rules dominate; automation is not appropriate here."
+    },
+    {
+      "id": "product-hunt",
+      "name": "Product Hunt",
+      "registration": "A human owner creates an account and launches a product through the launch flow; there is no public launch API.",
+      "automation_policy": "manual_only",
+      "api_kind": "GraphQL (read-oriented)",
+      "posting_api": false,
+      "credential_env": "",
+      "content_rules": [
+        "One launch per meaningful release.",
+        "No fake reviews, incentivized upvotes or purchased placement.",
+        "Describe only released and testable capability.",
+        "Label Fixture output clearly."
+      ],
+      "security_requirements": [
+        "Enable two-factor authentication.",
+        "Set a recovery email.",
+        "Keep the maker account under the owner's control."
+      ],
+      "owner_only_steps": [
+        "Create the maker account and complete verification.",
+        "Prepare the launch page and assets.",
+        "Submit the launch manually."
+      ],
+      "source_urls": [
+        "https://www.producthunt.com/launch",
+        "https://www.producthunt.com/legal"
+      ],
+      "retrieved_at": "2026-11-08",
+      "notes": "Launching is a manual, owner-only action. No automated publisher is implemented."
+    }
+  ]
+}
