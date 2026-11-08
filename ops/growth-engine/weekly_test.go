@@ -91,6 +91,22 @@ func TestStopSwitch(t *testing.T) {
 	}
 }
 
+func TestDefaultStopFileHaltsCommands(t *testing.T) {
+	original := defaultStopFile
+	defaultStopFile = filepath.Join(t.TempDir(), "STOP")
+	defer func() { defaultStopFile = original }()
+	t.Setenv("DGE_STOP", "")
+	if stopRequested("") {
+		t.Fatal("a missing default stop file halted the engine")
+	}
+	if err := os.WriteFile(defaultStopFile, []byte("stop"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if !stopRequested("") {
+		t.Fatal("the default stop file did not halt the engine")
+	}
+}
+
 func TestWeeklyRejectsInvalidCapturedAt(t *testing.T) {
 	snapshot := snapshotFixture("yesterday", 0, 0, 0, 1, 0)
 	if _, err := BuildWeekly(snapshot, nil, nil, "", true, nil, nil, "snapshot.json"); err == nil {

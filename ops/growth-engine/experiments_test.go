@@ -1,7 +1,10 @@
 // SPDX-License-Identifier: Apache-2.0
 package main
 
-import "testing"
+import (
+	"bytes"
+	"testing"
+)
 
 func experimentFixture() *Experiment {
 	return &Experiment{
@@ -71,6 +74,40 @@ func TestExperimentUnknownMetricRefusesDecision(t *testing.T) {
 	}
 	if experiment.Decision != nil || experiment.Status != "running" {
 		t.Fatalf("experiment mutated: %+v", experiment)
+	}
+}
+
+func TestTickAutomaticallyCompletesRunningExperiments(t *testing.T) {
+	dir := t.TempDir()
+	file, err := loadExperiments("state/experiments.json")
+	if err != nil {
+		t.Fatal(err)
+	}
+	file.Experiments[0].Status = "running"
+	file.Experiments[0].StartedAt = "2026-11-08"
+	statePath := dir + "/experiments.json"
+	if err := writeFile(statePath, mustJSON(t, file), false); err != nil {
+		t.Fatal(err)
+	}
+	snapshot := &Snapshot{SchemaVersion: 1, CapturedAt: "2026-11-20T00:00:00Z", Repo: "QiyanAI/derive-world", Visibility: "public"}
+	snapshot.Metrics.Stars = 5
+	snapshot.DataQuality = DataQuality{Traffic: "UNKNOWN", Contributors: "VERIFIED", Notes: []string{}}
+	snapshotPath := writeJSONTemp(t, dir, "snapshot.json", snapshot)
+	var stdout, stderr bytes.Buffer
+	err = runExperiments([]string{
+		"tick", "--state", statePath, "--snapshot", snapshotPath,
+		"--date", "2026-11-20", "--write",
+	}, &stdout, &stderr)
+	if err != nil {
+		t.Fatalf("tick: %v", err)
+	}
+	updated, err := loadExperiments(statePath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	first := updated.Experiments[0]
+	if first.Status != "completed" || first.Decision == nil || first.Decision.Verdict != "keep" {
+		t.Fatalf("experiment = %+v", first)
 	}
 }
 

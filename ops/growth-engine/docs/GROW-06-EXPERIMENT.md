@@ -79,7 +79,14 @@ The report separates:
 
 ## Decision discipline
 
-After the window, evaluate each experiment with a real snapshot:
+Automated tick (evaluates every running experiment, skips `UNKNOWN` metrics,
+and writes a decision):
+
+```bash
+go run . experiments tick --snapshot snapshot.json --date 2026-11-21 --write
+```
+
+Or evaluate one experiment explicitly:
 
 ```bash
 go run . experiments evaluate --id EXP-01 --date 2026-11-21 \

@@ -102,9 +102,14 @@ func safeJoin(root, relative string) (string, error) {
 // stopRequested implements a local stop switch. A scheduled run checks it
 // before writing any report, so an operator can halt automation without
 // editing the workflow.
+var defaultStopFile = "var/growth-engine/STOP"
+
 func stopRequested(stopFile string) bool {
 	if value := strings.TrimSpace(os.Getenv("DGE_STOP")); value == "1" || strings.EqualFold(value, "true") {
 		return true
+	}
+	if stopFile == "" {
+		stopFile = defaultStopFile
 	}
 	if stopFile == "" {
 		return false

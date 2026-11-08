@@ -126,8 +126,9 @@ Committed reports and drafts are examples produced from the real
   the snapshot cannot observe, and refuses to evaluate the same snapshot twice.
 - **No silent caps.** The weekly report lists unavailable data and everything
   the run did not do.
-- **Stop switch.** `DGE_STOP=1` or an existing `--stop-file` aborts before any
-  report is written.
+- **Stop switch.** `scripts/stop.sh` creates `var/growth-engine/STOP`, which
+  every command checks by default. `DGE_STOP=1` or `--stop-file PATH` also
+  abort. `scripts/resume.sh` removes the marker.
 
 ## Automation
 

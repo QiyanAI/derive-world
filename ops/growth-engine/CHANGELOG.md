@@ -24,7 +24,7 @@ public research, channel account management and approval-gated publishing.
 - Plan-only pipeline with stage manifest, usage delta, stop switch and no
   publish path.
 - Daily deterministic workflow and a disabled-by-default AI workflow.
-- 30 new tests covering providers, budgets, research, accounts, publishing and
+- 32 new tests covering providers, budgets, research, accounts, publishing and
   the pipeline.
 
 No paid external model call was made and no content was published in the

@@ -348,6 +348,57 @@ func runExperiments(args []string, stdout, stderr io.Writer) error {
 		}
 		fmt.Fprintf(stdout, "experiment %s: verdict=%s status=%s (written=%t)\n", experiment.ID, verdict, experiment.Status, *write)
 		return nil
+	case "tick":
+		flags := newFlagSet("experiments tick", stderr)
+		statePath := flags.String("state", "state/experiments.json", "experiment ledger")
+		snapshotPath := flags.String("snapshot", "", "current snapshot JSON")
+		engagementPath := flags.String("engagement", "", "optional engagement JSON")
+		date := flags.String("date", "", "evaluation date (YYYY-MM-DD)")
+		write := flags.Bool("write", false, "write accepted decisions")
+		if err := flags.Parse(args[1:]); err != nil {
+			return err
+		}
+		if *snapshotPath == "" || *date == "" {
+			return errors.New("--snapshot and --date are required")
+		}
+		file, err := loadExperiments(*statePath)
+		if err != nil {
+			return err
+		}
+		snapshot, err := LoadSnapshot(*snapshotPath)
+		if err != nil {
+			return err
+		}
+		var engagement *Engagement
+		if *engagementPath != "" {
+			engagement, err = LoadEngagement(*engagementPath)
+			if err != nil {
+				return err
+			}
+		}
+		decided := 0
+		skipped := []string{}
+		for index := range file.Experiments {
+			experiment := &file.Experiments[index]
+			if experiment.Status != "running" {
+				continue
+			}
+			if err := EvaluateExperiment(experiment, snapshot, engagement, *date); err != nil {
+				skipped = append(skipped, experiment.ID+": "+redact(err.Error()))
+				continue
+			}
+			decided++
+		}
+		if *write && decided > 0 {
+			if err := writeExperimentState(*statePath, file); err != nil {
+				return err
+			}
+		}
+		for _, item := range skipped {
+			fmt.Fprintln(stderr, "skipped "+item)
+		}
+		fmt.Fprintf(stdout, "evaluated %d running experiment(s) (written=%t)\n", decided, *write)
+		return nil
 	default:
 		return fmt.Errorf("unknown experiments subcommand %q", args[0])
 	}
