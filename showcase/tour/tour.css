@@ -140,7 +140,7 @@ figure img {
 figcaption {
   margin-top: 0.7rem;
   font-size: 0.85rem;
-  color: var(--muted);
+  color: #333b52;
   line-height: 1.45;
 }
 
@@ -149,7 +149,7 @@ figcaption {
   gap: 0.55rem;
   align-items: baseline;
   font-size: 0.82rem;
-  color: var(--muted);
+  color: #333b52;
   margin-top: 1rem;
 }
 
