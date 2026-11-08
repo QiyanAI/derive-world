@@ -1,0 +1,59 @@
+{
+  "schema_version": 1,
+  "experiments": [
+    {
+      "id": "EXP-01",
+      "title": "README first-screen framing",
+      "status": "proposed",
+      "hypothesis": "If the first screen states the three product differences and the headline 'Create a world. Change it together. Derive something new.', more visitors will recognize the product and follow the repository.",
+      "audience": "developers and creators arriving from a search result or a shared link",
+      "channel": "github",
+      "change": "Update the README first screen and the Showcase entry once, then keep them stable for the whole window.",
+      "metric": "stars",
+      "baseline": {
+        "value": 0,
+        "captured_at": "2026-11-07T06:48:25Z",
+        "source": "ops/growth-engine/baseline/snapshot-2026-11-07.json"
+      },
+      "window_days": 14,
+      "decision_rules": { "keep_at_least": 1, "stop_at_or_below": -1 },
+      "results": []
+    },
+    {
+      "id": "EXP-02",
+      "title": "Derive Relay participation",
+      "status": "proposed",
+      "hypothesis": "If a reproducible base world and five derivation prompts are published together, at least one creator will submit a public derived world through the existing showcase form.",
+      "audience": "creators who already build worlds and stories",
+      "channel": "github",
+      "change": "Publish the Derive Relay material and link it from the Showcase. Do not pre-write or seed submissions.",
+      "metric": "showcase_submissions",
+      "baseline": {
+        "value": 0,
+        "captured_at": "2026-11-07T06:48:25Z",
+        "source": "ops/growth-engine/baseline/snapshot-2026-11-07.json"
+      },
+      "window_days": 14,
+      "decision_rules": { "keep_at_least": 1, "stop_at_or_below": -1 },
+      "results": []
+    },
+    {
+      "id": "EXP-03",
+      "title": "Developer technical introduction",
+      "status": "proposed",
+      "hypothesis": "If a technically framed introduction is published on an authorized developer channel, at least one external engineer will open a substantive issue or pull request.",
+      "audience": "engineers evaluating the runtime, permissions and lineage model",
+      "channel": "technical-blog",
+      "change": "Publish one technical introduction that cites repository paths and reproducible commands. No cross-posting of identical text.",
+      "metric": "meaningful_external_issues",
+      "baseline": {
+        "value": 0,
+        "captured_at": "2026-11-07T06:48:25Z",
+        "source": "ops/growth-engine/baseline/snapshot-2026-11-07.json"
+      },
+      "window_days": 14,
+      "decision_rules": { "keep_at_least": 1, "stop_at_or_below": -1 },
+      "results": []
+    }
+  ]
+}

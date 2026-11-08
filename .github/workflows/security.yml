@@ -30,6 +30,7 @@ jobs:
       - run: go run golang.org/x/vuln/cmd/govulncheck@v1.9.0 ./...
       - run: (cd examples/capability-provider && go run golang.org/x/vuln/cmd/govulncheck@v1.9.0 ./...)
       - run: (cd ops/github-metrics && go run golang.org/x/vuln/cmd/govulncheck@v1.9.0 ./...)
+      - run: (cd ops/growth-engine && go run golang.org/x/vuln/cmd/govulncheck@v1.9.0 ./...)
 
   gitleaks:
     name: gitleaks
@@ -101,6 +102,7 @@ jobs:
       - run: go run github.com/google/go-licenses@v1.6.0 check ./... --allowed_licenses=Apache-2.0,MIT,BSD-2-Clause,BSD-3-Clause,ISC,MPL-2.0
       - run: (cd examples/capability-provider && go run github.com/google/go-licenses@v1.6.0 check ./... --allowed_licenses=Apache-2.0,MIT,BSD-2-Clause,BSD-3-Clause,ISC,MPL-2.0 --ignore github.com/QiyanAI/derive-world/examples/capability-provider)
       - run: (cd ops/github-metrics && go run github.com/google/go-licenses@v1.6.0 check ./... --allowed_licenses=Apache-2.0,MIT,BSD-2-Clause,BSD-3-Clause,ISC,MPL-2.0 --ignore github.com/QiyanAI/derive-world/ops/github-metrics)
+      - run: (cd ops/growth-engine && go run github.com/google/go-licenses@v1.6.0 check ./... --allowed_licenses=Apache-2.0,MIT,BSD-2-Clause,BSD-3-Clause,ISC,MPL-2.0 --ignore github.com/QiyanAI/derive-world/ops/growth-engine)
       - run: npm ci
       - name: npm production license check
         # Production dependencies only. Build-only dev dependencies (for

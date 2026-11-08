@@ -1,0 +1,398 @@
+{
+  "schema_version": 1,
+  "tool_version": "1.0.0",
+  "generated_for": "2026-11-07",
+  "repo": "QiyanAI/derive-world",
+  "analytics": {
+    "schema_version": 1,
+    "tool_version": "1.0.0",
+    "repo": "QiyanAI/derive-world",
+    "visibility": "public",
+    "captured_at": "2026-11-07T06:48:25Z",
+    "changes": null,
+    "open_issues": 3,
+    "open_pull_requests": 8,
+    "releases": [
+      {
+        "tag": "v0.2.0",
+        "published_at": "2026-10-30T04:13:46Z",
+        "assets": [
+          {
+            "name": "ATTESTATION.json",
+            "download_count": 2
+          },
+          {
+            "name": "BUILD-MANIFEST.json",
+            "download_count": 2
+          },
+          {
+            "name": "derive-world_0.2.0_darwin_arm64.tar.gz",
+            "download_count": 2
+          },
+          {
+            "name": "derive-world_0.2.0_linux_amd64.tar.gz",
+            "download_count": 2
+          },
+          {
+            "name": "derive-world_0.2.0_source.tar.gz",
+            "download_count": 3
+          },
+          {
+            "name": "derive-world_0.2.0_windows_amd64.zip",
+            "download_count": 2
+          },
+          {
+            "name": "SHA256SUMS",
+            "download_count": 2
+          }
+        ]
+      },
+      {
+        "tag": "v0.1.0",
+        "published_at": "2026-10-24T19:40:31Z",
+        "assets": [
+          {
+            "name": "ATTESTATION.json",
+            "download_count": 3
+          },
+          {
+            "name": "BUILD-MANIFEST.json",
+            "download_count": 2
+          },
+          {
+            "name": "derive-world_0.1.0_darwin_arm64.tar.gz",
+            "download_count": 2
+          },
+          {
+            "name": "derive-world_0.1.0_linux_amd64.tar.gz",
+            "download_count": 2
+          },
+          {
+            "name": "derive-world_0.1.0_source.tar.gz",
+            "download_count": 3
+          },
+          {
+            "name": "derive-world_0.1.0_windows_amd64.zip",
+            "download_count": 4
+          },
+          {
+            "name": "SHA256SUMS",
+            "download_count": 4
+          }
+        ]
+      }
+    ],
+    "downloads_total": 35,
+    "traffic_quality": "UNKNOWN",
+    "unavailable": [
+      "traffic views and clones: UNKNOWN (requires repository administration read)",
+      "item-level issues and pull requests: UNKNOWN (no engagement file supplied)"
+    ],
+    "caveats": [
+      "Stars, forks, watchers and downloads are public signals, not active users or adoption.",
+      "Maintainer and CI downloads cannot be excluded from public download totals.",
+      "An absent value is UNKNOWN; it is never estimated.",
+      "Correlation in a short window is not causation; every experiment needs a stated counterfactual."
+    ]
+  },
+  "opportunities": [
+    {
+      "id": "OBS-001",
+      "title": "Make traffic observable before spending on promotion",
+      "source": "baseline/snapshot-2026-11-07.json",
+      "source_type": "snapshot",
+      "retrieved_at": "2026-11-07T06:48:25Z",
+      "audience": "maintainer",
+      "relevance": "Without administration read, views and clones are UNKNOWN, so no channel can be compared and no experiment can be measured. This blocks the whole optimization loop.",
+      "action": "Add a fine-grained METRICS_TOKEN with Administration: read to the existing metrics-daily workflow. Do not broaden the development token.",
+      "expected_value": "Turns every later channel test from unmeasurable into a comparable, 14-day observation.",
+      "risk": "Low: read-only permission; secret handled by the existing workflow secret store.",
+      "scores": {
+        "relevance": 95,
+        "evidence": 100,
+        "reach": 40,
+        "risk": 5,
+        "confidence": 95
+      },
+      "score": 85,
+      "decision": "pursue",
+      "reason": "Data-quality note in the snapshot; existing ops/README documents the required permission."
+    },
+    {
+      "id": "OBS-002",
+      "title": "Produce item-level issue and pull-request evidence",
+      "source": "baseline/snapshot-2026-11-07.json",
+      "source_type": "snapshot",
+      "retrieved_at": "2026-11-07T06:48:25Z",
+      "audience": "maintainer",
+      "relevance": "The snapshot counts open issues and PRs but cannot distinguish a meaningful contributor report from noise, so contribution growth stays UNKNOWN.",
+      "action": "Run the documented read-only engagement export and pass it to the weekly analysis. Classify only public item metadata.",
+      "expected_value": "Makes external contribution and showcase participation a measured signal instead of a guess.",
+      "risk": "Low: public metadata only; no private repository content.",
+      "scores": {
+        "relevance": 90,
+        "evidence": 100,
+        "reach": 30,
+        "risk": 5,
+        "confidence": 90
+      },
+      "score": 81,
+      "decision": "pursue",
+      "reason": "Engagement input absent from this run; the classification is marked UNKNOWN rather than assumed."
+    },
+    {
+      "id": "OBS-004",
+      "title": "Reduce review latency for the current pull-request queue",
+      "source": "baseline/snapshot-2026-11-07.json",
+      "source_type": "snapshot",
+      "retrieved_at": "2026-11-07T06:48:25Z",
+      "audience": "external contributors evaluating whether to stay",
+      "relevance": "8 open pull requests against 1 visible contributor(s) is a first-response risk: a new contributor who waits cannot tell interest from abandonment.",
+      "action": "State a response window in CONTRIBUTING, triage the queue, and close or label stale items with a reason. This is a maintenance action, not a promotion.",
+      "expected_value": "Improves contributor conversion without any new channel spend.",
+      "risk": "Low: maintenance work; do not merge unreviewed changes to hit a number.",
+      "scores": {
+        "relevance": 75,
+        "evidence": 100,
+        "reach": 45,
+        "risk": 10,
+        "confidence": 80
+      },
+      "score": 77,
+      "decision": "pursue",
+      "reason": "Open PR and contributor counts from the snapshot."
+    },
+    {
+      "id": "OBS-006",
+      "title": "Record channel outcomes before scaling any channel",
+      "source": "state/channels.json",
+      "source_type": "registry",
+      "retrieved_at": "2026-11-08",
+      "audience": "growth operator",
+      "relevance": "6 of 6 registered channels have no recorded observation, so the strategy layer has no evidence on which to keep or stop a channel.",
+      "action": "After each authorized action, record date, material and observable result in the channel registry. Leave the result empty when nothing can be observed.",
+      "expected_value": "Prevents effort from accumulating in channels that never worked.",
+      "risk": "Low: bookkeeping only.",
+      "scores": {
+        "relevance": 70,
+        "evidence": 90,
+        "reach": 20,
+        "risk": 5,
+        "confidence": 90
+      },
+      "score": 70,
+      "decision": "pursue",
+      "reason": "Channel registry inspection."
+    },
+    {
+      "id": "OBS-005",
+      "title": "Check whether release archives are discoverable as a first experience",
+      "source": "baseline/snapshot-2026-11-07.json",
+      "source_type": "snapshot",
+      "retrieved_at": "2026-11-07T06:48:25Z",
+      "audience": "visitors who reach releases but not the README",
+      "relevance": "Cumulative release-asset downloads exceed stars. That is a hypothesis about discoverability, not proof of users; downloads include maintainers and CI.",
+      "action": "Review the release notes first screen and the README entry paths. Do not claim downloads as users and do not buy promotion.",
+      "expected_value": "A clearer first experience for the same traffic already arriving.",
+      "risk": "Low, provided the Fixture/Real AI distinction stays explicit.",
+      "scores": {
+        "relevance": 55,
+        "evidence": 85,
+        "reach": 50,
+        "risk": 10,
+        "confidence": 35
+      },
+      "score": 63,
+      "decision": "research",
+      "reason": "Snapshot counts only; the causal link to discovery is unproven and labelled as a hypothesis."
+    }
+  ],
+  "rejected_research": null,
+  "experiments": {
+    "schema_version": 1,
+    "experiments": [
+      {
+        "id": "EXP-01",
+        "title": "README first-screen framing",
+        "status": "proposed",
+        "hypothesis": "If the first screen states the three product differences and the headline 'Create a world. Change it together. Derive something new.', more visitors will recognize the product and follow the repository.",
+        "audience": "developers and creators arriving from a search result or a shared link",
+        "channel": "github",
+        "change": "Update the README first screen and the Showcase entry once, then keep them stable for the whole window.",
+        "metric": "stars",
+        "baseline": {
+          "value": 0,
+          "captured_at": "2026-11-07T06:48:25Z",
+          "source": "ops/growth-engine/baseline/snapshot-2026-11-07.json"
+        },
+        "window_days": 14,
+        "decision_rules": {
+          "keep_at_least": 1,
+          "stop_at_or_below": -1
+        },
+        "results": []
+      },
+      {
+        "id": "EXP-02",
+        "title": "Derive Relay participation",
+        "status": "proposed",
+        "hypothesis": "If a reproducible base world and five derivation prompts are published together, at least one creator will submit a public derived world through the existing showcase form.",
+        "audience": "creators who already build worlds and stories",
+        "channel": "github",
+        "change": "Publish the Derive Relay material and link it from the Showcase. Do not pre-write or seed submissions.",
+        "metric": "showcase_submissions",
+        "baseline": {
+          "value": 0,
+          "captured_at": "2026-11-07T06:48:25Z",
+          "source": "ops/growth-engine/baseline/snapshot-2026-11-07.json"
+        },
+        "window_days": 14,
+        "decision_rules": {
+          "keep_at_least": 1,
+          "stop_at_or_below": -1
+        },
+        "results": []
+      },
+      {
+        "id": "EXP-03",
+        "title": "Developer technical introduction",
+        "status": "proposed",
+        "hypothesis": "If a technically framed introduction is published on an authorized developer channel, at least one external engineer will open a substantive issue or pull request.",
+        "audience": "engineers evaluating the runtime, permissions and lineage model",
+        "channel": "technical-blog",
+        "change": "Publish one technical introduction that cites repository paths and reproducible commands. No cross-posting of identical text.",
+        "metric": "meaningful_external_issues",
+        "baseline": {
+          "value": 0,
+          "captured_at": "2026-11-07T06:48:25Z",
+          "source": "ops/growth-engine/baseline/snapshot-2026-11-07.json"
+        },
+        "window_days": 14,
+        "decision_rules": {
+          "keep_at_least": 1,
+          "stop_at_or_below": -1
+        },
+        "results": []
+      }
+    ]
+  },
+  "next_round": [
+    {
+      "id": "OBS-001",
+      "title": "Make traffic observable before spending on promotion",
+      "source": "baseline/snapshot-2026-11-07.json",
+      "source_type": "snapshot",
+      "retrieved_at": "2026-11-07T06:48:25Z",
+      "audience": "maintainer",
+      "relevance": "Without administration read, views and clones are UNKNOWN, so no channel can be compared and no experiment can be measured. This blocks the whole optimization loop.",
+      "action": "Add a fine-grained METRICS_TOKEN with Administration: read to the existing metrics-daily workflow. Do not broaden the development token.",
+      "expected_value": "Turns every later channel test from unmeasurable into a comparable, 14-day observation.",
+      "risk": "Low: read-only permission; secret handled by the existing workflow secret store.",
+      "scores": {
+        "relevance": 95,
+        "evidence": 100,
+        "reach": 40,
+        "risk": 5,
+        "confidence": 95
+      },
+      "score": 85,
+      "decision": "pursue",
+      "reason": "Data-quality note in the snapshot; existing ops/README documents the required permission."
+    },
+    {
+      "id": "OBS-002",
+      "title": "Produce item-level issue and pull-request evidence",
+      "source": "baseline/snapshot-2026-11-07.json",
+      "source_type": "snapshot",
+      "retrieved_at": "2026-11-07T06:48:25Z",
+      "audience": "maintainer",
+      "relevance": "The snapshot counts open issues and PRs but cannot distinguish a meaningful contributor report from noise, so contribution growth stays UNKNOWN.",
+      "action": "Run the documented read-only engagement export and pass it to the weekly analysis. Classify only public item metadata.",
+      "expected_value": "Makes external contribution and showcase participation a measured signal instead of a guess.",
+      "risk": "Low: public metadata only; no private repository content.",
+      "scores": {
+        "relevance": 90,
+        "evidence": 100,
+        "reach": 30,
+        "risk": 5,
+        "confidence": 90
+      },
+      "score": 81,
+      "decision": "pursue",
+      "reason": "Engagement input absent from this run; the classification is marked UNKNOWN rather than assumed."
+    },
+    {
+      "id": "OBS-004",
+      "title": "Reduce review latency for the current pull-request queue",
+      "source": "baseline/snapshot-2026-11-07.json",
+      "source_type": "snapshot",
+      "retrieved_at": "2026-11-07T06:48:25Z",
+      "audience": "external contributors evaluating whether to stay",
+      "relevance": "8 open pull requests against 1 visible contributor(s) is a first-response risk: a new contributor who waits cannot tell interest from abandonment.",
+      "action": "State a response window in CONTRIBUTING, triage the queue, and close or label stale items with a reason. This is a maintenance action, not a promotion.",
+      "expected_value": "Improves contributor conversion without any new channel spend.",
+      "risk": "Low: maintenance work; do not merge unreviewed changes to hit a number.",
+      "scores": {
+        "relevance": 75,
+        "evidence": 100,
+        "reach": 45,
+        "risk": 10,
+        "confidence": 80
+      },
+      "score": 77,
+      "decision": "pursue",
+      "reason": "Open PR and contributor counts from the snapshot."
+    },
+    {
+      "id": "OBS-006",
+      "title": "Record channel outcomes before scaling any channel",
+      "source": "state/channels.json",
+      "source_type": "registry",
+      "retrieved_at": "2026-11-08",
+      "audience": "growth operator",
+      "relevance": "6 of 6 registered channels have no recorded observation, so the strategy layer has no evidence on which to keep or stop a channel.",
+      "action": "After each authorized action, record date, material and observable result in the channel registry. Leave the result empty when nothing can be observed.",
+      "expected_value": "Prevents effort from accumulating in channels that never worked.",
+      "risk": "Low: bookkeeping only.",
+      "scores": {
+        "relevance": 70,
+        "evidence": 90,
+        "reach": 20,
+        "risk": 5,
+        "confidence": 90
+      },
+      "score": 70,
+      "decision": "pursue",
+      "reason": "Channel registry inspection."
+    },
+    {
+      "id": "OBS-005",
+      "title": "Check whether release archives are discoverable as a first experience",
+      "source": "baseline/snapshot-2026-11-07.json",
+      "source_type": "snapshot",
+      "retrieved_at": "2026-11-07T06:48:25Z",
+      "audience": "visitors who reach releases but not the README",
+      "relevance": "Cumulative release-asset downloads exceed stars. That is a hypothesis about discoverability, not proof of users; downloads include maintainers and CI.",
+      "action": "Review the release notes first screen and the README entry paths. Do not claim downloads as users and do not buy promotion.",
+      "expected_value": "A clearer first experience for the same traffic already arriving.",
+      "risk": "Low, provided the Fixture/Real AI distinction stays explicit.",
+      "scores": {
+        "relevance": 55,
+        "evidence": 85,
+        "reach": 50,
+        "risk": 10,
+        "confidence": 35
+      },
+      "score": 63,
+      "decision": "research",
+      "reason": "Snapshot counts only; the causal link to discovery is unproven and labelled as a hypothesis."
+    }
+  ],
+  "stopped": [],
+  "not_performed": [
+    "No model provider was called; all analysis is deterministic.",
+    "No external content was posted, messaged or submitted.",
+    "No stars, votes or engagement were purchased or manipulated.",
+    "Private objects, conversations and Personal AI context were not read."
+  ]
+}

@@ -8,6 +8,11 @@ Derive World 是 **Living Object** 的基础：共享、有版本的对象，人
 
 [完整录屏](../assets/demo-17s.webm) 是 17 秒参考世界演示：Living Object、版本历史与来源链、互动投票。它运行在 **Fixture 模式**——确定性演示数据，不调用模型，不需要 API Key。
 
+## 两个新入口
+
+- [五步离线演示](../../showcase/tour/index.html)——用真实产品截图构建的静态页面，衍生面板明确标注为模拟。它不是在线 AI 服务，不调用模型，也不会创建任何内容。
+- [Derive Relay](../../examples/worlds/README.md)——可复现的基础世界与自愿衍生挑战，使用 `v0.2.0` 已有的公开与衍生能力。单实例；不存在跨实例联邦，也不自动采集用户内容。
+
 ## 三个角度
 
 ### 1. Living Object 保留历史，并可以衍生

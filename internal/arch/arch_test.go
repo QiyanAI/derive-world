@@ -115,6 +115,7 @@ func TestModuleBoundaries(t *testing.T) {
 	assertDirectDependencyCount(t, root, 6)
 	assertSubmoduleIsolation(t, root, "examples/capability-provider", modulePath+"/examples/capability-provider")
 	assertSubmoduleIsolation(t, root, "ops/github-metrics", modulePath+"/ops/github-metrics")
+	assertSubmoduleIsolation(t, root, "ops/growth-engine", modulePath+"/ops/growth-engine")
 	assertTableOwnership(t, root, packages)
 }
 

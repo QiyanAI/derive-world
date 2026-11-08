@@ -1,9 +1,17 @@
 # AI-OPS
 
-`ops/github-metrics` is an independent Go module with no third-party
-dependencies. It collects read-only GitHub metrics, compares snapshots, and
-renders Markdown reports. It never changes code, merges pull requests, publishes
-releases, or posts content.
+Two independent Go modules with no third-party dependencies:
+
+- `ops/github-metrics` collects read-only GitHub metrics, compares snapshots,
+  and renders Markdown reports. It never changes code, merges pull requests,
+  publishes releases, or posts content.
+- `ops/growth-engine` analyzes those snapshots offline: net growth, sourced
+  opportunities, fact-checked drafts, channel preflight, experiment decisions
+  and a weekly report. It calls no model, posts nothing, and reuses the daily
+  snapshot instead of collecting it again.
+
+Each module has its own `go.mod` and test suite. The repository architecture
+test asserts that neither imports the root module.
 
 ## Commands
 

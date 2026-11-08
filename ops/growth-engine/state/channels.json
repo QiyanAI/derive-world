@@ -1,0 +1,95 @@
+{
+  "schema_version": 1,
+  "updated_at": "2026-11-08",
+  "channels": [
+    {
+      "id": "github",
+      "name": "GitHub repository, releases and issue forms",
+      "audience": "Developers evaluating a self-hostable, open-source world runtime",
+      "rules": [
+        "Follow CONTRIBUTING.md, CODE_OF_CONDUCT.md and SECURITY.md.",
+        "Never open promotional issues, mass-comment, or ask for stars.",
+        "Release notes only describe changes present in the tagged tree.",
+        "Showcase links only to public, reproducible work that the author chose to share.",
+        "Record the observable outcome after each action; leave it empty when nothing is observable."
+      ],
+      "fits": ["technical-intro", "release-notes", "showcase", "tutorial", "community", "relay", "product-update"],
+      "cadence": "With a verified release or a real technical change; no fixed posting quota.",
+      "authorization": "maintainer-controlled",
+      "observed": []
+    },
+    {
+      "id": "hacker-news",
+      "name": "Hacker News",
+      "audience": "Engineers and founders who reward technical honesty over marketing",
+      "rules": [
+        "A real person posts from their own account; automation must not post.",
+        "No Show HN for a project that cannot be tried, and no reposting the same launch.",
+        "Never ask for upvotes or coordinate voting.",
+        "Answer technical questions directly; disclose that you maintain the project."
+      ],
+      "fits": ["technical-intro", "tutorial", "community"],
+      "cadence": "At most one Show HN per meaningful release; skip if nothing new is testable.",
+      "authorization": "owner-account-required",
+      "observed": []
+    },
+    {
+      "id": "reddit",
+      "name": "Reddit developer and world-building communities",
+      "audience": "Subreddit-specific; read each community's rules before writing anything",
+      "rules": [
+        "Read and obey each subreddit's self-promotion rules; some forbid it entirely.",
+        "Disclose authorship in the post body.",
+        "Answer questions in existing threads before considering a standalone post.",
+        "No cross-posting the same text to many communities."
+      ],
+      "fits": ["technical-intro", "showcase", "community", "relay"],
+      "cadence": "Only where the rules allow it, and only with a genuinely different angle per community.",
+      "authorization": "owner-account-required",
+      "observed": []
+    },
+    {
+      "id": "product-hunt",
+      "name": "Product Hunt",
+      "audience": "Product-curious users and makers",
+      "rules": [
+        "One launch, run by the owner's account.",
+        "No fake reviews, no incentivized upvotes, no purchased placement.",
+        "Describe only released and testable capability; label Fixture output."
+      ],
+      "fits": ["release-notes", "showcase", "product-update"],
+      "cadence": "At most one launch per major release.",
+      "authorization": "owner-account-required",
+      "observed": []
+    },
+    {
+      "id": "technical-blog",
+      "name": "Technical blog or dev.to",
+      "audience": "Developers who want an implementation story, not an announcement",
+      "rules": [
+        "Every claim must cite a repository path or a reproducible command.",
+        "Publish the article on an account the owner controls.",
+        "Link to the repository once; do not pad with calls to action."
+      ],
+      "fits": ["technical-intro", "tutorial", "relay"],
+      "cadence": "After a real engineering milestone, with a new lesson worth reading.",
+      "authorization": "owner-account-required",
+      "observed": []
+    },
+    {
+      "id": "ecosystem",
+      "name": "Open-source ecosystem lists and integrations",
+      "audience": "Maintainers of adjacent tools and curated lists",
+      "rules": [
+        "Ask the list or project maintainer before submitting; follow their contribution guide.",
+        "Only submit when the integration or entry is real and maintained.",
+        "Never open an unrelated pull request to place a link.",
+        "No bulk outreach or identical messages."
+      ],
+      "fits": ["technical-intro", "tutorial"],
+      "cadence": "Only when a genuine integration exists and its maintainer agrees.",
+      "authorization": "owner-account-required",
+      "observed": []
+    }
+  ]
+}

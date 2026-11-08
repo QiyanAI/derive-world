@@ -15,3 +15,12 @@ The showcase covers:
 
 It also links the GitHub-native **Showcase submission** issue form and the
 public-safety checklist for sharing your own work.
+
+Two more entry points live alongside the showcase:
+
+- [Five-step offline tour](../../showcase/tour/index.html) — a static page
+  built from real screenshots with a labelled simulation. It is not a live AI
+  service and creates nothing.
+- [Derive Relay](../../examples/worlds/README.md) — a reproducible base world
+  and a voluntary derivation challenge using the existing publication and
+  derivation paths. Single instance; no cross-instance federation.
