@@ -324,6 +324,12 @@ func (client *ModelClient) Complete(ctx context.Context, request ModelRequest) (
 		_ = client.settle(reservationInput, reservationOutput, reservationCost, reservationInput, reservationOutput, now)
 		return nil, err
 	}
+	if inputTokens <= 0 {
+		inputTokens = reservationInput
+	}
+	if outputTokens <= 0 {
+		outputTokens = estimateTokens(len(text))
+	}
 	if err := client.settle(reservationInput, reservationOutput, reservationCost, inputTokens, outputTokens, now); err != nil {
 		return nil, err
 	}
@@ -331,9 +337,9 @@ func (client *ModelClient) Complete(ctx context.Context, request ModelRequest) (
 		Text:         text,
 		Provider:     client.provider.ID,
 		Model:        client.provider.Model,
-		InputTokens:  maxInt(inputTokens, reservationInput),
-		OutputTokens: maxInt(outputTokens, 0),
-		CostUSD:      client.estimatedCost(maxInt(inputTokens, reservationInput), maxInt(outputTokens, 0)),
+		InputTokens:  inputTokens,
+		OutputTokens: outputTokens,
+		CostUSD:      client.estimatedCost(inputTokens, outputTokens),
 	}, nil
 }
 

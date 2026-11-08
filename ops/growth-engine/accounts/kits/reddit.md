@@ -8,7 +8,7 @@ Prepared, not registered. A human owns every account and every credential.
 - API: OAuth API
 - Retrieved: 2026-11-08
 - Sources:
-  - https://support.reddithelp.com/hc/en-us/articles/14945211791892
+  - https://www.reddit.com/wiki/selfpromotion
   - https://www.reddit.com/wiki/api
   - https://www.redditinc.com/policies/user-agreement
 
