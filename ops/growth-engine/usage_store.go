@@ -2,7 +2,6 @@
 package main
 
 import (
-	"encoding/json"
 	"errors"
 	"fmt"
 	"os"
@@ -196,5 +195,3 @@ func summarizeUsage(usage *Usage, budget *Budget, provider Provider) UsageSummar
 	}
 	return summary
 }
-
-var _ = json.MarshalIndent

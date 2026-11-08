@@ -138,6 +138,12 @@ func validateProvider(provider Provider) error {
 	if parsed.Scheme != "https" && !loopbackHost(parsed.Hostname()) {
 		return errors.New("base_url must use https unless it is a loopback test endpoint")
 	}
+	if provider.InputPricePerMillion < 0 || provider.OutputPricePerMillion < 0 {
+		return errors.New("prices must not be negative")
+	}
+	if (provider.InputPricePerMillion > 0) != (provider.OutputPricePerMillion > 0) {
+		return errors.New("input and output prices must both be positive or both zero")
+	}
 	if provider.Model == "" || provider.APIKeyEnv == "" {
 		return errors.New("model and api_key_env are required")
 	}
