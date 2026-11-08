@@ -1,0 +1,10 @@
+{
+  "schema_version": 2,
+  "authorization_id": "",
+  "calls": 0,
+  "input_tokens": 0,
+  "output_tokens": 0,
+  "cost_usd": 0,
+  "cost_cap_enforced": false,
+  "updated_at": ""
+}
