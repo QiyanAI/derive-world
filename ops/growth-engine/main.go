@@ -46,6 +46,14 @@ func run(args []string, stdout, stderr io.Writer) error {
 		return runVerifyContent(args[1:], stdout, stderr)
 	case "experiments":
 		return runExperiments(args[1:], stdout, stderr)
+	case "research":
+		return runResearch(args[1:], stdout, stderr)
+	case "accounts":
+		return runAccounts(args[1:], stdout, stderr)
+	case "publish":
+		return runPublish(args[1:], stdout, stderr)
+	case "pipeline":
+		return runPipeline(args[1:], stdout, stderr)
 	case "weekly":
 		return runWeekly(args[1:], stdout, stderr)
 	case "tour-check":

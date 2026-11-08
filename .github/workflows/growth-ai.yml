@@ -1,0 +1,126 @@
+name: Growth AI (gated)
+
+# Model calls are OFF by default. This schedule runs only when the repository
+# owner sets DGE_AI_ENABLED=1, a non-secret provider configuration and a
+# call/cost budget, and stores the model key as a repository secret.
+# It produces a review-only plan and never publishes.
+
+on:
+  schedule:
+    - cron: "0 4 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  actions: read
+  issues: read
+  pull-requests: read
+
+concurrency:
+  group: ${{ github.workflow }}
+  cancel-in-progress: false
+
+jobs:
+  ai-plan:
+    name: AI plan
+    if: vars.DGE_AI_ENABLED == '1'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version: "1.27.3"
+          cache: true
+
+      - name: require owner configuration
+        env:
+          PROVIDER_JSON: ${{ vars.DGE_AI_PROVIDER_JSON }}
+          BUDGET_JSON: ${{ vars.DGE_AI_BUDGET_JSON }}
+          PROVIDER_ID: ${{ vars.DGE_AI_PROVIDER_ID }}
+          MODEL_KEY: ${{ secrets.DGE_MODEL_API_KEY }}
+        run: |
+          set -euo pipefail
+          [ -n "${PROVIDER_JSON:-}" ] || { echo "DGE_AI_PROVIDER_JSON is not set"; exit 1; }
+          [ -n "${BUDGET_JSON:-}" ] || { echo "DGE_AI_BUDGET_JSON is not set"; exit 1; }
+          [ -n "${PROVIDER_ID:-}" ] || { echo "DGE_AI_PROVIDER_ID is not set"; exit 1; }
+          [ -n "${MODEL_KEY:-}" ] || { echo "DGE_MODEL_API_KEY secret is not set"; exit 1; }
+
+      - name: locate the latest successful metrics run
+        id: metrics
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          run_id=$(gh run list --repo "$GITHUB_REPOSITORY" --workflow metrics-daily.yml \
+            --status success --limit 1 --json databaseId --jq '.[0].databaseId // empty')
+          echo "run_id=$run_id" >> "$GITHUB_OUTPUT"
+
+      - name: download the metrics artifact
+        if: steps.metrics.outputs.run_id != ''
+        continue-on-error: true
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          gh run download "${{ steps.metrics.outputs.run_id }}" \
+            --repo "$GITHUB_REPOSITORY" -n github-metrics -D ops/growth-engine/.artifacts/metrics
+
+      - name: export item-level public issue and pull-request metadata
+        continue-on-error: true
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REPO: ${{ github.repository }}
+        run: bash ops/growth-engine/scripts/engagement-export.sh /tmp/engagement.json
+
+      - name: write owner configuration
+        env:
+          PROVIDER_JSON: ${{ vars.DGE_AI_PROVIDER_JSON }}
+          BUDGET_JSON: ${{ vars.DGE_AI_BUDGET_JSON }}
+        run: |
+          set -euo pipefail
+          printf '%s' "$PROVIDER_JSON" > ops/growth-engine/state/providers.generated.json
+          printf '%s' "$BUDGET_JSON" > /tmp/dge-budget.json
+          python3 -c "import json;json.load(open('ops/growth-engine/state/providers.generated.json'));json.load(open('/tmp/dge-budget.json'))"
+
+      - name: AI-assisted plan
+        working-directory: ops/growth-engine
+        env:
+          DGE_STOP: ${{ vars.DGE_STOP }}
+          DGE_MODEL_API_KEY: ${{ secrets.DGE_MODEL_API_KEY }}
+          PROVIDER_ID: ${{ vars.DGE_AI_PROVIDER_ID }}
+        run: |
+          set -euo pipefail
+          snapshot="baseline/snapshot-2026-11-07.json"
+          if [ -f .artifacts/metrics/snapshot.json ]; then
+            snapshot=".artifacts/metrics/snapshot.json"
+          fi
+          args=(pipeline --snapshot "$snapshot" --out-dir runs --min-interval 2s
+            --providers state/providers.generated.json --provider "$PROVIDER_ID"
+            --budget /tmp/dge-budget.json --usage var/growth-engine/usage.json)
+          if [ -f /tmp/engagement.json ]; then
+            args+=(--engagement /tmp/engagement.json)
+          fi
+          go run . "${args[@]}"
+
+      - name: summarize
+        if: always()
+        working-directory: ops/growth-engine
+        run: |
+          set -euo pipefail
+          report=$(ls -1 runs/*-pipeline.md 2>/dev/null | sort | tail -1 || true)
+          if [ -z "$report" ]; then
+            echo "No AI plan was produced." >> "$GITHUB_STEP_SUMMARY"
+            exit 0
+          fi
+          cat "$report" >> "$GITHUB_STEP_SUMMARY"
+
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        if: always()
+        with:
+          name: growth-ai-plan
+          path: ops/growth-engine/runs/
+          if-no-files-found: warn
+          retention-days: 30

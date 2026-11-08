@@ -78,10 +78,20 @@
     }
   ],
   "downloads_total": 35,
+  "engagement": {
+    "captured_at": "2026-11-08T03:26:14Z",
+    "meaningful_external_issues": 0,
+    "merged_external_pull_requests": 0,
+    "showcase_submissions": 0,
+    "showcase_issue_numbers": [],
+    "external_contributors": 0,
+    "unavailable": [
+      "no external contributor is visible in the supplied engagement window; this is not evidence that none exist"
+    ]
+  },
   "traffic_quality": "UNKNOWN",
   "unavailable": [
-    "traffic views and clones: UNKNOWN (requires repository administration read)",
-    "item-level issues and pull requests: UNKNOWN (no engagement file supplied)"
+    "traffic views and clones: UNKNOWN (requires repository administration read)"
   ],
   "caveats": [
     "Stars, forks, watchers and downloads are public signals, not active users or adoption.",

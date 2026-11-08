@@ -270,6 +270,9 @@ func RenderVerificationText(report VerificationReport) string {
 }
 
 func runContent(args []string, stdout, stderr io.Writer) error {
+	if len(args) > 0 && args[0] == "ai" {
+		return runAIContent(args[1:], stdout, stderr)
+	}
 	flags := newFlagSet("content", stderr)
 	kind := flags.String("kind", "", "content kind")
 	channelID := flags.String("channel", "", "target channel id")

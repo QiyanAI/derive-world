@@ -47,6 +47,7 @@ type Opportunity struct {
 	Action        string `json:"action"`
 	ExpectedValue string `json:"expected_value"`
 	Risk          string `json:"risk"`
+	Evidence      string `json:"evidence,omitempty"`
 	Scores        struct {
 		Relevance  int `json:"relevance"`
 		Evidence   int `json:"evidence"`

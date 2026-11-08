@@ -1,25 +1,40 @@
 # Growth Engine (DGE)
 
-Deterministic, offline growth operations for Derive World.
+Offline growth operations and a budget-gated, model-neutral AI Growth Operator
+for Derive World.
 
 `ops/growth-engine` turns the read-only snapshots produced by
-`ops/github-metrics`, verified product facts, a channel registry and an
-experiment ledger into weekly reports, sourced opportunities and prepared
-content drafts. It is an independent Go module with zero dependencies.
+`ops/github-metrics`, verified product facts, dated public research, a channel
+registry, an account registry and an experiment ledger into weekly reports,
+sourced opportunities, prepared content and review-only AI plans. It is an
+independent Go module with zero dependencies.
 
-## What it does not do
+Phase II adds real model calls through a provider registry
+(`openai`-compatible or `anthropic`-compatible), a spend authorization file, a
+usage ledger, public research collection with robots.txt and evidence-quote
+validation, the Channel Account Manager, and approval-gated publish adapters
+for DEV Community and GitHub Discussions.
 
-- It never calls a model provider and produces no paid spend.
-- It never posts, messages, comments, opens issues, or submits to a directory.
-- It never reads or prints credentials. Reports are redacted before they are
-  written.
-- It never estimates a missing value. Unavailable data is `UNKNOWN`.
-- It never treats stars, downloads or forks as active users.
-- It never creates or modifies Derive World product data.
+## Defaults and safety
 
-External publication remains a human decision on an authorized account. The
-engine prepares material and refuses to treat an owner-only channel as
-permitted.
+- **Zero paid calls by default.** No provider is configured in
+  `state/providers.json`. A call requires `--provider`, a valid owner budget
+  file and a matching credential environment variable.
+- **Budget before request.** Purpose, call count, input size, output size and
+  worst-case cost are checked before the HTTP request. A reservation is written
+  first, so a crash cannot hide a possibly billable call.
+- **No silent publishing.** The pipeline is plan-only. Live publishing needs an
+  active account record, `publish` scope, a content-hash approval artifact, a
+  passing verification and a deduplication ledger.
+- **Manual platforms stay manual.** Hacker News, Reddit and Product Hunt have
+  no automated publisher; material is prepared for a human.
+- **No credentials in state.** Passwords, one-time codes, recovery codes and
+  API keys are never read, requested or stored. Model keys come from an
+  environment variable named in the provider registry.
+- **Untrusted input.** Fetched pages are data, never instructions. AI research
+  proposals are accepted only when their evidence quote is an exact substring
+  of the fetched item.
+- **No estimates.** Unavailable values stay `UNKNOWN`; downloads are not users.
 
 ## Commands
 
@@ -35,12 +50,26 @@ go run . verify-content --file drafts/technical-intro-github.md
 go run . experiments list
 go run . weekly --snapshot baseline/snapshot-2026-11-07.json --out-dir reports
 go run . tour-check
+
+# Phase II
+go run . research collect --sources state/sources.json --out reviews/research.json
+go run . research analyze --input reviews/research.json --out reviews/research-ai.json \
+  --provider <id> --budget <owner-budget.json>
+go run . content ai --kind technical-intro --channel github --date 2026-11-08 \
+  --provider <id> --budget <owner-budget.json>
+go run . accounts list
+go run . accounts prepare --channel github
+go run . accounts check --channel github
+go run . accounts preflight --channel github --scope publish
+go run . accounts owner-todo --out docs/GROW-P2-OWNER-TODO.md
+go run . publish --channel devto --file drafts/ai/technical-intro-devto.md --date 2026-11-08
+go run . publish --channel devto --file ... --approval approvals/....json --confirm --date ...
+go run . pipeline --snapshot baseline/snapshot-2026-11-07.json --out-dir reviews
 ```
 
-Every command accepts `--out PATH` where it renders Markdown or JSON, and
-`--json` where a machine-readable form exists. `weekly` requires `--out-dir`,
-refuses to overwrite an existing report without `--force`, and honours
-`--stop-file` or `DGE_STOP=1` as a local stop switch.
+`publish` is a dry run by default. `--confirm` with a valid approval artifact
+performs the network action. AI commands refuse before the request when the
+budget is absent, expired, out of purposes, out of calls or over the cost cap.
 
 ## Inputs
 
@@ -48,7 +77,12 @@ refuses to overwrite an existing report without `--force`, and honours
 |---|---|---|
 | `baseline/snapshot-*.json` | `ops/github-metrics` | Schema v1. Never re-collected here. |
 | `state/facts.json` | this module | Every statement names files and exact substrings; `facts verify` fails if a source stops containing the quote. |
-| `state/channels.json` | this module | Audience, rules, accepted content kinds and explicit authorization per channel. |
+| `state/channels.json` | this module | Audience, rules, accepted content kinds and authorization per channel. |
+| `state/platforms.json` | this module | Dated platform rules, registration requirements, owner-only steps, API policy. |
+| `state/accounts.json` | this module | Non-secret account state, scopes, security facts, owner steps. |
+| `state/sources.json` | this module | Public research sources; none enabled by default. |
+| `state/providers.json` | this module | Model-neutral provider registry; empty by default. |
+| owner budget file | owner | Spend authorization; never committed. See GROW-P2-AI-OPERATOR. |
 | `state/experiments.json` | this module | Hypothesis, metric, baseline, window and decision rule per experiment. |
 | engagement export | `scripts/engagement-export.sh` | Optional item-level public issue/PR metadata. |
 
@@ -106,7 +140,41 @@ only, no schedule overlap with the daily collection, and a hard timeout.
 It does not commit to the repository and does not create issues or discussions.
 Enabling any external channel remains an explicit owner action.
 
+`growth-daily.yml` runs the plan-only pipeline daily against the previous
+metrics artifact and uploads a run manifest. `growth-ai.yml` is a disabled-by-
+default AI schedule: it runs only when the repository variable
+`DGE_AI_ENABLED=1`, a non-secret provider configuration variable and a
+call/cost budget variable are set, and the model key is a repository secret.
+It never publishes.
+
 ## Tests
+
+```bash
+go test ./... -count=1
+go vet ./...
+gofmt -l .
+```
+
+The suite verifies real facts against the repository, the committed example
+world, the static tour, engagement classification, experiment state transitions,
+secret redaction, path safety, stop-switch behaviour and report determinism.
+Phase II adds mock-provider tests for both wire protocols, budget and expiry
+refusal, cost caps, redirect refusal, robots.txt, feed/HTML/GitHub parsing,
+evidence-quote validation, AI draft verification, account preflight and audit,
+approval-gated DEV/GitHub publishing, duplicate suppression, and the pipeline's
+no-publish boundary.
+
+## Documentation
+
+- [GROW-00 audit](docs/GROW-00-AUDIT.md)
+- [Operator guide](docs/GROW-03-OPERATOR.md)
+- [Developer outreach](docs/GROW-04-DEVELOPER-OUTREACH.md)
+- [Derive Relay](docs/GROW-05-DERIVE-RELAY.md)
+- [14-day experiment](docs/GROW-06-EXPERIMENT.md)
+- [Phase II AI operator](docs/GROW-P2-AI-OPERATOR.md)
+- [Phase II accounts](docs/GROW-P2-ACCOUNTS.md)
+- [Phase II publishing](docs/GROW-P2-PUBLISHING.md)
+- [Owner action list](docs/GROW-P2-OWNER-TODO.md)
 
 ```bash
 go test ./... -count=1

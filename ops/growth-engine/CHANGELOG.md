@@ -1,5 +1,35 @@
 # Growth Engine changelog
 
+## 1.1.0 — 2026-11-08
+
+DGE Phase II: a real, model-neutral AI Growth Operator with hard spend gates,
+public research, channel account management and approval-gated publishing.
+
+- Model-neutral provider registry for OpenAI-compatible and Anthropic-compatible
+  endpoints, with HTTPS enforcement, timeouts, no redirects, bounded responses
+  and no vendor names in code.
+- Owner budget file gate: purpose, call count, input/output size and worst-case
+  cost are checked before each request; a reservation is written first.
+- Public research collection (RSS, Atom, HTML, GitHub search) with robots.txt,
+  response caps, per-source status and untrusted-data framing.
+- AI research proposals require an exact evidence quote from a fetched item;
+  hallucinated sources are rejected. Proposals are review-only.
+- AI content generation must cite verified fact markers and pass the existing
+  deterministic verifier; rejected drafts are not written.
+- AI strategy synthesis with evidence-id validation; review-only.
+- Channel Account Manager with dated platform rules, account kits, security
+  checklists, owner-only steps, preflight and append-only non-secret audit.
+- Approval-gated DEV Community and GitHub Discussions publishers, content-hash
+  approvals, duplicate suppression and a runtime ledger.
+- Plan-only pipeline with stage manifest, usage delta, stop switch and no
+  publish path.
+- Daily deterministic workflow and a disabled-by-default AI workflow.
+- 30 new tests covering providers, budgets, research, accounts, publishing and
+  the pipeline.
+
+No paid external model call was made and no content was published in the
+implementation of this version.
+
 ## 1.0.0 — 2026-11-08
 
 First implementation of the Derive World Growth Engine (DGE) under the V1.0
