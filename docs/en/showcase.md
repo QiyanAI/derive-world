@@ -18,7 +18,7 @@ public-safety checklist for sharing your own work.
 
 Two more entry points live alongside the showcase:
 
-- [Five-step offline tour](../../showcase/tour/index.html) — a static page
+- [Five-step offline tour](../../showcase/tour/README.md) — a static page
   built from real screenshots with a labelled simulation. It is not a live AI
   service and creates nothing.
 - [Derive Relay](../../examples/worlds/README.md) — a reproducible base world

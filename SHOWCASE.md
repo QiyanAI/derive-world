@@ -18,7 +18,7 @@ data, no model call, no API key.
 
 ## Try it without Docker
 
-The [five-step offline tour](showcase/tour/index.html) is a static page built
+The [five-step offline tour](showcase/tour/README.md) is a static page built
 from real product screenshots. It walks through create, change, derive, approve
 and share, and includes a small derivation panel that is explicitly a
 **simulation**. It is not a live AI service, it calls no model, and it creates

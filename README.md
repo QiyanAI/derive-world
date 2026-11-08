@@ -43,7 +43,7 @@ and lineage, and an interactive poll. The full recording is
 [Showcase](SHOWCASE.md) has three launch examples and a voluntary way to share
 what you build.
 
-**No Docker?** Take the [five-step offline tour](showcase/tour/index.html).
+**No Docker?** Take the [five-step offline tour](showcase/tour/README.md).
 It is a static page built from real product screenshots and one clearly
 labelled simulation. It is not a live AI service, it calls no model, and it
 creates nothing.

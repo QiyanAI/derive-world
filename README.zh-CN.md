@@ -20,7 +20,7 @@ Derive World 是一个面向 *Living Object（活对象）* 的开源基础：�
 
 17 秒参考世界演示：Living Object、版本历史与来源链、互动投票。完整录屏见 [`demo-17s.webm`](docs/assets/demo-17s.webm)。Fixture 模式，无需模型 API Key。[作品展示](docs/zh/showcase.md)提供三个首发示例与自愿分享入口。
 
-**没有 Docker？** 打开[五步离线演示](showcase/tour/index.html)。它是用真实产品截图构建的静态页面，其中的衍生面板明确标注为模拟。它不是在线 AI 服务，不调用模型，也不会创建任何内容。
+**没有 Docker？** 打开[五步离线演示](showcase/tour/README.md)。它是用真实产品截图构建的静态页面，其中的衍生面板明确标注为模拟。它不是在线 AI 服务，不调用模型，也不会创建任何内容。
 
 **衍生一个分支：**[Derive Relay](examples/worlds/README.md) 是自愿参与的衍生挑战，从一个可复现的基础世界出发，使用 `v0.2.0` 已有的公开与衍生能力。
 
