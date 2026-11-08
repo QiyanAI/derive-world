@@ -1,5 +1,33 @@
 # Growth Engine changelog
 
+## 1.2.0 — 2026-11-08
+
+Final security hardening for Phase II.
+
+- **Cross-run budget durability.** Usage state lives in a dedicated git branch
+  (`dge-state`). A reservation is committed and pushed before the model
+  request; push conflicts are retried against the latest remote totals and
+  re-validated. A fresh Actions runner or a crash cannot reset the cumulative
+  call/cost counters. Local runs use an atomic file store with a lease lock.
+- **Truthful cost cap.** A hard cost cap is claimed only when both provider
+  prices are positive and `max_cost_usd > 0`. Missing or zero pricing is
+  refused for a cost cap and reported as `cost cap NOT enforced`; such runs
+  require `allow_without_cost_cap: true`.
+- **Signed publish approvals.** Ed25519 owner signatures over a canonical
+  payload replace plain JSON approvals. Unsigned, tampered, revoked, expired
+  and wrong-key artifacts are rejected. Approval ids are single-use.
+- **Two-phase publishing.** A pending entry is written before the network call;
+  an ambiguous failure becomes `unknown`, the approval stays consumed, and a
+  retry requires reconciliation (`--external-id/--url` or `--not-published`).
+- **State branch setup** (`scripts/init-state-branch.sh`) and workflow wiring
+  with `contents: write` limited to the state branch.
+- 72 tests total, including cross-run file/git ledger tests, cost-cap
+  truthfulness, signed-approval negative tests, replay, ambiguous failure and
+  recovery.
+
+No paid external model call was made and no content was published in this
+change.
+
 ## 1.1.0 — 2026-11-08
 
 DGE Phase II: a real, model-neutral AI Growth Operator with hard spend gates,

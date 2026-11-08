@@ -80,8 +80,8 @@ func TestAnalyzeResearchRejectsHallucinatedEvidence(t *testing.T) {
 	server := openAIServer(t, func(map[string]any) string { return modelReply })
 	defer server.Close()
 	dir := t.TempDir()
-	client := NewModelClient(testProvider(server.URL, "openai"), futureBudget(),
-		&Usage{SchemaVersion: 1}, filepath.Join(dir, "usage.json"), "test-key", time.Now)
+	client := testClient(testProvider(server.URL, "openai"), futureBudget(),
+		filepath.Join(dir, "usage.json"), "test-key")
 	facts, err := loadFacts("state/facts.json")
 	if err != nil {
 		t.Fatal(err)

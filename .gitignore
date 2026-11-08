@@ -54,3 +54,4 @@ ops/growth-engine/growth-engine.exe
 ops/growth-engine/var/
 ops/growth-engine/runs/
 ops/growth-engine/state/providers.generated.json
+ops/growth-engine/.state/

@@ -31,6 +31,8 @@ func runAIContent(args []string, stdout, stderr io.Writer) error {
 	providerID := flags.String("provider", "", "provider id")
 	budgetPath := flags.String("budget", "", "owner budget authorization")
 	usagePath := flags.String("usage", "var/growth-engine/usage.json", "usage ledger")
+	usageGitDir := flags.String("usage-git-dir", "", "git work tree containing the shared usage ledger")
+	usageGitBranch := flags.String("usage-git-branch", "dge-state", "git branch used by --usage-git-dir")
 	output := flags.String("out", "", "output path")
 	force := flags.Bool("force", false, "replace an existing draft")
 	date := flags.String("date", "", "draft date YYYY-MM-DD")
@@ -58,7 +60,7 @@ func runAIContent(args []string, stdout, stderr io.Writer) error {
 	if !channelFits(channel, *kind) {
 		return fmt.Errorf("channel %q does not accept content kind %q", channel.ID, *kind)
 	}
-	client, err := loadModelClient(*providersPath, *providerID, *budgetPath, *usagePath, "content")
+	client, err := loadModelClient(*providersPath, *providerID, *budgetPath, *usagePath, *usageGitDir, *usageGitBranch, "content")
 	if err != nil {
 		return err
 	}

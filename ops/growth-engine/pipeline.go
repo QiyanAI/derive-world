@@ -39,6 +39,7 @@ type PipelineManifest struct {
 	Strategy      *StrategyPlan    `json:"strategy,omitempty"`
 	StrategyMeta  *ModelResponse   `json:"strategy_meta,omitempty"`
 	Usage         *Usage           `json:"usage,omitempty"`
+	UsageSummary  *UsageSummary    `json:"usage_summary,omitempty"`
 	NotPerformed  []string         `json:"not_performed"`
 }
 
@@ -55,6 +56,8 @@ func runPipeline(args []string, stdout, stderr io.Writer) error {
 	providerID := flags.String("provider", "", "provider id (enables AI stages)")
 	budgetPath := flags.String("budget", "", "owner budget authorization")
 	usagePath := flags.String("usage", "var/growth-engine/usage.json", "usage ledger")
+	usageGitDir := flags.String("usage-git-dir", "", "git work tree containing the shared usage ledger")
+	usageGitBranch := flags.String("usage-git-branch", "dge-state", "git branch used by --usage-git-dir")
 	outDir := flags.String("out-dir", "runs", "output directory")
 	force := flags.Bool("force", false, "replace existing run files")
 	stopFile := flags.String("stop-file", "", "halt if this file exists")
@@ -127,14 +130,18 @@ func runPipeline(args []string, stdout, stderr io.Writer) error {
 	}
 	var client *ModelClient
 	if aiEnabled {
-		client, err = loadModelClient(*providersPath, *providerID, *budgetPath, *usagePath, "research")
+		client, err = loadModelClient(*providersPath, *providerID, *budgetPath, *usagePath, *usageGitDir, *usageGitBranch, "research")
 		if err != nil {
 			return err
 		}
 	}
 	var usageBefore Usage
 	if client != nil {
-		usageBefore = *client.usage
+		loaded, err := client.store.Load()
+		if err != nil {
+			return fmt.Errorf("load usage ledger: %w", err)
+		}
+		usageBefore = *loaded
 	}
 
 	// Stage 1: research collection (external, read-only, untrusted).
@@ -192,6 +199,7 @@ func runPipeline(args []string, stdout, stderr io.Writer) error {
 			})
 			manifest.Opportunities = opportunities
 			manifest.Research = summarizeResearch(research)
+			applyUsage(&manifest, client, usageBefore)
 			writePipelineOutputs(*outDir, date, &manifest, *force)
 			return err
 		}
@@ -226,7 +234,7 @@ func runPipeline(args []string, stdout, stderr io.Writer) error {
 			manifest.Stages = append(manifest.Stages, PipelineStage{
 				Name: "strategy", Status: "error", Detail: redact(err.Error()),
 			})
-			manifest.Usage = usagePointer(usageDelta(usageBefore, *client.usage))
+			applyUsage(&manifest, client, usageBefore)
 			writePipelineOutputs(*outDir, date, &manifest, *force)
 			return err
 		}
@@ -235,7 +243,7 @@ func runPipeline(args []string, stdout, stderr io.Writer) error {
 		manifest.Stages = append(manifest.Stages, PipelineStage{
 			Name: "strategy", Status: "complete", Detail: "AI plan validated against known evidence ids; review-only", Items: len(plan.Actions),
 		})
-		manifest.Usage = usagePointer(usageDelta(usageBefore, *client.usage))
+		applyUsage(&manifest, client, usageBefore)
 	} else {
 		manifest.Stages = append(manifest.Stages, PipelineStage{
 			Name: "strategy", Status: "skipped", Detail: "no provider selected; use the weekly deterministic report",
@@ -272,6 +280,21 @@ func usagePointer(usage Usage) *Usage {
 	return &usage
 }
 
+func applyUsage(manifest *PipelineManifest, client *ModelClient, before Usage) {
+	if client == nil {
+		return
+	}
+	after, err := client.store.Load()
+	if err != nil {
+		manifest.NotPerformed = append(manifest.NotPerformed, "Usage ledger could not be read after the run: "+redact(err.Error()))
+		return
+	}
+	delta := usageDelta(before, *after)
+	manifest.Usage = usagePointer(delta)
+	summary := summarizeUsage(after, client.budget, client.provider)
+	manifest.UsageSummary = &summary
+}
+
 func writePipelineOutputs(dir, date string, manifest *PipelineManifest, force bool) error {
 	encoded, err := json.MarshalIndent(manifest, "", "  ")
 	if err != nil {
@@ -302,8 +325,19 @@ func renderPipelineMarkdown(manifest *PipelineManifest) string {
 		builder.WriteString("\n" + renderStrategyMarkdown(manifest.Strategy, manifest.StrategyMeta) + "\n")
 	}
 	if manifest.Usage != nil {
-		builder.WriteString(fmt.Sprintf("\n## Model usage this run\n\n- Calls: %d\n- Input tokens: %d\n- Output tokens: %d\n- Estimated cost: %.6f USD\n",
-			manifest.Usage.Calls, manifest.Usage.InputTokens, manifest.Usage.OutputTokens, manifest.Usage.CostUSD))
+		builder.WriteString(fmt.Sprintf("\n## Model usage this run\n\n- Calls: %d\n- Input tokens: %d\n- Output tokens: %d\n- Estimated cost: %.6f USD\n- Hard cost cap enforced: %t\n",
+			manifest.Usage.Calls, manifest.Usage.InputTokens, manifest.Usage.OutputTokens, manifest.Usage.CostUSD, manifest.Usage.CostCapEnforced))
+		if manifest.UsageSummary != nil {
+			builder.WriteString(fmt.Sprintf("- Cumulative authorization: %s — %d calls used, %d remaining; estimated %.6f USD",
+				manifest.UsageSummary.AuthorizationID, manifest.UsageSummary.Calls, manifest.UsageSummary.RemainingCalls, manifest.UsageSummary.CostUSD))
+			if manifest.UsageSummary.CostCapEnforced {
+				builder.WriteString(fmt.Sprintf(", %.6f USD remaining under the cap", manifest.UsageSummary.RemainingCostUSD))
+			}
+			builder.WriteString("\n")
+			if manifest.UsageSummary.Note != "" {
+				builder.WriteString("- **" + manifest.UsageSummary.Note + "**\n")
+			}
+		}
 	}
 	builder.WriteString("\n## Not performed\n\n")
 	for _, item := range manifest.NotPerformed {

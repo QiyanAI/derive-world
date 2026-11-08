@@ -12,6 +12,7 @@ import (
 	"net/http"
 	"net/url"
 	"os"
+	"path/filepath"
 	"strings"
 	"time"
 )
@@ -40,26 +41,36 @@ type Provider struct {
 // Budget is an owner-authored spend authorization. It is a hard pre-call gate,
 // not a security boundary: the owner controls the file and the credential.
 type Budget struct {
-	SchemaVersion   int      `json:"schema_version"`
-	AuthorizedBy    string   `json:"authorized_by"`
-	AuthorizedAt    string   `json:"authorized_at"`
-	ExpiresAt       string   `json:"expires_at"`
-	MaxCalls        int      `json:"max_calls"`
-	MaxInputChars   int      `json:"max_input_chars"`
-	MaxOutputTokens int      `json:"max_output_tokens"`
-	MaxCostUSD      float64  `json:"max_cost_usd"`
-	Purposes        []string `json:"purposes"`
+	SchemaVersion       int      `json:"schema_version"`
+	AuthorizationID     string   `json:"authorization_id"`
+	AuthorizedBy        string   `json:"authorized_by"`
+	AuthorizedAt        string   `json:"authorized_at"`
+	ExpiresAt           string   `json:"expires_at"`
+	MaxCalls            int      `json:"max_calls"`
+	MaxInputChars       int      `json:"max_input_chars"`
+	MaxOutputTokens     int      `json:"max_output_tokens"`
+	MaxCostUSD          float64  `json:"max_cost_usd"`
+	AllowWithoutCostCap bool     `json:"allow_without_cost_cap"`
+	Purposes            []string `json:"purposes"`
 }
 
-// Usage is the durable local ledger. A reservation is written before the HTTP
-// request, so a crash cannot hide a possibly billable call.
+// PricingKnown reports whether a hard cost cap can be truthfully enforced.
+// A zero or missing price means the cost is unknown, not free.
+func (provider Provider) PricingKnown() bool {
+	return provider.InputPricePerMillion > 0 && provider.OutputPricePerMillion > 0
+}
+
+// Usage is the durable ledger. A reservation is written and pushed before the
+// HTTP request, so a crash or a fresh runner cannot hide a billable call.
 type Usage struct {
-	SchemaVersion int     `json:"schema_version"`
-	Calls         int     `json:"calls"`
-	InputTokens   int     `json:"input_tokens"`
-	OutputTokens  int     `json:"output_tokens"`
-	CostUSD       float64 `json:"cost_usd"`
-	UpdatedAt     string  `json:"updated_at"`
+	SchemaVersion   int     `json:"schema_version"`
+	AuthorizationID string  `json:"authorization_id"`
+	Calls           int     `json:"calls"`
+	InputTokens     int     `json:"input_tokens"`
+	OutputTokens    int     `json:"output_tokens"`
+	CostUSD         float64 `json:"cost_usd"`
+	CostCapEnforced bool    `json:"cost_cap_enforced"`
+	UpdatedAt       string  `json:"updated_at"`
 }
 
 type ModelRequest struct {
@@ -71,22 +82,23 @@ type ModelRequest struct {
 }
 
 type ModelResponse struct {
-	Text         string
-	Provider     string
-	Model        string
-	InputTokens  int
-	OutputTokens int
-	CostUSD      float64
+	Text            string
+	Provider        string
+	Model           string
+	InputTokens     int
+	OutputTokens    int
+	CostUSD         float64
+	CostCapEnforced bool
+	PricingKnown    bool
 }
 
 type ModelClient struct {
-	provider  Provider
-	budget    *Budget
-	usage     *Usage
-	usagePath string
-	apiKey    string
-	now       func() time.Time
-	http      *http.Client
+	provider Provider
+	budget   *Budget
+	store    UsageStore
+	apiKey   string
+	now      func() time.Time
+	http     *http.Client
 }
 
 func loadProviders(path string) (*ProviderFile, error) {
@@ -167,11 +179,17 @@ func loadBudget(path string) (*Budget, error) {
 	if budget.AuthorizedBy == "" || budget.AuthorizedAt == "" || budget.ExpiresAt == "" {
 		return nil, fmt.Errorf("%s: authorized_by, authorized_at and expires_at are required", path)
 	}
+	if budget.AuthorizationID == "" {
+		return nil, fmt.Errorf("%s: authorization_id is required (a stable id for this cumulative budget)", path)
+	}
 	if budget.MaxCalls <= 0 || budget.MaxInputChars <= 0 || budget.MaxOutputTokens <= 0 {
 		return nil, fmt.Errorf("%s: call, input and output limits must be positive", path)
 	}
 	if budget.MaxCostUSD < 0 {
 		return nil, fmt.Errorf("%s: max_cost_usd must not be negative", path)
+	}
+	if budget.MaxCostUSD == 0 && !budget.AllowWithoutCostCap {
+		return nil, fmt.Errorf("%s: a zero cost cap requires allow_without_cost_cap=true; the engine will not claim a cost limit it cannot enforce", path)
 	}
 	if _, err := time.Parse("2006-01-02", budget.AuthorizedAt); err != nil {
 		return nil, fmt.Errorf("%s: authorized_at must be YYYY-MM-DD", path)
@@ -205,11 +223,14 @@ func loadUsage(path string) (*Usage, error) {
 	var usage Usage
 	if err := readJSON(path, &usage); err != nil {
 		if errors.Is(err, os.ErrNotExist) || strings.Contains(err.Error(), "no such file") {
-			return &Usage{SchemaVersion: 1}, nil
+			return &Usage{SchemaVersion: 2}, nil
 		}
 		return nil, err
 	}
-	if usage.SchemaVersion != 1 {
+	if usage.SchemaVersion == 1 {
+		usage.SchemaVersion = 2
+	}
+	if usage.SchemaVersion != 2 {
 		return nil, fmt.Errorf("%s: unsupported usage schema_version %d", path, usage.SchemaVersion)
 	}
 	return &usage, nil
@@ -224,17 +245,16 @@ func (usage *Usage) save(path string, now time.Time) error {
 	return writeFile(path, append(encoded, '\n'), true)
 }
 
-func NewModelClient(provider Provider, budget *Budget, usage *Usage, usagePath, apiKey string, now func() time.Time) *ModelClient {
+func NewModelClient(provider Provider, budget *Budget, store UsageStore, apiKey string, now func() time.Time) *ModelClient {
 	timeout := time.Duration(provider.TimeoutSeconds) * time.Second
 	transport := http.DefaultTransport.(*http.Transport).Clone()
 	transport.TLSClientConfig = &tls.Config{MinVersion: tls.VersionTLS12}
 	return &ModelClient{
-		provider:  provider,
-		budget:    budget,
-		usage:     usage,
-		usagePath: usagePath,
-		apiKey:    apiKey,
-		now:       now,
+		provider: provider,
+		budget:   budget,
+		store:    store,
+		apiKey:   apiKey,
+		now:      now,
 		http: &http.Client{
 			Timeout:   timeout,
 			Transport: transport,
@@ -262,6 +282,9 @@ func (client *ModelClient) reserve(request ModelRequest) (int, int, float64, err
 	if err := client.budget.validate(request.Purpose, now); err != nil {
 		return 0, 0, 0, err
 	}
+	if client.budget.MaxCostUSD > 0 && !client.provider.PricingKnown() {
+		return 0, 0, 0, errors.New("a hard cost cap was requested but provider pricing is missing or zero; supply both prices or allow_without_cost_cap")
+	}
 	inputChars := len(request.System) + len(request.User)
 	if inputChars > client.budget.MaxInputChars {
 		return 0, 0, 0, fmt.Errorf("input %d characters exceeds the authorized %d", inputChars, client.budget.MaxInputChars)
@@ -273,20 +296,36 @@ func (client *ModelClient) reserve(request ModelRequest) (int, int, float64, err
 	if maxOutput > client.budget.MaxOutputTokens {
 		return 0, 0, 0, fmt.Errorf("max output %d exceeds the authorized %d", maxOutput, client.budget.MaxOutputTokens)
 	}
-	if client.usage.Calls+1 > client.budget.MaxCalls {
-		return 0, 0, 0, fmt.Errorf("call budget exhausted: %d/%d", client.usage.Calls, client.budget.MaxCalls)
-	}
 	inputTokens := estimateTokens(inputChars)
 	estimate := client.estimatedCost(inputTokens, maxOutput)
-	if client.usage.CostUSD+estimate > client.budget.MaxCostUSD+1e-9 {
-		return 0, 0, 0, fmt.Errorf("estimated cost %.6f USD would exceed the authorized %.6f USD",
-			client.usage.CostUSD+estimate, client.budget.MaxCostUSD)
-	}
-	client.usage.Calls++
-	client.usage.CostUSD += estimate
-	client.usage.InputTokens += inputTokens
-	client.usage.OutputTokens += maxOutput
-	if err := client.usage.save(client.usagePath, now); err != nil {
+	capEnforced := client.provider.PricingKnown() && client.budget.MaxCostUSD > 0
+	err := client.store.Update(func(usage *Usage) error {
+		if usage.AuthorizationID == "" {
+			usage.AuthorizationID = client.budget.AuthorizationID
+		}
+		if usage.AuthorizationID != client.budget.AuthorizationID {
+			return fmt.Errorf("usage ledger belongs to authorization %q, not %q; archive it before starting a new authorization",
+				usage.AuthorizationID, client.budget.AuthorizationID)
+		}
+		if usage.Calls+1 > client.budget.MaxCalls {
+			return fmt.Errorf("call budget exhausted: %d/%d (cumulative across runs)", usage.Calls, client.budget.MaxCalls)
+		}
+		if capEnforced && usage.CostUSD+estimate > client.budget.MaxCostUSD+1e-9 {
+			return fmt.Errorf("estimated cost %.6f USD would exceed the authorized %.6f USD (cumulative)",
+				usage.CostUSD+estimate, client.budget.MaxCostUSD)
+		}
+		if usage.Calls == 0 {
+			usage.CostCapEnforced = capEnforced
+		} else if !capEnforced {
+			usage.CostCapEnforced = false
+		}
+		usage.Calls++
+		usage.CostUSD += estimate
+		usage.InputTokens += inputTokens
+		usage.OutputTokens += maxOutput
+		return nil
+	})
+	if err != nil {
 		return 0, 0, 0, fmt.Errorf("record reservation: %w", err)
 	}
 	return inputTokens, maxOutput, estimate, nil
@@ -301,13 +340,18 @@ func (client *ModelClient) settle(reservationInput, reservationOutput int, reser
 		outputTokens = reservationOutput
 	}
 	actual := client.estimatedCost(inputTokens, outputTokens)
-	client.usage.CostUSD += actual - reservationCost
-	client.usage.InputTokens += inputTokens - reservationInput
-	client.usage.OutputTokens += outputTokens - reservationOutput
-	if client.usage.CostUSD < 0 {
-		client.usage.CostUSD = 0
-	}
-	return client.usage.save(client.usagePath, now)
+	return client.store.Update(func(usage *Usage) error {
+		if usage.AuthorizationID != client.budget.AuthorizationID {
+			return fmt.Errorf("usage ledger belongs to authorization %q, not %q", usage.AuthorizationID, client.budget.AuthorizationID)
+		}
+		usage.CostUSD += actual - reservationCost
+		usage.InputTokens += inputTokens - reservationInput
+		usage.OutputTokens += outputTokens - reservationOutput
+		if usage.CostUSD < 0 {
+			usage.CostUSD = 0
+		}
+		return nil
+	})
 }
 
 // Complete performs one bounded model call. It refuses before the request when
@@ -334,12 +378,14 @@ func (client *ModelClient) Complete(ctx context.Context, request ModelRequest) (
 		return nil, err
 	}
 	return &ModelResponse{
-		Text:         text,
-		Provider:     client.provider.ID,
-		Model:        client.provider.Model,
-		InputTokens:  inputTokens,
-		OutputTokens: outputTokens,
-		CostUSD:      client.estimatedCost(inputTokens, outputTokens),
+		Text:            text,
+		Provider:        client.provider.ID,
+		Model:           client.provider.Model,
+		InputTokens:     inputTokens,
+		OutputTokens:    outputTokens,
+		CostUSD:         client.estimatedCost(inputTokens, outputTokens),
+		CostCapEnforced: client.provider.PricingKnown() && client.budget.MaxCostUSD > 0,
+		PricingKnown:    client.provider.PricingKnown(),
 	}, nil
 }
 
@@ -495,7 +541,9 @@ func truncateText(value string, limit int) string {
 
 // loadModelClientFromFlags resolves the provider, key, budget and usage ledger
 // shared by every AI command.
-func loadModelClient(providersPath, providerID, budgetPath, usagePath, purpose string) (*ModelClient, error) {
+const defaultUsagePath = "var/growth-engine/usage.json"
+
+func loadModelClient(providersPath, providerID, budgetPath, usagePath, usageGitDir, usageGitBranch, purpose string) (*ModelClient, error) {
 	if providersPath == "" || providerID == "" || budgetPath == "" {
 		return nil, errors.New("--providers, --provider and --budget are required for a model call")
 	}
@@ -511,13 +559,37 @@ func loadModelClient(providersPath, providerID, budgetPath, usagePath, purpose s
 	if err != nil {
 		return nil, err
 	}
-	usage, err := loadUsage(usagePath)
-	if err != nil {
-		return nil, err
+	if budget.MaxCostUSD > 0 && !provider.PricingKnown() {
+		return nil, errors.New("the budget asks for a hard cost cap but provider pricing is missing or zero; supply input and output prices, or set max_cost_usd=0 with allow_without_cost_cap=true")
+	}
+	if budget.MaxCostUSD == 0 && !budget.AllowWithoutCostCap {
+		return nil, errors.New("the budget has no cost cap; set allow_without_cost_cap=true to run with call/token limits only")
 	}
 	apiKey := os.Getenv(provider.APIKeyEnv)
 	if apiKey == "" {
 		return nil, fmt.Errorf("credential environment variable %s is not set; no model call was made", provider.APIKeyEnv)
 	}
-	return NewModelClient(provider, budget, usage, usagePath, apiKey, time.Now), nil
+	now := time.Now
+	var store UsageStore
+	if usageGitDir != "" {
+		file := usagePath
+		if file == "" || file == defaultUsagePath {
+			file = "usage.json"
+		}
+		file = filepath.ToSlash(file)
+		if filepath.IsAbs(file) {
+			file = filepath.Base(file)
+		}
+		branch := usageGitBranch
+		if branch == "" {
+			branch = "dge-state"
+		}
+		store = &GitUsageStore{Dir: usageGitDir, File: file, Branch: branch, Now: now}
+	} else {
+		if usagePath == "" {
+			usagePath = defaultUsagePath
+		}
+		store = &FileUsageStore{Path: usagePath, Now: now}
+	}
+	return NewModelClient(provider, budget, store, apiKey, now), nil
 }

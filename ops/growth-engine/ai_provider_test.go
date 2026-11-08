@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -29,16 +30,22 @@ func writeJSONTemp(t *testing.T, dir, name string, value any) string {
 
 func futureBudget() *Budget {
 	return &Budget{
-		SchemaVersion:   1,
-		AuthorizedBy:    "test owner",
-		AuthorizedAt:    "2026-11-08",
-		ExpiresAt:       "2099-12-31",
-		MaxCalls:        3,
-		MaxInputChars:   20000,
-		MaxOutputTokens: 2000,
-		MaxCostUSD:      1.0,
-		Purposes:        []string{"research", "strategy", "content"},
+		SchemaVersion:       1,
+		AuthorizationID:     "test-auth",
+		AuthorizedBy:        "test owner",
+		AuthorizedAt:        "2026-11-08",
+		ExpiresAt:           "2099-12-31",
+		MaxCalls:            3,
+		MaxInputChars:       20000,
+		MaxOutputTokens:     2000,
+		MaxCostUSD:          0,
+		AllowWithoutCostCap: true,
+		Purposes:            []string{"research", "strategy", "content"},
 	}
+}
+
+func testClient(provider Provider, budget *Budget, usagePath, apiKey string) *ModelClient {
+	return NewModelClient(provider, budget, &FileUsageStore{Path: usagePath, Now: time.Now}, apiKey, time.Now)
 }
 
 func testProvider(baseURL, protocol string) Provider {
@@ -84,8 +91,8 @@ func TestOpenAIProviderCallAndUsage(t *testing.T) {
 	defer server.Close()
 	dir := t.TempDir()
 	usagePath := filepath.Join(dir, "usage.json")
-	client := NewModelClient(testProvider(server.URL, "openai"), futureBudget(),
-		&Usage{SchemaVersion: 1}, usagePath, "test-key", time.Now)
+	client := testClient(testProvider(server.URL, "openai"), futureBudget(),
+		usagePath, "test-key")
 	response, err := client.Complete(context.Background(), ModelRequest{
 		Purpose: "research", System: "system", User: "user", MaxOutputTokens: 100,
 	})
@@ -114,8 +121,8 @@ func TestAnthropicProviderCall(t *testing.T) {
 	}))
 	defer server.Close()
 	dir := t.TempDir()
-	client := NewModelClient(testProvider(server.URL, "anthropic"), futureBudget(),
-		&Usage{SchemaVersion: 1}, filepath.Join(dir, "usage.json"), "test-key", time.Now)
+	client := testClient(testProvider(server.URL, "anthropic"), futureBudget(),
+		filepath.Join(dir, "usage.json"), "test-key")
 	response, err := client.Complete(context.Background(), ModelRequest{
 		Purpose: "strategy", System: "system", User: "user", MaxOutputTokens: 100,
 	})
@@ -137,8 +144,8 @@ func TestBudgetRefusesUnauthorizedPurposeBeforeAnyRequest(t *testing.T) {
 	budget := futureBudget()
 	budget.Purposes = []string{"content"}
 	dir := t.TempDir()
-	client := NewModelClient(testProvider(server.URL, "openai"), budget,
-		&Usage{SchemaVersion: 1}, filepath.Join(dir, "usage.json"), "test-key", time.Now)
+	client := testClient(testProvider(server.URL, "openai"), budget,
+		filepath.Join(dir, "usage.json"), "test-key")
 	if _, err := client.Complete(context.Background(), ModelRequest{Purpose: "research", System: "s", User: "u"}); err == nil {
 		t.Fatal("unauthorized purpose accepted")
 	}
@@ -159,8 +166,7 @@ func TestBudgetRefusesEstimatedCostOverCap(t *testing.T) {
 	provider.OutputPricePerMillion = 1_000_000
 	budget := futureBudget()
 	budget.MaxCostUSD = 0.0000001
-	client := NewModelClient(provider, budget, &Usage{SchemaVersion: 1},
-		filepath.Join(t.TempDir(), "usage.json"), "test-key", time.Now)
+	client := testClient(provider, budget, filepath.Join(t.TempDir(), "usage.json"), "test-key")
 	if _, err := client.Complete(context.Background(), ModelRequest{Purpose: "research", System: "s", User: "u", MaxOutputTokens: 100}); err == nil {
 		t.Fatal("cost cap not enforced")
 	}
@@ -172,8 +178,8 @@ func TestBudgetRefusesEstimatedCostOverCap(t *testing.T) {
 func TestBudgetExpiryIsEnforced(t *testing.T) {
 	budget := futureBudget()
 	budget.ExpiresAt = "2020-01-01"
-	client := NewModelClient(testProvider("http://127.0.0.1:1", "openai"), budget,
-		&Usage{SchemaVersion: 1}, filepath.Join(t.TempDir(), "usage.json"), "key", time.Now)
+	client := testClient(testProvider("http://127.0.0.1:1", "openai"), budget,
+		filepath.Join(t.TempDir(), "usage.json"), "key")
 	if _, err := client.Complete(context.Background(), ModelRequest{Purpose: "research", System: "s", User: "u"}); err == nil {
 		t.Fatal("expired budget accepted")
 	}
@@ -185,8 +191,8 @@ func TestCallBudgetIsEnforced(t *testing.T) {
 	budget := futureBudget()
 	budget.MaxCalls = 1
 	dir := t.TempDir()
-	client := NewModelClient(testProvider(server.URL, "openai"), budget,
-		&Usage{SchemaVersion: 1}, filepath.Join(dir, "usage.json"), "test-key", time.Now)
+	client := testClient(testProvider(server.URL, "openai"), budget,
+		filepath.Join(dir, "usage.json"), "test-key")
 	if _, err := client.Complete(context.Background(), ModelRequest{Purpose: "research", System: "s", User: "u"}); err != nil {
 		t.Fatal(err)
 	}
@@ -204,8 +210,8 @@ func TestRedirectsAreRefused(t *testing.T) {
 		http.Redirect(w, r, target.URL, http.StatusTemporaryRedirect)
 	}))
 	defer server.Close()
-	client := NewModelClient(testProvider(server.URL, "openai"), futureBudget(),
-		&Usage{SchemaVersion: 1}, filepath.Join(t.TempDir(), "usage.json"), "test-key", time.Now)
+	client := testClient(testProvider(server.URL, "openai"), futureBudget(),
+		filepath.Join(t.TempDir(), "usage.json"), "test-key")
 	if _, err := client.Complete(context.Background(), ModelRequest{Purpose: "research", System: "s", User: "u"}); err == nil {
 		t.Fatal("redirect was followed")
 	}
@@ -227,13 +233,158 @@ func TestModelErrorDoesNotEchoCredential(t *testing.T) {
 		http.Error(w, "upstream rejected the request", http.StatusBadGateway)
 	}))
 	defer server.Close()
-	client := NewModelClient(testProvider(server.URL, "openai"), futureBudget(),
-		&Usage{SchemaVersion: 1}, filepath.Join(t.TempDir(), "usage.json"), secret, time.Now)
+	client := testClient(testProvider(server.URL, "openai"), futureBudget(),
+		filepath.Join(t.TempDir(), "usage.json"), secret)
 	_, err := client.Complete(context.Background(), ModelRequest{Purpose: "research", System: "s", User: "u"})
 	if err == nil {
 		t.Fatal("expected an error")
 	}
 	if strings.Contains(err.Error(), secret) {
 		t.Fatalf("error leaked the credential: %v", err)
+	}
+}
+
+func TestCrossRunBudgetPersistenceUsesSharedLedger(t *testing.T) {
+	hits := 0
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		hits++
+		fmt.Fprint(w, `{"choices":[{"message":{"content":"ok"}}],"usage":{"prompt_tokens":5,"completion_tokens":5}}`)
+	}))
+	defer server.Close()
+	usagePath := filepath.Join(t.TempDir(), "usage.json")
+	budget := futureBudget()
+	budget.MaxCalls = 1
+	first := testClient(testProvider(server.URL, "openai"), budget, usagePath, "key")
+	if _, err := first.Complete(context.Background(), ModelRequest{Purpose: "research", System: "s", User: "u"}); err != nil {
+		t.Fatal(err)
+	}
+	// A new client represents a new process or a fresh GitHub Actions runner.
+	second := testClient(testProvider(server.URL, "openai"), budget, usagePath, "key")
+	if _, err := second.Complete(context.Background(), ModelRequest{Purpose: "research", System: "s", User: "u"}); err == nil {
+		t.Fatal("a fresh client reset the cumulative call budget")
+	}
+	if hits != 1 {
+		t.Fatalf("model endpoint hits = %d, want 1", hits)
+	}
+}
+
+func TestCostCapIsRefusedWhenPricingIsUnknown(t *testing.T) {
+	hits := 0
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		hits++
+		fmt.Fprint(w, `{"choices":[{"message":{"content":"ok"}}]}`)
+	}))
+	defer server.Close()
+	budget := futureBudget()
+	budget.MaxCostUSD = 1.0
+	budget.AllowWithoutCostCap = false
+	client := testClient(testProvider(server.URL, "openai"), budget, filepath.Join(t.TempDir(), "usage.json"), "key")
+	if _, err := client.Complete(context.Background(), ModelRequest{Purpose: "research", System: "s", User: "u"}); err == nil {
+		t.Fatal("a zero-price provider was allowed to claim a hard cost cap")
+	}
+	if hits != 0 {
+		t.Fatalf("model endpoint was called %d times", hits)
+	}
+}
+
+func TestUnpricedRunDoesNotClaimCostCap(t *testing.T) {
+	server := openAIServer(t, func(map[string]any) string { return "ok" })
+	defer server.Close()
+	budget := futureBudget()
+	budget.MaxCostUSD = 0
+	budget.AllowWithoutCostCap = true
+	usagePath := filepath.Join(t.TempDir(), "usage.json")
+	client := testClient(testProvider(server.URL, "openai"), budget, usagePath, "key")
+	response, err := client.Complete(context.Background(), ModelRequest{Purpose: "research", System: "s", User: "u"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if response.CostCapEnforced {
+		t.Fatal("an unpriced provider claimed a hard cost cap")
+	}
+	usage, err := loadUsage(usagePath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if usage.CostCapEnforced {
+		t.Fatal("usage ledger claimed a hard cost cap without pricing")
+	}
+	summary := summarizeUsage(usage, budget, testProvider(server.URL, "openai"))
+	if !strings.Contains(summary.Note, "NOT enforced") || summary.RemainingCostUSD != 0 {
+		t.Fatalf("summary = %+v", summary)
+	}
+}
+
+func TestStaleUsageLockIsRecovered(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "usage.json")
+	lock := path + ".lock"
+	if err := os.WriteFile(lock, []byte("old"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	old := time.Now().Add(-10 * time.Minute)
+	if err := os.Chtimes(lock, old, old); err != nil {
+		t.Fatal(err)
+	}
+	store := &FileUsageStore{Path: path, Now: time.Now}
+	if err := store.Update(func(usage *Usage) error { usage.Calls++; return nil }); err != nil {
+		t.Fatalf("stale lock was not recovered: %v", err)
+	}
+}
+
+func runGit(t *testing.T, dir string, args ...string) {
+	t.Helper()
+	command := exec.Command("git", args...)
+	command.Dir = dir
+	if output, err := command.CombinedOutput(); err != nil {
+		t.Fatalf("git %v: %v\n%s", args, err, output)
+	}
+}
+
+func TestGitUsageStorePersistsAcrossFreshClones(t *testing.T) {
+	root := t.TempDir()
+	bare := filepath.Join(root, "state.git")
+	work := filepath.Join(root, "work")
+	runGit(t, root, "init", "--bare", "--initial-branch=main", bare)
+	runGit(t, root, "clone", bare, work)
+	runGit(t, work, "config", "user.email", "test@example.com")
+	runGit(t, work, "config", "user.name", "Test")
+	initial := `{"schema_version":2,"authorization_id":"","calls":0,"input_tokens":0,"output_tokens":0,"cost_usd":0,"cost_cap_enforced":false}
+`
+	if err := os.WriteFile(filepath.Join(work, "usage.json"), []byte(initial), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	runGit(t, work, "add", "usage.json")
+	runGit(t, work, "commit", "-m", "init usage")
+	runGit(t, work, "push", "origin", "main")
+
+	hits := 0
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		hits++
+		fmt.Fprint(w, `{"choices":[{"message":{"content":"ok"}}],"usage":{"prompt_tokens":3,"completion_tokens":3}}`)
+	}))
+	defer server.Close()
+	budget := futureBudget()
+	budget.MaxCalls = 1
+	provider := testProvider(server.URL, "openai")
+	first := NewModelClient(provider, budget, &GitUsageStore{Dir: work, File: "usage.json", Branch: "main", Now: time.Now}, "key", time.Now)
+	if _, err := first.Complete(context.Background(), ModelRequest{Purpose: "research", System: "s", User: "u"}); err != nil {
+		t.Fatalf("first call: %v", err)
+	}
+
+	work2 := filepath.Join(root, "work2")
+	runGit(t, root, "clone", "--branch", "main", bare, work2)
+	second := NewModelClient(provider, budget, &GitUsageStore{Dir: work2, File: "usage.json", Branch: "main", Now: time.Now}, "key", time.Now)
+	if _, err := second.Complete(context.Background(), ModelRequest{Purpose: "research", System: "s", User: "u"}); err == nil {
+		t.Fatal("a fresh clone reset the cumulative budget")
+	}
+	if hits != 1 {
+		t.Fatalf("model endpoint hits = %d, want 1", hits)
+	}
+	usage, err := second.store.Load()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if usage.Calls != 1 || usage.AuthorizationID != "test-auth" {
+		t.Fatalf("persisted usage = %+v", usage)
 	}
 }

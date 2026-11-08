@@ -52,6 +52,8 @@ func run(args []string, stdout, stderr io.Writer) error {
 		return runAccounts(args[1:], stdout, stderr)
 	case "publish":
 		return runPublish(args[1:], stdout, stderr)
+	case "approvals":
+		return runApprovals(args[1:], stdout, stderr)
 	case "pipeline":
 		return runPipeline(args[1:], stdout, stderr)
 	case "weekly":
@@ -75,14 +77,20 @@ commands:
   analytics         growth analytics from github-metrics snapshots
   opportunities     sourced growth opportunities
   channels          channel registry and fit rules
-  content           prepare an offline content draft
+  content           prepare an offline or AI-assisted content draft
   verify-content    fact-check and safety-check a draft
-  experiments       list or evaluate controlled growth experiments
+  research          collect public sources and analyze them with a model
+  accounts          channel account manager and owner-only steps
+  approvals         generate owner keys and sign publish approvals
+  publish           dry-run or approval-gated publishing; reconcile outcomes
+  pipeline          plan-only research/content/strategy pipeline
+  experiments       list, start, tick or evaluate controlled experiments
   weekly            render the weekly growth report
   tour-check        validate the static product tour assets
   version           print the tool version
 
-The engine never calls a model provider and never publishes anything.`)
+Model calls are off by default and require a provider, a credential and an
+owner budget. Publishing requires an Ed25519-signed, single-use approval.`)
 }
 
 // newFlagSet returns a flag set that reports to stderr and does not exit on

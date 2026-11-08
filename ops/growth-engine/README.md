@@ -20,12 +20,18 @@ for DEV Community and GitHub Discussions.
 - **Zero paid calls by default.** No provider is configured in
   `state/providers.json`. A call requires `--provider`, a valid owner budget
   file and a matching credential environment variable.
-- **Budget before request.** Purpose, call count, input size, output size and
-  worst-case cost are checked before the HTTP request. A reservation is written
-  first, so a crash cannot hide a possibly billable call.
+- **Budget before request, cumulative across runs.** Purpose, call count,
+  input size, output size and worst-case cost are checked before the HTTP
+  request. A reservation is committed to a shared git state branch first, so a
+  fresh Actions runner or a crash cannot reset or hide a possibly billable call.
+- **Cost cap is only claimed when it is real.** A hard cost cap requires both
+  provider prices to be positive. Missing pricing is reported as
+  `cost cap NOT enforced`, never as a spend ceiling; such a run requires
+  `allow_without_cost_cap: true`.
 - **No silent publishing.** The pipeline is plan-only. Live publishing needs an
-  active account record, `publish` scope, a content-hash approval artifact, a
-  passing verification and a deduplication ledger.
+  active account record, `publish` scope, a passing verification, a content-hash
+  approval **signed with the owner's Ed25519 key**, a single-use approval id and
+  a deduplication/recovery ledger.
 - **Manual platforms stay manual.** Hacker News, Reddit and Product Hunt have
   no automated publisher; material is prepared for a human.
 - **No credentials in state.** Passwords, one-time codes, recovery codes and
@@ -62,9 +68,17 @@ go run . accounts prepare --channel github
 go run . accounts check --channel github
 go run . accounts preflight --channel github --scope publish
 go run . accounts owner-todo --out docs/GROW-P2-OWNER-TODO.md
+go run . approvals keygen --id owner-2026 --private ~/.dge/owner-2026.key \
+  --keys state/approval-keys.json --date 2026-11-08
+go run . approvals sign --file payload.json --key ~/.dge/owner-2026.key --out approval.json
+go run . approvals verify --file approval.json --keys state/approval-keys.json \
+  --channel devto --hash <hash>
 go run . publish --channel devto --file drafts/ai/technical-intro-devto.md --date 2026-11-08
-go run . publish --channel devto --file ... --approval approvals/....json --confirm --date ...
-go run . pipeline --snapshot baseline/snapshot-2026-11-07.json --out-dir reviews
+go run . publish --channel devto --file ... --approval approval.json \
+  --keys state/approval-keys.json --confirm --date ...
+go run . publish reconcile --channel devto --hash <hash> --not-published --date ...
+go run . pipeline --snapshot baseline/snapshot-2026-11-07.json --out-dir reviews \
+  --provider <id> --budget <owner-budget.json> --usage-git-dir .state
 ```
 
 `publish` is a dry run by default. `--confirm` with a valid approval artifact
@@ -146,7 +160,9 @@ metrics artifact and uploads a run manifest. `growth-ai.yml` is a disabled-by-
 default AI schedule: it runs only when the repository variable
 `DGE_AI_ENABLED=1`, a non-secret provider configuration variable and a
 call/cost budget variable are set, and the model key is a repository secret.
-It never publishes.
+It never publishes. It has `contents: write` only to clone and push the
+`dge-state` cumulative-usage branch created once with
+`scripts/init-state-branch.sh`; the product main branch is unchanged.
 
 ## Tests
 
@@ -176,6 +192,7 @@ no-publish boundary.
 - [Phase II accounts](docs/GROW-P2-ACCOUNTS.md)
 - [Phase II publishing](docs/GROW-P2-PUBLISHING.md)
 - [Owner action list](docs/GROW-P2-OWNER-TODO.md)
+- [Enablement steps](docs/GROW-P2-ENABLEMENT.md)
 
 ```bash
 go test ./... -count=1

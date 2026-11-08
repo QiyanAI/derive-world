@@ -41,8 +41,8 @@ facts ─────────► content ai ─► deterministic verify ─�
       "max_output_tokens": 2000,
       "timeout_seconds": 60,
       "json_mode": false,
-      "input_price_per_million_usd": 0,
-      "output_price_per_million_usd": 0
+      "input_price_per_million_usd": 0.50,
+      "output_price_per_million_usd": 1.50
     },
     {
       "id": "generic-anthropic",
@@ -53,8 +53,8 @@ facts ─────────► content ai ─► deterministic verify ─�
       "max_output_tokens": 2000,
       "timeout_seconds": 60,
       "json_mode": false,
-      "input_price_per_million_usd": 0,
-      "output_price_per_million_usd": 0
+      "input_price_per_million_usd": 0.50,
+      "output_price_per_million_usd": 1.50
     }
   ]
 }
@@ -64,8 +64,14 @@ facts ─────────► content ai ─► deterministic verify ─�
 - `protocol: anthropic` posts to `{base_url}/v1/messages`.
 - Base URLs must be HTTPS unless they are loopback test endpoints.
 - The credential is read from `api_key_env`; it is never stored or printed.
-- Prices are optional. Set them to make the cost cap meaningful; zero prices
-  still count calls and tokens.
+- A hard cost cap is enforced only when **both** prices are greater than zero
+  and `max_cost_usd` is positive. A missing or zero price means the cost is
+  unknown, not free.
+- A budget that asks for `max_cost_usd > 0` with missing prices is refused.
+- A budget with no cost cap must set `allow_without_cost_cap: true`; reports then
+  say `cost cap NOT enforced` and never claim a spend ceiling.
+- `authorization_id` is stable across runs. The ledger refuses to mix totals
+  from a different authorization; archive the state before starting a new one.
 
 ## Budget authorization
 
@@ -74,6 +80,7 @@ A call is refused unless an owner-created budget file is supplied. Example:
 ```json
 {
   "schema_version": 1,
+  "authorization_id": "dge-2026-11",
   "authorized_by": "owner name",
   "authorized_at": "2026-11-08",
   "expires_at": "2026-11-15",
@@ -81,6 +88,7 @@ A call is refused unless an owner-created budget file is supplied. Example:
   "max_input_chars": 200000,
   "max_output_tokens": 40000,
   "max_cost_usd": 1.0,
+  "allow_without_cost_cap": false,
   "purposes": ["research", "content", "strategy"]
 }
 ```
@@ -93,8 +101,38 @@ the credential. It is never committed. The engine refuses on:
 - input over `max_input_chars` or output over `max_output_tokens`;
 - a worst-case estimate over the remaining `max_cost_usd`.
 
-A reservation is written to `var/growth-engine/usage.json` before the HTTP
-request; a failed call stays counted.
+A reservation is written before the HTTP request; a failed call stays counted.
+
+## Cross-run cumulative budget
+
+A GitHub Actions workspace is ephemeral. The AI workflow therefore keeps the
+usage ledger in a dedicated `dge-state` branch, created once by the owner:
+
+```bash
+bash ops/growth-engine/scripts/init-state-branch.sh
+```
+
+For every reservation and settlement the engine:
+
+1. locks the state work tree and fetches the latest `dge-state`;
+2. validates the reservation against the **cumulative** ledger;
+3. commits and pushes `usage.json` **before** the model request;
+4. retries a rejected push against the latest remote state, re-running the
+   budget validation on the new totals;
+5. refuses the call if the push cannot be completed.
+
+A crash therefore leaves a reservation, not an unrecorded call. A concurrent
+run sees the reservation through the git state. Local runs use an atomic file
+store with the same lease lock; pass `--usage-git-dir` to use a shared git
+work tree locally.
+
+Cost-cap status is recorded in the ledger:
+
+- `cost_cap_enforced: true` only when prices are known and `max_cost_usd > 0`;
+- otherwise the report prints `cost cap NOT enforced` and does not claim a
+  spend ceiling.
+
+Call and token limits are always enforced from the cumulative ledger.
 
 ## Research
 

@@ -26,26 +26,73 @@ go run . publish --channel devto --file drafts/ai/intro-devto.md --date 2026-11-
 The output includes `content_sha256`, whether the account is ready, whether an
 approval is valid and `would_publish: false`. Nothing is sent.
 
-Approval:
+Owner approval is an **Ed25519-signed** artifact. A plain JSON file is not an
+approval and is rejected.
+
+### One-time owner key
+
+```bash
+go run . approvals keygen --id owner-2026 --private ~/.dge/owner-2026.key \
+  --keys state/approval-keys.json --date 2026-11-08
+```
+
+The private key is written with mode 0600 outside the repository and is never
+printed. The public key is registered in `state/approval-keys.json` (public
+data, safe to commit). Keep the private key offline; do not give it to the AI
+or to CI.
+
+### Sign one exact payload
 
 ```json
 {
-  "schema_version": 1,
+  "schema_version": 2,
+  "approval_id": "unique-id-for-this-post",
   "channel": "devto",
   "action": "publish",
   "content_sha256": "<hash printed by the dry run>",
   "approved_by": "owner name",
   "approved_at": "2026-11-08",
-  "expires_at": "2026-11-15"
+  "expires_at": "2026-11-15",
+  "key_id": "owner-2026"
 }
 ```
+
+```bash
+go run . approvals sign --file payload.json --key ~/.dge/owner-2026.key \
+  --out /secure/approvals/intro-devto.json
+go run . approvals verify --file /secure/approvals/intro-devto.json \
+  --keys state/approval-keys.json --channel devto --hash <hash>
+```
+
+The signature covers a canonical byte string of every payload field. Changing
+the channel, hash, approver, dates or key id invalidates it.
 
 Live:
 
 ```bash
 go run . publish --channel devto --file drafts/ai/intro-devto.md \
-  --approval /secure/approvals/intro-devto.json --confirm --date 2026-11-08
+  --approval /secure/approvals/intro-devto.json --keys state/approval-keys.json \
+  --confirm --date 2026-11-08
 ```
+
+### Replay and failure recovery
+
+- An `approval_id` is consumed **before** the network call in
+  `var/growth-engine/approvals.json`. Reusing it with any content is refused.
+- A `pending` publish entry is written before the network call.
+- On a network or platform error the entry becomes `unknown`; the approval is
+  already consumed. The same content hash cannot be retried until the owner
+  reconciles the platform state:
+
+```bash
+go run . publish reconcile --channel devto --hash <hash> \
+  --external-id <id> --url <url> --date 2026-11-09
+# or, if the platform has no post:
+go run . publish reconcile --channel devto --hash <hash> --not-published --date 2026-11-09
+```
+
+- After `--not-published`, a new signed approval is required for a retry.
+- A published or unknown hash is never sent twice automatically.
 
 ## Gates
 
@@ -56,11 +103,12 @@ go run . publish --channel devto --file drafts/ai/intro-devto.md \
    hand.
 3. **Account.** The recorded account must be active, carry `publish` scope, name
    the grantor, be unexpired, and record two-factor and a recovery email.
-4. **Approval.** Channel, action, hash and expiry must match. The hash covers
-   the prepared title and body, not the review scaffolding.
-5. **Deduplication.** A content hash already published to the channel is
-   refused before any network call.
-6. **Credential.** The adapter reads its key from an environment variable; the
+4. **Signature.** A registered, unrevoked Ed25519 public key must verify the
+   exact canonical payload; channel, hash, action and expiry must match.
+5. **Replay.** The approval id must not appear in the replay ledger.
+6. **Deduplication.** A content hash with a pending, unknown or published
+   record is refused before any network call.
+7. **Credential.** The adapter reads its key from an environment variable; the
    engine never prints it.
 
 ## Adapters

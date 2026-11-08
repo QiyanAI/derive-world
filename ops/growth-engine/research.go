@@ -716,6 +716,8 @@ func runResearch(args []string, stdout, stderr io.Writer) error {
 		providerID := flags.String("provider", "", "provider id")
 		budgetPath := flags.String("budget", "", "owner budget authorization")
 		usagePath := flags.String("usage", "var/growth-engine/usage.json", "usage ledger")
+		usageGitDir := flags.String("usage-git-dir", "", "git work tree containing the shared usage ledger")
+		usageGitBranch := flags.String("usage-git-branch", "dge-state", "git branch used by --usage-git-dir")
 		output := flags.String("out", "", "output JSON path")
 		force := flags.Bool("force", false, "replace an existing report")
 		if err := flags.Parse(args[1:]); err != nil {
@@ -732,7 +734,7 @@ func runResearch(args []string, stdout, stderr io.Writer) error {
 		if err != nil {
 			return err
 		}
-		client, err := loadModelClient(*providersPath, *providerID, *budgetPath, *usagePath, "research")
+		client, err := loadModelClient(*providersPath, *providerID, *budgetPath, *usagePath, *usageGitDir, *usageGitBranch, "research")
 		if err != nil {
 			return err
 		}

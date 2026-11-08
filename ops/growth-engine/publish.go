@@ -18,29 +18,23 @@ import (
 	"time"
 )
 
-// Approval is an owner-authored, single-use authorization for one exact
-// prepared payload. It never contains a credential.
-type Approval struct {
-	SchemaVersion int    `json:"schema_version"`
-	Channel       string `json:"channel"`
-	Action        string `json:"action"`
-	ContentSHA256 string `json:"content_sha256"`
-	ApprovedBy    string `json:"approved_by"`
-	ApprovedAt    string `json:"approved_at"`
-	ExpiresAt     string `json:"expires_at"`
-}
-
 type PublishLedger struct {
 	SchemaVersion int            `json:"schema_version"`
 	Entries       []PublishEntry `json:"entries"`
 }
 
+// PublishEntry is a two-phase publish record. A pending entry is written
+// before the network call; an ambiguous failure becomes "unknown" and must be
+// reconciled by the owner before the same payload can be retried.
 type PublishEntry struct {
 	Channel       string `json:"channel"`
 	ContentSHA256 string `json:"content_sha256"`
-	ExternalID    string `json:"external_id"`
-	URL           string `json:"url"`
-	PublishedAt   string `json:"published_at"`
+	ApprovalID    string `json:"approval_id,omitempty"`
+	Status        string `json:"status"`
+	ExternalID    string `json:"external_id,omitempty"`
+	URL           string `json:"url,omitempty"`
+	PublishedAt   string `json:"published_at,omitempty"`
+	Error         string `json:"error,omitempty"`
 }
 
 type PublishRequest struct {
@@ -57,38 +51,6 @@ type PublishResult struct {
 
 type publishAdapter interface {
 	publish(ctx context.Context, request PublishRequest) (PublishResult, error)
-}
-
-func loadApproval(path string) (*Approval, error) {
-	var approval Approval
-	if err := readJSON(path, &approval); err != nil {
-		return nil, err
-	}
-	if approval.SchemaVersion != 1 {
-		return nil, fmt.Errorf("%s: unsupported approval schema_version %d", path, approval.SchemaVersion)
-	}
-	if approval.Channel == "" || approval.Action != "publish" || approval.ContentSHA256 == "" ||
-		approval.ApprovedBy == "" || approval.ApprovedAt == "" || approval.ExpiresAt == "" {
-		return nil, fmt.Errorf("%s: approval is incomplete", path)
-	}
-	return &approval, nil
-}
-
-func (approval *Approval) validate(channel, hash string, now time.Time) error {
-	if !strings.EqualFold(approval.Channel, channel) {
-		return fmt.Errorf("approval is for channel %q, not %q", approval.Channel, channel)
-	}
-	if approval.ContentSHA256 != hash {
-		return errors.New("approval content hash does not match the prepared payload")
-	}
-	expiry, err := time.Parse("2006-01-02", approval.ExpiresAt)
-	if err != nil {
-		return errors.New("approval expires_at must be YYYY-MM-DD")
-	}
-	if now.UTC().After(expiry.Add(24*time.Hour - time.Second)) {
-		return fmt.Errorf("approval expired on %s", approval.ExpiresAt)
-	}
-	return nil
 }
 
 func loadPublishLedger(path string) (*PublishLedger, error) {
@@ -115,11 +77,25 @@ func (ledger *PublishLedger) save(path string) error {
 
 func (ledger *PublishLedger) contains(channel, hash string) bool {
 	for _, entry := range ledger.Entries {
-		if strings.EqualFold(entry.Channel, channel) && entry.ContentSHA256 == hash {
+		if !strings.EqualFold(entry.Channel, channel) || entry.ContentSHA256 != hash {
+			continue
+		}
+		switch entry.Status {
+		case "pending", "unknown", "published":
 			return true
 		}
 	}
 	return false
+}
+
+func (ledger *PublishLedger) latest(channel, hash string) (int, bool) {
+	for index := len(ledger.Entries) - 1; index >= 0; index-- {
+		entry := ledger.Entries[index]
+		if strings.EqualFold(entry.Channel, channel) && entry.ContentSHA256 == hash {
+			return index, true
+		}
+	}
+	return 0, false
 }
 
 var factMarkerPattern = regexp.MustCompile(`\[\[fact:[a-z0-9-]+\]\]`)
@@ -358,10 +334,15 @@ func newPublishAdapter(platform Platform) (publishAdapter, error) {
 }
 
 func runPublish(args []string, stdout, stderr io.Writer) error {
+	if len(args) > 0 && args[0] == "reconcile" {
+		return runReconcile(args[1:], stdout, stderr)
+	}
 	flags := newFlagSet("publish", stderr)
 	channel := flags.String("channel", "", "platform id")
 	file := flags.String("file", "", "verified draft file")
-	approvalPath := flags.String("approval", "", "owner approval artifact")
+	approvalPath := flags.String("approval", "", "owner-signed approval artifact")
+	keysPath := flags.String("keys", "state/approval-keys.json", "registered owner public keys")
+	approvalUsesPath := flags.String("approval-uses", "var/growth-engine/approvals.json", "approval replay ledger")
 	accountsPath := flags.String("accounts", "state/accounts.json", "account state")
 	platformsPath := flags.String("platforms", "state/platforms.json", "platform registry")
 	factsPath := flags.String("facts", "state/facts.json", "verified product facts")
@@ -422,32 +403,43 @@ func runPublish(args []string, stdout, stderr io.Writer) error {
 		return err
 	}
 	if ledger.contains(platform.ID, hash) {
-		return fmt.Errorf("this exact payload was already published to %s", platform.ID)
+		return fmt.Errorf("this exact payload has a pending, unknown or published record for %s; reconcile it before retrying", platform.ID)
 	}
 	accountError := AccountPreflight(account, "publish", time.Now())
-	var approval *Approval
+
+	var signed *SignedApproval
 	var approvalError error
 	if *approvalPath != "" {
-		approval, err = loadApproval(*approvalPath)
+		keys, err := loadApprovalKeys(*keysPath)
 		if err != nil {
 			return err
 		}
-		approvalError = approval.validate(platform.ID, hash, time.Now())
+		signed, approvalError = loadSignedApproval(*approvalPath, keys, platform.ID, hash, time.Now())
 	} else {
-		approvalError = errors.New("no approval artifact supplied")
+		approvalError = errors.New("no owner-signed approval artifact supplied")
 	}
+	uses, err := loadApprovalUses(*approvalUsesPath)
+	if err != nil {
+		return err
+	}
+	var replayError error
+	if signed != nil && uses.contains(signed.ApprovalID) {
+		replayError = fmt.Errorf("approval %q was already used; a publish attempt consumes it permanently", signed.ApprovalID)
+	}
+
 	if !*confirm {
 		preview := map[string]any{
-			"channel":        platform.ID,
-			"title":          title,
-			"content_sha256": hash,
-			"automation":     platform.AutomationPolicy,
-			"account_ready":  accountError == nil,
-			"account_error":  errorText(accountError),
-			"approval_valid": approvalError == nil,
-			"approval_error": errorText(approvalError),
-			"would_publish":  false,
-			"note":           "Dry run. Nothing was sent. Add --confirm with a valid approval artifact to publish.",
+			"channel":         platform.ID,
+			"title":           title,
+			"content_sha256":  hash,
+			"automation":      platform.AutomationPolicy,
+			"account_ready":   accountError == nil,
+			"account_error":   errorText(accountError),
+			"approval_valid":  approvalError == nil,
+			"approval_error":  errorText(approvalError),
+			"approval_reused": replayError != nil,
+			"would_publish":   false,
+			"note":            "Dry run. Nothing was sent. Add --confirm with a signed, unused approval artifact to publish.",
 		}
 		encoded, err := json.MarshalIndent(preview, "", "  ")
 		if err != nil {
@@ -462,41 +454,130 @@ func runPublish(args []string, stdout, stderr io.Writer) error {
 	if approvalError != nil {
 		return approvalError
 	}
+	if replayError != nil {
+		return replayError
+	}
 	adapter, err := newPublishAdapter(platform)
 	if err != nil {
 		return err
 	}
-	result, err := adapter.publish(context.Background(), PublishRequest{
+
+	// Consume the approval and record a pending publish before the network
+	// call. An ambiguous failure leaves the entry in "unknown" and the approval
+	// consumed, so a retry cannot duplicate a post.
+	uses.Uses = append(uses.Uses, ApprovalUse{
+		ApprovalID: signed.ApprovalID, Channel: platform.ID, ContentSHA256: hash, UsedAt: *date,
+	})
+	if err := uses.save(*approvalUsesPath); err != nil {
+		return fmt.Errorf("record approval use: %w", err)
+	}
+	ledger.Entries = append(ledger.Entries, PublishEntry{
+		Channel: platform.ID, ContentSHA256: hash, ApprovalID: signed.ApprovalID,
+		Status: "pending", PublishedAt: *date,
+	})
+	if err := ledger.save(*ledgerPath); err != nil {
+		return fmt.Errorf("record pending publish: %w", err)
+	}
+	if err := appendAudit(*auditPath, map[string]any{
+		"date": *date, "action": "publish.pending", "channel": platform.ID,
+		"content_sha256": hash, "approval_id": signed.ApprovalID, "approved_by": signed.ApprovedBy,
+	}); err != nil {
+		return err
+	}
+
+	result, publishErr := adapter.publish(context.Background(), PublishRequest{
 		Title:        title,
 		BodyMarkdown: body,
 		Tags:         splitList(*tags),
 		CanonicalURL: *canonical,
 	})
+	index, _ := ledger.latest(platform.ID, hash)
+	entry := &ledger.Entries[index]
+	if publishErr != nil {
+		entry.Status = "unknown"
+		entry.Error = redact(truncateText(publishErr.Error(), 500))
+		_ = ledger.save(*ledgerPath)
+		_ = appendAudit(*auditPath, map[string]any{
+			"date": *date, "action": "publish.unknown", "channel": platform.ID,
+			"content_sha256": hash, "approval_id": signed.ApprovalID, "error": entry.Error,
+		})
+		return fmt.Errorf("publish outcome is UNKNOWN; the approval is consumed. Check the platform, then run `publish reconcile` with the external id/url or --not-published: %w", publishErr)
+	}
+	entry.Status = "published"
+	entry.ExternalID = result.ExternalID
+	entry.URL = result.URL
+	if err := ledger.save(*ledgerPath); err != nil {
+		return fmt.Errorf("published at %s but the ledger write failed; run `publish reconcile --external-id %s --url %s`: %w", result.URL, result.ExternalID, result.URL, err)
+	}
+	if err := appendAudit(*auditPath, map[string]any{
+		"date": *date, "action": "publish", "channel": platform.ID,
+		"content_sha256": hash, "external_id": result.ExternalID, "url": result.URL,
+		"approval_id": signed.ApprovalID, "approved_by": signed.ApprovedBy,
+	}); err != nil {
+		return err
+	}
+	fmt.Fprintf(stdout, "published to %s: %s (signed approval %s by %s)\n", platform.ID, result.URL, signed.ApprovalID, signed.ApprovedBy)
+	return nil
+}
+
+func runReconcile(args []string, stdout, stderr io.Writer) error {
+	flags := newFlagSet("publish reconcile", stderr)
+	channel := flags.String("channel", "", "platform id")
+	hash := flags.String("hash", "", "content hash")
+	ledgerPath := flags.String("ledger", "var/growth-engine/published.json", "publish ledger")
+	auditPath := flags.String("audit", "var/growth-engine/audit.jsonl", "append-only audit log")
+	date := flags.String("date", "", "reconcile date YYYY-MM-DD")
+	externalID := flags.String("external-id", "", "platform post id")
+	urlValue := flags.String("url", "", "platform post URL")
+	notPublished := flags.Bool("not-published", false, "owner confirmed the post does not exist")
+	if err := flags.Parse(args); err != nil {
+		return err
+	}
+	if *channel == "" || *hash == "" || *date == "" {
+		return errors.New("--channel, --hash and --date are required")
+	}
+	ledger, err := loadPublishLedger(*ledgerPath)
 	if err != nil {
 		return err
 	}
-	ledger.Entries = append(ledger.Entries, PublishEntry{
-		Channel:       platform.ID,
-		ContentSHA256: hash,
-		ExternalID:    result.ExternalID,
-		URL:           result.URL,
-		PublishedAt:   *date,
-	})
+	index, ok := ledger.latest(*channel, *hash)
+	if !ok {
+		return fmt.Errorf("no publish record for %s %s", *channel, *hash)
+	}
+	entry := &ledger.Entries[index]
+	if entry.Status == "published" {
+		if *notPublished {
+			return errors.New("this hash is recorded as published; refusing to mark it not published without a manual ledger correction")
+		}
+		fmt.Fprintf(stdout, "already reconciled as published: %s\n", entry.URL)
+		return nil
+	}
+	if *notPublished {
+		entry.Status = "failed"
+		entry.Error = "owner confirmed the platform has no post"
+		entry.ExternalID = ""
+		entry.URL = ""
+	} else {
+		if *externalID == "" || *urlValue == "" {
+			return errors.New("--external-id and --url are required unless --not-published is set")
+		}
+		entry.Status = "published"
+		entry.ExternalID = *externalID
+		entry.URL = *urlValue
+		entry.Error = ""
+	}
+	entry.PublishedAt = *date
 	if err := ledger.save(*ledgerPath); err != nil {
 		return err
 	}
 	if err := appendAudit(*auditPath, map[string]any{
-		"date":           *date,
-		"action":         "publish",
-		"channel":        platform.ID,
-		"content_sha256": hash,
-		"external_id":    result.ExternalID,
-		"url":            result.URL,
-		"approved_by":    approval.ApprovedBy,
+		"date": *date, "action": "publish.reconcile", "channel": *channel,
+		"content_sha256": *hash, "status": entry.Status,
+		"external_id": entry.ExternalID, "url": entry.URL,
 	}); err != nil {
 		return err
 	}
-	fmt.Fprintf(stdout, "published to %s: %s (approval by %s)\n", platform.ID, result.URL, approval.ApprovedBy)
+	fmt.Fprintf(stdout, "reconciled %s %s as %s\n", *channel, *hash, entry.Status)
 	return nil
 }
 

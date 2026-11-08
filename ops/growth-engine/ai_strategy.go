@@ -189,11 +189,13 @@ func renderStrategyMarkdown(plan *StrategyPlan, response *ModelResponse) string 
 
 func usageDelta(before, after Usage) Usage {
 	return Usage{
-		SchemaVersion: 1,
-		Calls:         after.Calls - before.Calls,
-		InputTokens:   after.InputTokens - before.InputTokens,
-		OutputTokens:  after.OutputTokens - before.OutputTokens,
-		CostUSD:       after.CostUSD - before.CostUSD,
-		UpdatedAt:     time.Now().UTC().Format(time.RFC3339),
+		SchemaVersion:   2,
+		AuthorizationID: after.AuthorizationID,
+		Calls:           after.Calls - before.Calls,
+		InputTokens:     after.InputTokens - before.InputTokens,
+		OutputTokens:    after.OutputTokens - before.OutputTokens,
+		CostUSD:         after.CostUSD - before.CostUSD,
+		CostCapEnforced: after.CostCapEnforced,
+		UpdatedAt:       time.Now().UTC().Format(time.RFC3339),
 	}
 }
