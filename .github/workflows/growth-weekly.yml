@@ -62,6 +62,7 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           REPO: ${{ github.repository }}
+          INTERNAL_AUTHORS: ${{ vars.DGE_INTERNAL_AUTHORS || 'QiyanNarantsogt' }}
         run: |
           set -euo pipefail
           bash ops/growth-engine/scripts/engagement-export.sh /tmp/engagement.json

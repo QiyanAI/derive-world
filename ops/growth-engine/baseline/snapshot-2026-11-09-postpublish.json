@@ -1,0 +1,102 @@
+{
+  "schema_version": 1,
+  "captured_at": "2026-11-09T08:41:47Z",
+  "repo": "QiyanAI/derive-world",
+  "visibility": "public",
+  "metrics": {
+    "stars": 0,
+    "forks": 0,
+    "watchers": 0,
+    "open_issues": 3,
+    "open_pull_requests": 8,
+    "contributors": 1,
+    "releases": [
+      {
+        "tag": "v0.2.0",
+        "published_at": "2026-10-30T04:13:46Z",
+        "assets": [
+          {
+            "name": "ATTESTATION.json",
+            "download_count": 2
+          },
+          {
+            "name": "BUILD-MANIFEST.json",
+            "download_count": 2
+          },
+          {
+            "name": "derive-world_0.2.0_darwin_arm64.tar.gz",
+            "download_count": 2
+          },
+          {
+            "name": "derive-world_0.2.0_linux_amd64.tar.gz",
+            "download_count": 2
+          },
+          {
+            "name": "derive-world_0.2.0_source.tar.gz",
+            "download_count": 3
+          },
+          {
+            "name": "derive-world_0.2.0_windows_amd64.zip",
+            "download_count": 2
+          },
+          {
+            "name": "SHA256SUMS",
+            "download_count": 2
+          }
+        ]
+      },
+      {
+        "tag": "v0.1.0",
+        "published_at": "2026-10-24T19:40:31Z",
+        "assets": [
+          {
+            "name": "ATTESTATION.json",
+            "download_count": 3
+          },
+          {
+            "name": "BUILD-MANIFEST.json",
+            "download_count": 2
+          },
+          {
+            "name": "derive-world_0.1.0_darwin_arm64.tar.gz",
+            "download_count": 2
+          },
+          {
+            "name": "derive-world_0.1.0_linux_amd64.tar.gz",
+            "download_count": 2
+          },
+          {
+            "name": "derive-world_0.1.0_source.tar.gz",
+            "download_count": 3
+          },
+          {
+            "name": "derive-world_0.1.0_windows_amd64.zip",
+            "download_count": 4
+          },
+          {
+            "name": "SHA256SUMS",
+            "download_count": 4
+          }
+        ]
+      }
+    ],
+    "traffic": {
+      "views_14d": {
+        "count": 2,
+        "uniques": 1
+      },
+      "clones_14d": {
+        "count": 2478,
+        "uniques": 369
+      }
+    }
+  },
+  "data_quality": {
+    "traffic": "VERIFIED",
+    "contributors": "VERIFIED",
+    "notes": []
+  },
+  "api": {
+    "rate_limit_remaining": 4940
+  }
+}

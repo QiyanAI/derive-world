@@ -105,6 +105,81 @@ func TestEngagementClassification(t *testing.T) {
 	}
 }
 
+func TestEngagementSeparatesMaintainerBotsAndExternalHumans(t *testing.T) {
+	engagement := &Engagement{
+		SchemaVersion:   1,
+		CapturedAt:      "2026-11-09T00:00:00Z",
+		InternalAuthors: []string{"maintainer"},
+		Issues: []EngagementItem{
+			{Number: 1, Author: "maintainer", AuthorAssociation: "NONE", AuthorType: "User", BodyLength: 200},
+			{Number: 2, Author: "internal-user", AuthorAssociation: "MEMBER", AuthorType: "User", BodyLength: 200},
+			{Number: 3, Author: "dependabot[bot]", AuthorAssociation: "NONE", AuthorType: "Bot", BodyLength: 200},
+			{Number: 4, Author: "renovate[bot]", AuthorAssociation: "NONE", AuthorType: "Bot", BodyLength: 200},
+			{Number: 5, Author: "external-dev", AuthorAssociation: "NONE", AuthorType: "User", BodyLength: 200},
+		},
+		PullRequests: []EngagementPR{
+			{Number: 10, Author: "maintainer", AuthorAssociation: "NONE", AuthorType: "User", State: "closed", Merged: true},
+			{Number: 11, Author: "dependabot[bot]", AuthorAssociation: "NONE", AuthorType: "Bot", State: "closed", Merged: true},
+			{Number: 12, Author: "external-dev", AuthorAssociation: "NONE", AuthorType: "User", State: "closed", Merged: true},
+		},
+	}
+	summary := summarizeEngagement(engagement)
+	want := map[string]int{
+		"maintainer issues":     1,
+		"maintainer PRs":        1,
+		"internal issues":       1,
+		"internal PRs":          0,
+		"dependabot issues":     1,
+		"dependabot PRs":        1,
+		"other bot issues":      1,
+		"other bot PRs":         0,
+		"external issues":       1,
+		"external PRs":          1,
+		"meaningful external":   1,
+		"merged external PRs":   1,
+		"external contributors": 1,
+	}
+	got := map[string]int{
+		"maintainer issues":     summary.MaintainerIssues,
+		"maintainer PRs":        summary.MaintainerPRs,
+		"internal issues":       summary.InternalIssues,
+		"internal PRs":          summary.InternalPRs,
+		"dependabot issues":     summary.DependabotIssues,
+		"dependabot PRs":        summary.DependabotPRs,
+		"other bot issues":      summary.OtherBotIssues,
+		"other bot PRs":         summary.OtherBotPRs,
+		"external issues":       summary.ExternalIssues,
+		"external PRs":          summary.ExternalPRs,
+		"meaningful external":   summary.MeaningfulExternalIssues,
+		"merged external PRs":   summary.MergedExternalPRs,
+		"external contributors": summary.ExternalContributors,
+	}
+	for key, value := range want {
+		if got[key] != value {
+			t.Errorf("%s = %d, want %d (summary %+v)", key, got[key], value, summary)
+		}
+	}
+	value, ok := MetricValue("meaningful_external_issues", snapshotFixture("2026-11-09T00:00:00Z", 0, 0, 0, 1, 35), engagement)
+	if !ok || value != 1 {
+		t.Fatalf("experiment metric = %v (known=%t), want 1 external human", value, ok)
+	}
+}
+
+func TestEngagementDeclaredAuthorClassIsAuthoritative(t *testing.T) {
+	engagement := &Engagement{
+		SchemaVersion: 1,
+		CapturedAt:    "2026-11-09T00:00:00Z",
+		Issues: []EngagementItem{
+			{Number: 1, Author: "maintainer", AuthorAssociation: "NONE", AuthorType: "User", AuthorClass: "maintainer", BodyLength: 200},
+			{Number: 2, Author: "external-dev", AuthorAssociation: "MEMBER", AuthorType: "User", AuthorClass: "external", BodyLength: 200},
+		},
+	}
+	summary := summarizeEngagement(engagement)
+	if summary.MaintainerIssues != 1 || summary.ExternalIssues != 1 || summary.MeaningfulExternalIssues != 1 {
+		t.Fatalf("declared classes not honored: %+v", summary)
+	}
+}
+
 func TestEngagementMetricIsUnknownWithoutExport(t *testing.T) {
 	snapshot := snapshotFixture("2026-11-08T00:00:00Z", 0, 0, 0, 1, 35)
 	if _, ok := MetricValue("showcase_submissions", snapshot, nil); ok {

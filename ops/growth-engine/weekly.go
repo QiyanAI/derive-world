@@ -104,7 +104,12 @@ func RenderWeeklyMarkdown(bundle *WeeklyBundle) string {
 	}
 	builder.WriteString("\n")
 	if summary := bundle.Analytics.Engagement; summary != nil {
-		builder.WriteString(fmt.Sprintf("- Meaningful external issues: %d; merged external PRs: %d; showcase submissions: %d; visible external contributors: %d\n\n",
+		builder.WriteString(fmt.Sprintf("- Maintainer-authored: %d issues, %d PRs\n", summary.MaintainerIssues, summary.MaintainerPRs))
+		builder.WriteString(fmt.Sprintf("- Internal collaborators: %d issues, %d PRs\n", summary.InternalIssues, summary.InternalPRs))
+		builder.WriteString(fmt.Sprintf("- Dependabot: %d issues, %d PRs\n", summary.DependabotIssues, summary.DependabotPRs))
+		builder.WriteString(fmt.Sprintf("- Other bots: %d issues, %d PRs\n", summary.OtherBotIssues, summary.OtherBotPRs))
+		builder.WriteString(fmt.Sprintf("- External humans: %d issues, %d PRs\n", summary.ExternalIssues, summary.ExternalPRs))
+		builder.WriteString(fmt.Sprintf("- Meaningful external issues: %d; merged external PRs: %d; external showcase submissions: %d; visible external contributors: %d\n\n",
 			summary.MeaningfulExternalIssues, summary.MergedExternalPRs, summary.ShowcaseSubmissions, summary.ExternalContributors))
 	} else {
 		builder.WriteString("- Item-level contribution evidence: UNKNOWN (no engagement export).\n\n")

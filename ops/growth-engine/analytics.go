@@ -67,10 +67,11 @@ type APIInfo struct {
 // requests. It is produced outside this tool (for example with gh api) and is
 // never fabricated here. The schema is documented in docs/GROW-03-OPERATOR.md.
 type Engagement struct {
-	SchemaVersion int              `json:"schema_version"`
-	CapturedAt    string           `json:"captured_at"`
-	Issues        []EngagementItem `json:"issues"`
-	PullRequests  []EngagementPR   `json:"pull_requests"`
+	SchemaVersion   int              `json:"schema_version"`
+	CapturedAt      string           `json:"captured_at"`
+	InternalAuthors []string         `json:"internal_authors,omitempty"`
+	Issues          []EngagementItem `json:"issues"`
+	PullRequests    []EngagementPR   `json:"pull_requests"`
 }
 
 type EngagementItem struct {
@@ -78,6 +79,8 @@ type EngagementItem struct {
 	Title             string   `json:"title"`
 	Author            string   `json:"author"`
 	AuthorAssociation string   `json:"author_association"`
+	AuthorType        string   `json:"author_type,omitempty"`
+	AuthorClass       string   `json:"author_class,omitempty"`
 	State             string   `json:"state"`
 	CreatedAt         string   `json:"created_at"`
 	Comments          int      `json:"comments"`
@@ -90,6 +93,8 @@ type EngagementPR struct {
 	Title             string   `json:"title"`
 	Author            string   `json:"author"`
 	AuthorAssociation string   `json:"author_association"`
+	AuthorType        string   `json:"author_type,omitempty"`
+	AuthorClass       string   `json:"author_class,omitempty"`
 	State             string   `json:"state"`
 	Merged            bool     `json:"merged"`
 	CreatedAt         string   `json:"created_at"`
@@ -107,9 +112,21 @@ type MetricChange struct {
 	Quality string `json:"quality"`
 }
 
-// EngagementSummary is item-level, public contribution evidence.
+// EngagementSummary is item-level, public contribution evidence. Counts are
+// explicit about author class so maintainers, internal collaborators, bots and
+// external humans can never be conflated.
 type EngagementSummary struct {
 	CapturedAt               string   `json:"captured_at"`
+	MaintainerIssues         int      `json:"maintainer_issues"`
+	MaintainerPRs            int      `json:"maintainer_pull_requests"`
+	InternalIssues           int      `json:"internal_collaborator_issues"`
+	InternalPRs              int      `json:"internal_collaborator_pull_requests"`
+	DependabotIssues         int      `json:"dependabot_issues"`
+	DependabotPRs            int      `json:"dependabot_pull_requests"`
+	OtherBotIssues           int      `json:"other_bot_issues"`
+	OtherBotPRs              int      `json:"other_bot_pull_requests"`
+	ExternalIssues           int      `json:"external_human_issues"`
+	ExternalPRs              int      `json:"external_human_pull_requests"`
 	MeaningfulExternalIssues int      `json:"meaningful_external_issues"`
 	MergedExternalPRs        int      `json:"merged_external_pull_requests"`
 	ShowcaseSubmissions      int      `json:"showcase_submissions"`
@@ -239,12 +256,76 @@ func hasLabel(labels []string, want string) bool {
 	return false
 }
 
-func externalAssociation(value string) bool {
-	switch strings.ToUpper(strings.TrimSpace(value)) {
-	case "OWNER", "MEMBER", "COLLABORATOR":
-		return false
-	default:
+const (
+	authorClassMaintainer = "maintainer"
+	authorClassInternal   = "internal"
+	authorClassDependabot = "bot_dependabot"
+	authorClassOtherBot   = "bot_other"
+	authorClassExternal   = "external"
+	authorClassUnknown    = "unknown"
+)
+
+var knownBotLogins = map[string]bool{
+	"dependabot": true, "dependabot[bot]": true,
+	"renovate": true, "renovate[bot]": true,
+	"github-actions": true, "github-actions[bot]": true,
+	"codecov": true, "codecov[bot]": true,
+	"sonarcloud": true, "sonarcloud[bot]": true,
+	"mergify": true, "mergify[bot]": true,
+}
+
+func validAuthorClass(value string) bool {
+	switch value {
+	case authorClassMaintainer, authorClassInternal, authorClassDependabot,
+		authorClassOtherBot, authorClassExternal, authorClassUnknown:
 		return true
+	default:
+		return false
+	}
+}
+
+func internalAuthor(value string, internal []string) bool {
+	value = strings.TrimSpace(value)
+	for _, item := range internal {
+		if strings.EqualFold(strings.TrimSpace(item), value) {
+			return true
+		}
+	}
+	return false
+}
+
+// resolveAuthorClass separates the maintainer, internal collaborators,
+// Dependabot, other bots and real external humans. The explicit author_class
+// from a fresh export is authoritative; older exports fall back to the
+// association and login so historical data is not rewritten.
+func resolveAuthorClass(author, authorType, association, declared string, internal []string) string {
+	if validAuthorClass(declared) {
+		return declared
+	}
+	login := strings.ToLower(strings.TrimSpace(author))
+	if login == "" {
+		return authorClassUnknown
+	}
+	if strings.EqualFold(strings.TrimSpace(authorType), "Bot") ||
+		strings.HasSuffix(login, "[bot]") || knownBotLogins[login] ||
+		strings.HasPrefix(login, "dependabot") {
+		if login == "dependabot" || login == "dependabot[bot]" || strings.HasPrefix(login, "dependabot") {
+			return authorClassDependabot
+		}
+		return authorClassOtherBot
+	}
+	if internalAuthor(author, internal) {
+		return authorClassMaintainer
+	}
+	switch strings.ToUpper(strings.TrimSpace(association)) {
+	case "OWNER":
+		return authorClassMaintainer
+	case "MEMBER", "COLLABORATOR":
+		return authorClassInternal
+	case "NONE", "FIRST_TIME_CONTRIBUTOR", "FIRST_TIMER", "CONTRIBUTOR":
+		return authorClassExternal
+	default:
+		return authorClassUnknown
 	}
 }
 
@@ -262,8 +343,8 @@ func meaningfulIssue(item EngagementItem) bool {
 	return item.BodyLength >= 120 || item.Comments >= 2
 }
 
-func mergedExternalPR(pr EngagementPR) bool {
-	return pr.Merged && pr.State == "closed" && !hasNoisyLabel(pr.Labels) && externalAssociation(pr.AuthorAssociation)
+func mergedExternalPR(pr EngagementPR, class string) bool {
+	return class == authorClassExternal && pr.Merged && pr.State == "closed" && !hasNoisyLabel(pr.Labels)
 }
 
 func summarizeEngagement(engagement *Engagement) *EngagementSummary {
@@ -274,22 +355,48 @@ func summarizeEngagement(engagement *Engagement) *EngagementSummary {
 	}
 	contributors := map[string]bool{}
 	for _, issue := range engagement.Issues {
-		if hasLabel(issue.Labels, "showcase") {
-			summary.ShowcaseSubmissions++
-			summary.ShowcaseIssueNumbers = append(summary.ShowcaseIssueNumbers, issue.Number)
-		}
-		if meaningfulIssue(issue) && externalAssociation(issue.AuthorAssociation) {
-			summary.MeaningfulExternalIssues++
-			if issue.Author != "" {
-				contributors[issue.Author] = true
+		class := resolveAuthorClass(issue.Author, issue.AuthorType, issue.AuthorAssociation, issue.AuthorClass, engagement.InternalAuthors)
+		switch class {
+		case authorClassMaintainer:
+			summary.MaintainerIssues++
+		case authorClassInternal:
+			summary.InternalIssues++
+		case authorClassDependabot:
+			summary.DependabotIssues++
+		case authorClassOtherBot:
+			summary.OtherBotIssues++
+		case authorClassExternal:
+			summary.ExternalIssues++
+			if hasLabel(issue.Labels, "showcase") {
+				summary.ShowcaseSubmissions++
+				summary.ShowcaseIssueNumbers = append(summary.ShowcaseIssueNumbers, issue.Number)
+			}
+			if meaningfulIssue(issue) {
+				summary.MeaningfulExternalIssues++
+				if issue.Author != "" {
+					contributors[issue.Author] = true
+				}
 			}
 		}
 	}
 	for _, pr := range engagement.PullRequests {
-		if mergedExternalPR(pr) {
-			summary.MergedExternalPRs++
-			if pr.Author != "" {
-				contributors[pr.Author] = true
+		class := resolveAuthorClass(pr.Author, pr.AuthorType, pr.AuthorAssociation, pr.AuthorClass, engagement.InternalAuthors)
+		switch class {
+		case authorClassMaintainer:
+			summary.MaintainerPRs++
+		case authorClassInternal:
+			summary.InternalPRs++
+		case authorClassDependabot:
+			summary.DependabotPRs++
+		case authorClassOtherBot:
+			summary.OtherBotPRs++
+		case authorClassExternal:
+			summary.ExternalPRs++
+			if mergedExternalPR(pr, class) {
+				summary.MergedExternalPRs++
+				if pr.Author != "" {
+					contributors[pr.Author] = true
+				}
 			}
 		}
 	}
@@ -362,9 +469,14 @@ func RenderAnalyticsMarkdown(report *AnalyticsReport) string {
 	} else {
 		summary := report.Engagement
 		builder.WriteString(fmt.Sprintf("- Captured: %s\n", summary.CapturedAt))
+		builder.WriteString(fmt.Sprintf("- Maintainer-authored: %d issues, %d pull requests\n", summary.MaintainerIssues, summary.MaintainerPRs))
+		builder.WriteString(fmt.Sprintf("- Internal collaborators: %d issues, %d pull requests\n", summary.InternalIssues, summary.InternalPRs))
+		builder.WriteString(fmt.Sprintf("- Dependabot: %d issues, %d pull requests\n", summary.DependabotIssues, summary.DependabotPRs))
+		builder.WriteString(fmt.Sprintf("- Other bots: %d issues, %d pull requests\n", summary.OtherBotIssues, summary.OtherBotPRs))
+		builder.WriteString(fmt.Sprintf("- External humans: %d issues, %d pull requests\n", summary.ExternalIssues, summary.ExternalPRs))
 		builder.WriteString(fmt.Sprintf("- Meaningful external issues: %d\n", summary.MeaningfulExternalIssues))
 		builder.WriteString(fmt.Sprintf("- Merged external pull requests: %d\n", summary.MergedExternalPRs))
-		builder.WriteString(fmt.Sprintf("- Showcase submissions: %d", summary.ShowcaseSubmissions))
+		builder.WriteString(fmt.Sprintf("- Showcase submissions (external humans): %d", summary.ShowcaseSubmissions))
 		if len(summary.ShowcaseIssueNumbers) > 0 {
 			builder.WriteString(" (issues ")
 			for index, number := range summary.ShowcaseIssueNumbers {

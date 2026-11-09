@@ -14,6 +14,7 @@
 set -euo pipefail
 
 REPO="${REPO:-QiyanAI/derive-world}"
+INTERNAL_AUTHORS="${INTERNAL_AUTHORS:-}"
 OUT="${1:-}"
 if [ -z "$OUT" ]; then
   echo "usage: REPO=owner/name bash scripts/engagement-export.sh OUTPUT.json" >&2
@@ -31,11 +32,39 @@ gh api "repos/$REPO/issues?state=all&per_page=100" --paginate > "$TMP/issues.jso
 gh api "repos/$REPO/pulls?state=all&per_page=100" --paginate > "$TMP/pulls.json"
 
 CAPTURED_AT="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
-python3 - "$TMP/issues.json" "$TMP/pulls.json" "$OUT" "$CAPTURED_AT" <<'PY'
+python3 - "$TMP/issues.json" "$TMP/pulls.json" "$OUT" "$CAPTURED_AT" "$INTERNAL_AUTHORS" <<'PY'
 import json
 import sys
 
-issues_path, pulls_path, out_path, captured_at = sys.argv[1:5]
+issues_path, pulls_path, out_path, captured_at, internal_raw = sys.argv[1:6]
+internal = [value.strip() for value in internal_raw.split(",") if value.strip()]
+internal_lower = {value.lower() for value in internal}
+known_bots = {
+    "dependabot", "dependabot[bot]", "renovate", "renovate[bot]",
+    "github-actions", "github-actions[bot]", "codecov", "codecov[bot]",
+    "sonarcloud", "sonarcloud[bot]", "mergify", "mergify[bot]",
+}
+
+
+def classify_author(author, author_type, association):
+    login = (author or "").strip().lower()
+    if not login:
+        return "unknown"
+    if (author_type or "").strip().lower() == "bot" or \
+            login.endswith("[bot]") or login in known_bots or login.startswith("dependabot"):
+        if login == "dependabot" or login == "dependabot[bot]" or login.startswith("dependabot"):
+            return "bot_dependabot"
+        return "bot_other"
+    if login in internal_lower:
+        return "maintainer"
+    association = (association or "").strip().upper()
+    if association == "OWNER":
+        return "maintainer"
+    if association in ("MEMBER", "COLLABORATOR"):
+        return "internal"
+    if association in ("NONE", "FIRST_TIME_CONTRIBUTOR", "FIRST_TIMER", "CONTRIBUTOR"):
+        return "external"
+    return "unknown"
 
 
 def load(path):
@@ -70,11 +99,17 @@ issues = []
 for item in load(issues_path):
     if item.get("pull_request") is not None:
         continue
+    user = item.get("user") or {}
+    author = user.get("login", "")
+    author_type = user.get("type", "")
+    association = item.get("author_association", "NONE")
     issues.append({
         "number": item.get("number", 0),
         "title": item.get("title", ""),
-        "author": (item.get("user") or {}).get("login", ""),
-        "author_association": item.get("author_association", "NONE"),
+        "author": author,
+        "author_association": association,
+        "author_type": author_type,
+        "author_class": classify_author(author, author_type, association),
         "state": item.get("state", "open"),
         "created_at": item.get("created_at", ""),
         "comments": item.get("comments", 0),
@@ -84,11 +119,17 @@ for item in load(issues_path):
 
 pulls = []
 for item in load(pulls_path):
+    user = item.get("user") or {}
+    author = user.get("login", "")
+    author_type = user.get("type", "")
+    association = item.get("author_association", "NONE")
     pulls.append({
         "number": item.get("number", 0),
         "title": item.get("title", ""),
-        "author": (item.get("user") or {}).get("login", ""),
-        "author_association": item.get("author_association", "NONE"),
+        "author": author,
+        "author_association": association,
+        "author_type": author_type,
+        "author_class": classify_author(author, author_type, association),
         "state": item.get("state", "open"),
         "merged": item.get("merged_at") is not None,
         "created_at": item.get("created_at", ""),
@@ -99,6 +140,7 @@ for item in load(pulls_path):
 payload = {
     "schema_version": 1,
     "captured_at": captured_at,
+    "internal_authors": internal,
     "issues": issues,
     "pull_requests": pulls,
 }
