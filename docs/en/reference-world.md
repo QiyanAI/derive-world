@@ -11,7 +11,13 @@ that ship in this repository.
 > tree; it is not a general provider claim. See the
 > [release notes](release-notes.md).
 
-![Reference World landing](../assets/g05-landing.png)
+![A v0.2.0 reference world](../assets/v02-world.jpg)
+
+> **Visual note:** the step-by-step screenshots below were captured on the
+> reference build and are retained as historical walkthrough evidence. Current
+> `v0.2.0` product visuals are in the [README](../../README.md),
+> [Showcase](../../SHOWCASE.md) and the
+> [online tour](https://qiyanai.github.io/derive-world/showcase/tour/).
 
 ## Run it
 

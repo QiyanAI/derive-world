@@ -12,15 +12,19 @@ Derive World 是一个面向 *Living Object（活对象）* 的开源基础：�
 2. **世界可以持续改变，形式不受限。** 动画、游戏、故事、工作台、可视空间、三维与受控自定义表面共享同一份内容、状态、变量、权限、版本与来源链。世界不会因为形式变化而变成另一种产品类别。
 3. **衍生保留独立的来源。** 衍生世界是从不可变快照生成的独立子对象，来源链被记录，并按权限裁剪。
 
-结果是一个小而可审计、可自托管的开源世界。
+结果是一个小而可审计、可自托管的开源世界。下方截图来自真实 `v0.2.0` 产品的 Fixture 模式。
 
 ## 演示
 
-![17 秒 Derive World 演示](docs/assets/demo-preview.gif)
+![Derive World v0.2.0 产品演示](docs/assets/v02-demo-preview.gif)
 
-17 秒参考世界演示：Living Object、版本历史与来源链、互动投票。完整录屏见 [`demo-17s.webm`](docs/assets/demo-17s.webm)。Fixture 模式，无需模型 API Key。[作品展示](docs/zh/showcase.md)提供三个首发示例与自愿分享入口。
+这是真实 `v0.2.0` 产品在 Fixture 模式下的短视频：新用户描述一个世界、批准计划、进入世界、让 Personal AI 修改，再衍生一个独立分支。完整录屏见 [`demo-v02-17s.webm`](docs/assets/demo-v02-17s.webm)。Fixture 模式不调用模型，不是真实 AI。[作品展示](docs/zh/showcase.md)按 Create → Experience → Change → Derive → Share 展示，并提供自愿分享入口。
 
-**没有 Docker？** 打开[五步离线演示](showcase/tour/README.md)。它是用真实产品截图构建的静态页面，其中的衍生面板明确标注为模拟。它不是在线 AI 服务，不调用模型，也不会创建任何内容。
+| 与我的 AI 一起创造 | 修改世界 | 衍生新世界 |
+|---|---|---|
+| ![与 Personal AI 一起创造世界](docs/assets/v02-create.jpg) | ![经过人类批准的 AI 修改](docs/assets/v02-change.jpg) | ![独立的衍生世界](docs/assets/v02-branch.jpg) |
+
+**没有 Docker？** 打开[在线产品导览](https://qiyanai.github.io/derive-world/showcase/tour/)。它用真实 v0.2.0 Fixture 截图构建，其中的交互明确标注为模拟；它不是在线 AI 服务，不调用模型，也不会创建任何内容。
 
 **衍生一个分支：**[Derive Relay](examples/worlds/README.md) 是自愿参与的衍生挑战，从一个可复现的基础世界出发，使用 `v0.2.0` 已有的公开与衍生能力。
 
@@ -30,7 +34,7 @@ Derive World 是一个面向 *Living Object（活对象）* 的开源基础：�
 
 | | |
 |---|---|
-| ![首页](docs/assets/g05-landing.png) | ![世界](docs/assets/g05-world-populated.png) |
+| ![v0.2.0 世界](docs/assets/v02-world.jpg) | ![经过人类批准的修改](docs/assets/v02-change.jpg) |
 
 - **世界** — 真实对象与可见衍生分支的舞台，附真实变化的“世界脉搏”和待批准事项。
 - **对象** — 协作文档、互动投票、活场景（想法、步骤、场景、选择、结果）与自由世界；自由世界由创建者定义存在种类、关系与一次性规则，并可从已注册的呈现与行为能力中组合自己的体验，包括上传的图像/视频/音频、GLB 模型或基础形体三维场景、声音事件与简单物理；经典场景、舞台、卡片和时间线仍可作为同一世界的可选视图。所有类型都包含版本化操作、成员、邀请、Handoff、AI 协作、衍生透镜、历史与谱系。

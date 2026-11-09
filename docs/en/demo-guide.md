@@ -5,6 +5,11 @@ the real Compose stack: PostgreSQL, the Go API, the production web bundle, and
 two independent browser identities. Fixture mode is deterministic and labelled;
 it is not real AI.
 
+> **Visual note:** evidence files named `g05-*` are kept from the reference
+> build for historical test evidence. Current `v0.2.0` product visuals are in
+> the [README](../../README.md), [Showcase](../../SHOWCASE.md) and the
+> [online tour](https://qiyanai.github.io/derive-world/showcase/tour/).
+
 ## Prerequisites
 
 - Docker Engine with Compose v2.

@@ -1,19 +1,26 @@
-# Offline product tour
+# v0.2.0 product tour
 
-`index.html` is a self-contained, five-step tour of Derive World. It uses real
-product screenshots from `docs/assets/` and one clearly labelled simulation of
-the derivation rule. It is not a hosted product and not a live AI service.
+`index.html` is the static, offline product tour deployed at
+<https://qiyanai.github.io/derive-world/showcase/tour/>.
 
-## What it is
+It uses real `v0.2.0` Fixture-mode screenshots and a real Fixture product
+recording (create → approve → enter → change → derive). The
+"Describe. Change. Branch." panel is a scripted simulation: it creates no
+object and calls no model. Every demo surface is labelled Fixture or
+Simulation; this is not a live AI service.
 
-- Static HTML, CSS and JavaScript with no dependencies, no build step, no
-  analytics, and no network requests.
-- Responsive from 360 px to desktop widths.
-- Honest labels: every screenshot is marked Fixture, and the derivation panel
-  is marked Simulation. Fixture output is deterministic demo data, not real AI.
-- No personal data, tokens, or private objects are included.
+## What it contains
 
-## View it locally
+- A visual first screen with the playable, story and working worlds.
+- A one-world-many-forms grid: playable, story, workbench, motion.
+- A three-step interactive simulation: pick a world, add a surface, branch it.
+- The derivation and human-approval story, using the real product UI.
+- Links to the repository, quick start, Showcase and Limitations on GitHub.
+
+No backend, analytics, cookies, external scripts or network requests. All
+images and the recording are local files under `assets/`.
+
+## View locally
 
 From the repository root:
 
@@ -21,10 +28,9 @@ From the repository root:
 python3 -m http.server 8090
 ```
 
-Then open <http://127.0.0.1:8090/showcase/tour/>. Opening `index.html`
-directly from disk also works in current browsers.
+Open <http://127.0.0.1:8090/showcase/tour/>.
 
-## Validate it
+## Validate
 
 From `ops/growth-engine`:
 
@@ -32,19 +38,17 @@ From `ops/growth-engine`:
 go run . tour-check
 ```
 
-The check verifies the SPDX header, the Fixture label, offline-only assets,
-resolvable image paths and a responsive rule.
+The check verifies the SPDX header, the Fixture/“not a live AI service” labels,
+offline asset references, local image existence and the responsive rule.
 
 ## Deployment
 
-The page is a deployable artifact, not a deployed service. A maintainer may
-serve the repository root with any static host, or publish it through GitHub
-Pages after the owner authorizes that setting. This repository does not
-purchase a domain, a server, or paid hosting, and no public tour URL is claimed
-until one is actually deployed and verified.
+GitHub Pages serves a deployment branch containing only this tour, its assets,
+`LICENSE`, `NOTICE`, a root redirect and `.nojekyll`. It does not serve the
+repository root. See the owner notes for the exact branch and settings.
 
 ## Scope
 
-Single instance. There is no cross-instance federation, no public object API
-for visitors, and no cloud sharing service. See
+Single instance. No cross-instance federation, no public object API for
+visitors, and no cloud sharing service. See
 [Limitations](../../docs/en/limitations.md).

@@ -4,7 +4,9 @@ Derive World `v0.2.0` 是一个可自托管的活对象参考世界。它不是�
 
 > **状态：** `v0.2.0` 是 V2 产品阶段公开版本。固定演示模式是确定性演示输出，不是模型智能。真实 AI 仅对 DeepSeek `deepseek-flash` 上有记录的流程与发布源码树验证，不构成普遍 Provider 声明，见[发行说明](release-notes.md)。
 
-![参考世界首页](../assets/g05-landing.png)
+![v0.2.0 参考世界](../assets/v02-world.jpg)
+
+> **视觉说明：** 下方分步截图来自参考世界构建，作为历史流程证据保留。当前 `v0.2.0` 产品画面请见 [README](../../README.zh-CN.md)、[作品展示](../../SHOWCASE.md) 和[在线导览](https://qiyanai.github.io/derive-world/showcase/tour/)。
 
 ## 运行
 
