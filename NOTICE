@@ -1,0 +1,13 @@
+Derive World
+Copyright 2026 QiyanAI
+
+This product includes software developed by the Derive World contributors.
+
+Third-party dependencies and their full license texts are listed in
+THIRD_PARTY_NOTICES.md, which is included in every release archive. The
+release archives also include the pinned dependency manifests:
+
+- Go modules: go.mod / go.sum
+- npm packages: package.json / package-lock.json
+
+The Apache License 2.0 does not grant trademark rights. See TRADEMARK.md.

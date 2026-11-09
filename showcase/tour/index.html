@@ -1,0 +1,151 @@
+<!-- SPDX-License-Identifier: Apache-2.0 -->
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="A five-step, offline product tour of Derive World: create, change, derive, approve and share.">
+  <title>Derive World — five-step product tour</title>
+  <link rel="stylesheet" href="tour.css">
+</head>
+<body>
+  <a class="skip" href="#main">Skip to the tour</a>
+  <header class="masthead">
+    <p class="eyebrow">Derive World · product tour</p>
+    <h1>Create a world. Change it together.<br>Derive something new.</h1>
+    <p class="lede">
+      This is a static, offline tour built from real product screenshots and
+      captured Fixture data. It is <strong>not a live AI service</strong>, it
+      calls no model, and it sends nothing anywhere. Fixture output is
+      deterministic demo data, not real AI.
+    </p>
+    <nav class="steps" aria-label="Tour steps">
+      <a href="#step-create">1 · Create</a>
+      <a href="#step-change">2 · Change</a>
+      <a href="#step-derive">3 · Derive</a>
+      <a href="#step-approve">4 · Approve</a>
+      <a href="#step-share">5 · Share</a>
+    </nav>
+  </header>
+
+  <main id="main">
+    <section id="step-create" class="step" aria-labelledby="create-title">
+      <div class="step-text">
+        <p class="kicker">Step 1</p>
+        <h2 id="create-title">Describe a world in your own words</h2>
+        <p>
+          The Personal AI writes a compact world brief; a server-side composer
+          expands it into a real, runnable world. Nothing here is a fixed
+          template or a category picker — the kinds of things, their relations
+          and their interactions come from the description.
+        </p>
+        <p class="label"><span class="badge">Fixture</span> Screenshot taken from the reference product in deterministic demo mode.</p>
+      </div>
+      <figure>
+        <img src="../../docs/assets/g05-welcome.png" alt="The Derive World welcome screen with the Digital Self and Personal AI entry points">
+        <figcaption>The first screen is the Digital Self and its Personal AI, before any world exists.</figcaption>
+      </figure>
+    </section>
+
+    <section id="step-change" class="step reverse" aria-labelledby="change-title">
+      <div class="step-text">
+        <p class="kicker">Step 2</p>
+        <h2 id="change-title">Change the world, and keep every version</h2>
+        <p>
+          A Living Object has versions, members, permissions and an event
+          history. Each accepted change creates a version. You can revisit an
+          older version without rewriting history.
+        </p>
+        <p class="label"><span class="badge">Fixture</span> Deterministic demo data; no model call.</p>
+      </div>
+      <figure>
+        <img src="../../docs/assets/g05-history.png" alt="Version history of a Living Object">
+        <figcaption>History is append-only; a stale write becomes a version conflict, not an overwrite.</figcaption>
+      </figure>
+    </section>
+
+    <section id="step-derive" class="step" aria-labelledby="derive-title">
+      <div class="step-text">
+        <p class="kicker">Step 3</p>
+        <h2 id="derive-title">Derive an independent world, on purpose</h2>
+        <p>
+          A derive creates a child from an immutable snapshot of the source.
+          Later edits to the parent do not propagate, and the child keeps a
+          recorded ancestry. Try the small simulation: choose a source version
+          and derive.
+        </p>
+        <div class="sim" role="group" aria-labelledby="sim-title">
+          <p id="sim-title" class="sim-title">Simulated derivation</p>
+          <div class="sim-controls">
+            <button type="button" data-version="1">Derive from v1</button>
+            <button type="button" data-version="2">Derive from v2</button>
+            <button type="button" class="ghost" id="sim-reset">Reset</button>
+          </div>
+          <div class="lineage" id="lineage" aria-live="polite">
+            <div class="node source">Parent world<small>v1 · v2</small></div>
+          </div>
+          <p class="sim-note" id="sim-note">
+            Simulation only. This page has no backend and creates nothing.
+          </p>
+        </div>
+        <p class="label"><span class="badge">Simulation</span> A visual model of the derivation rule, not a live AI service.</p>
+      </div>
+      <figure>
+        <img src="../../docs/assets/g05-lineage.png" alt="Lineage view showing a source object and its derived child">
+        <figcaption>Lineage is permission-clipped: objects you cannot read are never named.</figcaption>
+      </figure>
+    </section>
+
+    <section id="step-approve" class="step reverse" aria-labelledby="approve-title">
+      <div class="step-text">
+        <p class="kicker">Step 4</p>
+        <h2 id="approve-title">The AI proposes. The human approves.</h2>
+        <p>
+          A Personal AI can propose a change or a derive. The proposal is inert
+          until a person applies it, and a derive needs a separate,
+          single-use confirmation bound to an object version. The AI never
+          authorizes itself.
+        </p>
+        <p class="label"><span class="badge">Fixture</span> Scripted proposal and confirmation, not a model response.</p>
+      </div>
+      <figure>
+        <img src="../../docs/assets/g05-ai-confirmation.png" alt="A human confirmation card bound to an object version">
+        <figcaption>The confirmation names the exact version and expires; a failed or expired plan never offers a fake approval.</figcaption>
+      </figure>
+    </section>
+
+    <section id="step-share" class="step" aria-labelledby="share-title">
+      <div class="step-text">
+        <p class="kicker">Step 5</p>
+        <h2 id="share-title">Share only what you choose to publish</h2>
+        <p>
+          Publication is opt-in, and a derived world can be published where the
+          owner allows it. Sharing is scoped to one instance: there is no
+          cross-instance federation or public import.
+        </p>
+        <ul class="links">
+          <li><a href="../../SHOWCASE.md">Showcase and submission guide</a></li>
+          <li><a href="../../examples/worlds/README.md">Derive Relay base world</a></li>
+          <li><a href="https://github.com/QiyanAI/derive-world">Repository</a></li>
+        </ul>
+        <p class="label"><span class="badge">Honest label</span> Participation is voluntary. You do not have to star or share anything to use the software.</p>
+      </div>
+      <figure>
+        <img src="../../docs/assets/g05-derived-child.png" alt="A derived child world with its own independent content">
+        <figcaption>A derived child is independent; later parent changes do not propagate.</figcaption>
+      </figure>
+    </section>
+  </main>
+
+  <footer class="footer">
+    <p>
+      This tour is a static page in the Derive World repository. It is not a
+      hosted product, not a live AI service, and not a claim of adoption.
+      The software is Apache-2.0.
+    </p>
+    <p><a href="../../README.md">README</a> · <a href="../../docs/en/limitations.md">Limitations</a></p>
+  </footer>
+
+  <script src="tour.js"></script>
+</body>
+</html>
