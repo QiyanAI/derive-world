@@ -56,17 +56,33 @@ jobs:
           set -euo pipefail
           run_id=$(gh run list --repo "$GITHUB_REPOSITORY" --workflow metrics-daily.yml \
             --status success --limit 1 --json databaseId --jq '.[0].databaseId // empty')
+          if [ -z "$run_id" ]; then
+            echo "::error::no successful metrics-daily run; refusing to generate an AI plan"
+            exit 1
+          fi
           echo "run_id=$run_id" >> "$GITHUB_OUTPUT"
 
       - name: download the metrics artifact
         if: steps.metrics.outputs.run_id != ''
-        continue-on-error: true
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           set -euo pipefail
-          gh run download "${{ steps.metrics.outputs.run_id }}" \
-            --repo "$GITHUB_REPOSITORY" -n github-metrics -D ops/growth-engine/.artifacts/metrics
+          bash ops/growth-engine/scripts/fetch-metrics-artifact.sh \
+            "${{ steps.metrics.outputs.run_id }}" ops/growth-engine/.artifacts/metrics 3
+
+      - name: record data provenance
+        working-directory: ops/growth-engine
+        run: |
+          set -euo pipefail
+          mkdir -p runs
+          cp .artifacts/metrics/provenance.json runs/data-provenance.json
+          {
+            echo "## Data provenance"
+            echo '```json'
+            cat runs/data-provenance.json
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
 
       - name: export item-level public issue and pull-request metadata
         continue-on-error: true
@@ -108,10 +124,11 @@ jobs:
           PROVIDER_ID: ${{ vars.DGE_AI_PROVIDER_ID }}
         run: |
           set -euo pipefail
-          snapshot="baseline/snapshot-2026-11-07.json"
-          if [ -f .artifacts/metrics/snapshot.json ]; then
-            snapshot=".artifacts/metrics/snapshot.json"
-          fi
+          snapshot=".artifacts/metrics/snapshot.json"
+          test -f "$snapshot" || {
+            echo "::error::latest metrics snapshot unavailable; refusing to use a historical baseline"
+            exit 1
+          }
           args=(pipeline --snapshot "$snapshot" --out-dir runs --min-interval 2s
             --providers state/providers.generated.json --provider "$PROVIDER_ID"
             --budget /tmp/dge-budget.json --usage usage.json
