@@ -54,6 +54,25 @@
       "window_days": 14,
       "decision_rules": { "keep_at_least": 1, "stop_at_or_below": -1 },
       "results": []
+    },
+    {
+      "id": "EXP-04",
+      "title": "International developer launch — GitHub + DEV",
+      "status": "running",
+      "hypothesis": "If the approved GitHub Discussion and an original DEV Community technical article are published within the first 14 days, at least one external engineer will open a substantive issue or pull request.",
+      "audience": "developers evaluating open-source AI runtimes, versioning, permissions and lineage",
+      "channel": "technical-blog",
+      "change": "Keep GitHub Discussion #26 as the first milestone; publish one original DEV technical article; do not cross-post identical text; link the repository, Showcase and Pages tour.",
+      "metric": "meaningful_external_issues",
+      "baseline": {
+        "value": 0,
+        "captured_at": "2026-11-09T07:41:55Z",
+        "source": "ops/growth-engine/baseline/snapshot-2026-11-09.json"
+      },
+      "window_days": 14,
+      "decision_rules": { "keep_at_least": 1, "stop_at_or_below": -1 },
+      "started_at": "2026-11-09",
+      "results": []
     }
   ]
 }

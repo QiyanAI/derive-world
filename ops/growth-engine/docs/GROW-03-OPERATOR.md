@@ -131,10 +131,18 @@ Supported metrics: `stars`, `forks`, `watchers`, `downloads_total`,
 - Traffic and contribution values are `UNKNOWN` unless actually present.
 - Downloads are never described as users.
 - `meaningful_external_issues` excludes spam/invalid/duplicate/wontfix
-  labels, one-line drive-bys without conversation, and internal authors.
-- `merged_external_prs` counts only merged PRs from non-owner, non-member,
-  non-collaborator authors.
+  labels, one-line drive-bys without conversation, maintainers, internal
+  collaborators and bots.
+- `merged_external_prs` counts only merged PRs from real external humans.
+- Author classification is explicit: `maintainer`, `internal`,
+  `bot_dependabot`, `bot_other`, `external`, or `unknown`.
+- `internal_authors` is an optional allowlist supplied by the owner/export
+  (`INTERNAL_AUTHORS`). It fixes the Actions token case where a maintainer's
+  `author_association` may be reported as `NONE`.
+- Dependabot and other bots are never counted as external contributors.
 - An empty engagement window is not evidence that no contributor exists.
+- The raw `author_association` and `author_type` remain in the export for audit;
+  `author_class` is additive and does not rewrite history.
 
 ## Permissions and secret handling
 

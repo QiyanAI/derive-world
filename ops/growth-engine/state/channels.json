@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "updated_at": "2026-11-08",
+  "updated_at": "2026-11-09",
   "channels": [
     {
       "id": "github",
@@ -16,7 +16,13 @@
       "fits": ["technical-intro", "release-notes", "showcase", "tutorial", "community", "relay", "product-update"],
       "cadence": "With a verified release or a real technical change; no fixed posting quota.",
       "authorization": "maintainer-controlled",
-      "observed": []
+      "observed": [
+        {
+          "date": "2026-11-09",
+          "summary": "Published GitHub Discussions #26: Derive World v0.2.0 — An Open-Source Foundation for Living Objects",
+          "outcome": "published; https://github.com/QiyanAI/derive-world/discussions/26"
+        }
+      ]
     },
     {
       "id": "hacker-news",
@@ -74,7 +80,13 @@
       "fits": ["technical-intro", "tutorial", "relay"],
       "cadence": "After a real engineering milestone, with a new lesson worth reading.",
       "authorization": "owner-account-required",
-      "observed": []
+      "observed": [
+        {
+          "date": "2026-11-09",
+          "summary": "Published DEV Community technical article: The Hard Part of AI World-Building Isn't Generation — It's Authority",
+          "outcome": "published; https://dev.to/deriveworld/the-hard-part-of-ai-world-building-isnt-generation-its-authority-25hh (article 5003122)"
+        }
+      ]
     },
     {
       "id": "ecosystem",
