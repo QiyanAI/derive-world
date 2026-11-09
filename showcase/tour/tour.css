@@ -679,6 +679,7 @@ dialog::backdrop { background: rgba(2, 5, 10, 0.82); backdrop-filter: blur(6px);
   .version { display: none; }
   .hero { padding: 38px 16px 30px; }
   .eyebrow { font-size: 10px; letter-spacing: 0.08em; }
+  .eyebrow-ai { display: none; }
   h1 { font-size: clamp(2.45rem, 12vw, 3.5rem); }
   .hero-actions { gap: 8px; }
   .btn { padding: 11px 15px; font-size: 13px; }
