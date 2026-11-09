@@ -41,6 +41,7 @@ facts ─────────► content ai ─► deterministic verify ─�
       "max_output_tokens": 2000,
       "timeout_seconds": 60,
       "json_mode": false,
+      "thinking_mode": "disabled",
       "input_price_per_million_usd": 0.50,
       "output_price_per_million_usd": 1.50
     },
@@ -53,6 +54,7 @@ facts ─────────► content ai ─► deterministic verify ─�
       "max_output_tokens": 2000,
       "timeout_seconds": 60,
       "json_mode": false,
+      "thinking_mode": "disabled",
       "input_price_per_million_usd": 0.50,
       "output_price_per_million_usd": 1.50
     }
@@ -208,9 +210,10 @@ go run . pipeline --snapshot baseline/snapshot-2026-11-07.json --out-dir reviews
 | Anthropic-compatible client | Implemented; tested against a local mock endpoint |
 | Budget/call/cost refusal | Implemented and tested |
 | Real public research collection | **Actually run** on 2026-11-08 (GitHub search) |
-| AI research analysis | Implemented and mock-tested; **no authorized external call yet** |
-| AI content generation | Implemented and mock-tested; **no authorized external call yet** |
-| AI strategy synthesis | Implemented and mock-tested; **no authorized external call yet** |
+| AI content generation | **Actually run** on 2026-11-09: verified draft (DeepSeek `deepseek-flash`) |
+| AI research analysis | **Actually run** on 2026-11-09: 7 proposals, 0 rejected |
+| AI strategy synthesis | **Actually run** on 2026-11-09: evidence-validated plan |
+| Real-model acceptance | 6 calls total, estimated **$0.01169**, hard cap $0.25, no publishing |
 | Scheduled AI run | Implemented, disabled by default; needs owner variables/secret |
 | Fixed-rule analysis | Remains as the deterministic fallback and verifier |
 

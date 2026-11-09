@@ -1,4 +1,10 @@
 {
   "schema_version": 1,
-  "keys": []
+  "keys": [
+    {
+      "id": "owner-2026",
+      "public_key": "jNcvITDu7NZ2+TV9dC1Lyh8WUBThvmz7pRbLD9JMgyg=",
+      "added_at": "2026-11-09"
+    }
+  ]
 }

@@ -74,7 +74,7 @@ func TestAnalyzeResearchRejectsHallucinatedEvidence(t *testing.T) {
 		Summary: "A community of developers building autonomous agents and tools.",
 	}
 	modelReply := `{"opportunities":[
-		{"title":"Agent developers","source_url":"https://example.com/community","evidence_quote":"developers building autonomous agents","audience":"agent developers","relevance":"The community builds autonomous agents, which overlaps with the project's Personal AI proposal and approval model, so a technical introduction is a real fit.","action":"Publish one technical introduction in an existing thread.","expected_value":"Reach developers who already work on agent runtimes.","risk":"Low; follow community rules.","reach":60,"risk_score":10,"confidence":70,"keyword_only":false},
+		{"title":"Agent developers","source_url":"https://example.com/community","evidence_quote":"developers building autonomous agents","audience":"agent developers","relevance":"The community builds autonomous agents, which overlaps with the project's Personal AI proposal and approval model, so a technical introduction is a real fit.","action":"Publish one technical introduction in an existing thread.","expected_value":"Reach developers who already work on agent runtimes.","risk":"Low; follow community rules.","reach":0.6,"risk_score":0.1,"confidence":0.7,"keyword_only":false},
 		{"title":"Hallucinated claim","source_url":"https://example.com/community","evidence_quote":"this text is not on the page","audience":"x","relevance":"This relevance sentence is deliberately longer than eighty characters so only the quote fails validation.","action":"Post something.","expected_value":"Nothing.","risk":"High.","reach":10,"risk_score":90,"confidence":10,"keyword_only":false}
 	]}`
 	server := openAIServer(t, func(map[string]any) string { return modelReply })
@@ -95,6 +95,9 @@ func TestAnalyzeResearchRejectsHallucinatedEvidence(t *testing.T) {
 	}
 	if report.Proposals[0].Evidence == "" || report.Proposals[0].Decision == "" {
 		t.Fatalf("proposal = %+v", report.Proposals[0])
+	}
+	if report.Proposals[0].Scores.Reach != 60 || report.Proposals[0].Scores.Risk != 10 || report.Proposals[0].Scores.Confidence != 70 {
+		t.Fatalf("fractional scores not normalized: %+v", report.Proposals[0].Scores)
 	}
 	if !strings.Contains(report.Rejected[0].Reason, "evidence_quote") {
 		t.Fatalf("rejection reason = %q", report.Rejected[0].Reason)

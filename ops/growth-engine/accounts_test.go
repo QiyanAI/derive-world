@@ -52,6 +52,10 @@ func TestAccountPreflightRequiresRecordedOwnerFacts(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	// Keep this test independent of the live operational account state.
+	account.Status = "owner-action-required"
+	account.Security = Security{}
+	account.Authorization = Authorization{}
 	now := time.Date(2026, 11, 9, 0, 0, 0, 0, time.UTC)
 	if err := AccountPreflight(account, "publish", now); err == nil {
 		t.Fatal("an owner-action-required account passed preflight")

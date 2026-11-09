@@ -23,15 +23,15 @@ type StrategyAction struct {
 	Action      string   `json:"action"`
 	Rationale   string   `json:"rationale"`
 	Evidence    []string `json:"evidence"`
-	HorizonDays int      `json:"horizon_days"`
+	HorizonDays float64  `json:"horizon_days"`
 	Risk        string   `json:"risk"`
 }
 
 type NextExperiment struct {
-	Title      string `json:"title"`
-	Hypothesis string `json:"hypothesis"`
-	Metric     string `json:"metric"`
-	WindowDays int    `json:"window_days"`
+	Title      string  `json:"title"`
+	Hypothesis string  `json:"hypothesis"`
+	Metric     string  `json:"metric"`
+	WindowDays float64 `json:"window_days"`
 }
 
 const strategySystemPrompt = `You are a growth strategist for an open-source project.
@@ -166,7 +166,7 @@ func renderStrategyMarkdown(plan *StrategyPlan, response *ModelResponse) string 
 	builder.WriteString("## Summary\n\n" + plan.Summary + "\n\n")
 	builder.WriteString("## Actions\n\n")
 	for index, action := range plan.Actions {
-		builder.WriteString(fmt.Sprintf("%d. **%s** (horizon %d days)\n", index+1, action.Action, action.HorizonDays))
+		builder.WriteString(fmt.Sprintf("%d. **%s** (horizon %.0f days)\n", index+1, action.Action, action.HorizonDays))
 		builder.WriteString("   - Why: " + action.Rationale + "\n")
 		builder.WriteString("   - Evidence: " + strings.Join(action.Evidence, ", ") + "\n")
 		builder.WriteString("   - Risk: " + action.Risk + "\n")
@@ -180,7 +180,7 @@ func renderStrategyMarkdown(plan *StrategyPlan, response *ModelResponse) string 
 	if len(plan.NextExperiments) > 0 {
 		builder.WriteString("\n## Next experiments\n\n")
 		for _, experiment := range plan.NextExperiments {
-			builder.WriteString(fmt.Sprintf("- **%s** — %s; metric `%s`, %d days\n", experiment.Title, experiment.Hypothesis, experiment.Metric, experiment.WindowDays))
+			builder.WriteString(fmt.Sprintf("- **%s** — %s; metric `%s`, %.0f days\n", experiment.Title, experiment.Hypothesis, experiment.Metric, experiment.WindowDays))
 		}
 	}
 	builder.WriteString("\n## Review boundary\n\nA human must accept or reject each action. Nothing in this file grants publication authorization or proves a result.\n")

@@ -34,6 +34,7 @@ type Provider struct {
 	MaxOutputTokens       int     `json:"max_output_tokens"`
 	TimeoutSeconds        int     `json:"timeout_seconds"`
 	JSONMode              bool    `json:"json_mode"`
+	ThinkingMode          string  `json:"thinking_mode,omitempty"`
 	InputPricePerMillion  float64 `json:"input_price_per_million_usd"`
 	OutputPricePerMillion float64 `json:"output_price_per_million_usd"`
 }
@@ -146,6 +147,9 @@ func validateProvider(provider Provider) error {
 	}
 	if provider.Model == "" || provider.APIKeyEnv == "" {
 		return errors.New("model and api_key_env are required")
+	}
+	if provider.ThinkingMode != "" && provider.ThinkingMode != "enabled" && provider.ThinkingMode != "disabled" {
+		return errors.New("thinking_mode must be enabled or disabled")
 	}
 	if provider.MaxOutputTokens <= 0 {
 		return errors.New("max_output_tokens must be positive")
@@ -429,6 +433,9 @@ func (client *ModelClient) doOpenAI(ctx context.Context, request ModelRequest) (
 	}
 	if request.JSON && client.provider.JSONMode {
 		payload["response_format"] = map[string]string{"type": "json_object"}
+	}
+	if client.provider.ThinkingMode != "" {
+		payload["thinking"] = map[string]string{"type": client.provider.ThinkingMode}
 	}
 	body, err := json.Marshal(payload)
 	if err != nil {
