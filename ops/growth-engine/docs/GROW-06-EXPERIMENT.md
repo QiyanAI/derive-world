@@ -15,6 +15,14 @@ Permissions: `contents: read`, `issues: read`, `pull-requests: read`.
 Timeout: 15 minutes. Concurrency: one weekly run. A missing or stale metrics
 artifact is reported, not invented.
 
+Artifact reliability: Growth Daily, Growth Weekly and Growth AI resolve the
+latest successful `metrics-daily` run, then download its `github-metrics`
+artifact with at most three attempts and bounded backoff (5s, 15s). If the
+artifact is still unavailable, the job fails closed; it never substitutes the
+committed 2026-11-07 baseline. The actual `source_run_id`,
+`snapshot_captured_at`, `traffic_quality` and `contributors_quality` are written
+to `data-provenance.json` and the step summary beside the report.
+
 Stop switch: set the repository variable `DGE_STOP` to `1`, or pass
 `--stop-file`. The engine aborts before writing.
 

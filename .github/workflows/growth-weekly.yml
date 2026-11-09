@@ -42,20 +42,32 @@ jobs:
           run_id=$(gh run list --repo "$GITHUB_REPOSITORY" --workflow metrics-daily.yml \
             --status success --limit 1 --json databaseId --jq '.[0].databaseId // empty')
           if [ -z "$run_id" ]; then
-            echo "::warning::no successful metrics-daily run; using the committed baseline"
+            echo "::error::no successful metrics-daily run; refusing to generate a weekly report"
+            exit 1
           fi
           echo "run_id=$run_id" >> "$GITHUB_OUTPUT"
 
       - name: download the metrics artifact
         if: steps.metrics.outputs.run_id != ''
-        continue-on-error: true
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           set -euo pipefail
-          gh run download "${{ steps.metrics.outputs.run_id }}" \
-            --repo "$GITHUB_REPOSITORY" -n github-metrics -D ops/growth-engine/.artifacts/metrics
-          test -f ops/growth-engine/.artifacts/metrics/snapshot.json
+          bash ops/growth-engine/scripts/fetch-metrics-artifact.sh \
+            "${{ steps.metrics.outputs.run_id }}" ops/growth-engine/.artifacts/metrics 3
+
+      - name: record data provenance
+        working-directory: ops/growth-engine
+        run: |
+          set -euo pipefail
+          mkdir -p reports/weekly
+          cp .artifacts/metrics/provenance.json reports/weekly/data-provenance.json
+          {
+            echo "## Data provenance"
+            echo '```json'
+            cat reports/weekly/data-provenance.json
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
 
       - name: export item-level public issue and pull-request metadata
         continue-on-error: true
@@ -73,10 +85,11 @@ jobs:
           DGE_STOP: ${{ vars.DGE_STOP }}
         run: |
           set -euo pipefail
-          snapshot="baseline/snapshot-2026-11-07.json"
-          if [ -f .artifacts/metrics/snapshot.json ]; then
-            snapshot=".artifacts/metrics/snapshot.json"
-          fi
+          snapshot=".artifacts/metrics/snapshot.json"
+          test -f "$snapshot" || {
+            echo "::error::latest metrics snapshot unavailable; refusing to use a historical baseline"
+            exit 1
+          }
           args=(weekly --snapshot "$snapshot" --out-dir reports/weekly --force)
           if [ -f /tmp/engagement.json ]; then
             args+=(--engagement /tmp/engagement.json)
