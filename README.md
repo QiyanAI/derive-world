@@ -31,20 +31,26 @@ treats the *object* as the product. Three differences:
    independent child from an immutable snapshot, with a recorded ancestry that
    is permission-clipped.
 
-The result is a small, auditable world you can run yourself.
+The result is a small, auditable world you can run yourself. The screenshots below are from the real `v0.2.0` product in Fixture mode.
 
 ## See it in action
 
-![17-second Derive World demo](docs/assets/demo-preview.gif)
+![Derive World v0.2.0 product demo](docs/assets/v02-demo-preview.gif)
 
-A 17-second tour of the reference world: a Living Object, its version history
-and lineage, and an interactive poll. The full recording is
-[`demo-17s.webm`](docs/assets/demo-17s.webm). Fixture mode, no model API key.
-[Showcase](SHOWCASE.md) has three launch examples and a voluntary way to share
-what you build.
+A short recording of the real `v0.2.0` product in Fixture mode: a newcomer
+describes a world, approves the plan, enters it, asks the Personal AI to change
+it, and derives an independent branch. The full recording is
+[`demo-v02-17s.webm`](docs/assets/demo-v02-17s.webm). Fixture mode calls no
+model and is not real AI. [Showcase](SHOWCASE.md) follows the same
+Create → Experience → Change → Derive → Share loop and offers a voluntary way
+to share your work.
 
-**No Docker?** Take the [five-step offline tour](showcase/tour/README.md).
-It is a static page built from real product screenshots and one clearly
+| Create with my AI | Change it | Derive a new world |
+|---|---|---|
+| ![Create a world with a Personal AI](docs/assets/v02-create.jpg) | ![A human-approved AI change](docs/assets/v02-change.jpg) | ![An independent derived world](docs/assets/v02-branch.jpg) |
+
+**No Docker?** Take the [online product tour](https://qiyanai.github.io/derive-world/showcase/tour/).
+It is a static page built from real v0.2.0 Fixture screenshots, with a clearly
 labelled simulation. It is not a live AI service, it calls no model, and it
 creates nothing.
 
@@ -67,7 +73,7 @@ publication and derivation paths already in `v0.2.0`.
 
 | | |
 |---|---|
-| ![Landing](docs/assets/g05-landing.png) | ![World](docs/assets/g05-world-populated.png) |
+| ![A v0.2.0 world](docs/assets/v02-world.jpg) | ![A human-approved change](docs/assets/v02-change.jpg) |
 
 - **World** — a stage of your real objects and visible derivation branches,
   with a Living Pulse of real changes and pending human approvals.

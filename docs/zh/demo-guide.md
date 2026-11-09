@@ -2,6 +2,8 @@
 
 这是参考世界验收使用的可复现衍生闭环。它运行在真实 Compose 栈上：PostgreSQL、Go API、生产 Web 构建，以及两个真正独立的浏览器身份。固定演示模式是确定性且有明确标记的，不是真实 AI。
 
+> **视觉说明：** `g05-*` 证据文件来自参考世界构建，作为历史测试证据保留。当前 `v0.2.0` 产品画面请见 [README](../../README.zh-CN.md)、[作品展示](../../SHOWCASE.md) 和[在线导览](https://qiyanai.github.io/derive-world/showcase/tour/)。
+
 ## 前置条件
 
 - Docker Engine 与 Compose v2。
