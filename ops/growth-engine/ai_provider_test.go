@@ -388,3 +388,22 @@ func TestGitUsageStorePersistsAcrossFreshClones(t *testing.T) {
 		t.Fatalf("persisted usage = %+v", usage)
 	}
 }
+
+func TestOpenAIThinkingModeParameter(t *testing.T) {
+	var got map[string]any
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_ = json.NewDecoder(r.Body).Decode(&got)
+		fmt.Fprint(w, `{"choices":[{"message":{"content":"ok"}}],"usage":{"prompt_tokens":3,"completion_tokens":3}}`)
+	}))
+	defer server.Close()
+	provider := testProvider(server.URL, "openai")
+	provider.ThinkingMode = "disabled"
+	client := testClient(provider, futureBudget(), filepath.Join(t.TempDir(), "usage.json"), "key")
+	if _, err := client.Complete(context.Background(), ModelRequest{Purpose: "content", System: "s", User: "u"}); err != nil {
+		t.Fatal(err)
+	}
+	thinking, ok := got["thinking"].(map[string]any)
+	if !ok || thinking["type"] != "disabled" {
+		t.Fatalf("thinking parameter = %#v", got["thinking"])
+	}
+}

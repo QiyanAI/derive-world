@@ -1,4 +1,18 @@
 {
   "schema_version": 1,
-  "providers": []
+  "providers": [
+    {
+      "id": "deepseek-flash",
+      "protocol": "openai",
+      "base_url": "https://api.deepseek.com",
+      "model": "deepseek-flash",
+      "api_key_env": "DGE_MODEL_API_KEY",
+      "max_output_tokens": 2000,
+      "timeout_seconds": 60,
+      "json_mode": true,
+      "thinking_mode": "disabled",
+      "input_price_per_million_usd": 0.3,
+      "output_price_per_million_usd": 1.2
+    }
+  ]
 }

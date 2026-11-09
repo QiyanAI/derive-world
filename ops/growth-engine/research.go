@@ -572,18 +572,18 @@ func analyzeResearch(ctx context.Context, report *ResearchReport, facts *FactFil
 	report.AI = response
 	var parsed struct {
 		Opportunities []struct {
-			Title         string `json:"title"`
-			SourceURL     string `json:"source_url"`
-			EvidenceQuote string `json:"evidence_quote"`
-			Audience      string `json:"audience"`
-			Relevance     string `json:"relevance"`
-			Action        string `json:"action"`
-			ExpectedValue string `json:"expected_value"`
-			Risk          string `json:"risk"`
-			Reach         int    `json:"reach"`
-			RiskScore     int    `json:"risk_score"`
-			Confidence    int    `json:"confidence"`
-			KeywordOnly   bool   `json:"keyword_only"`
+			Title         string  `json:"title"`
+			SourceURL     string  `json:"source_url"`
+			EvidenceQuote string  `json:"evidence_quote"`
+			Audience      string  `json:"audience"`
+			Relevance     string  `json:"relevance"`
+			Action        string  `json:"action"`
+			ExpectedValue string  `json:"expected_value"`
+			Risk          string  `json:"risk"`
+			Reach         float64 `json:"reach"`
+			RiskScore     float64 `json:"risk_score"`
+			Confidence    float64 `json:"confidence"`
+			KeywordOnly   bool    `json:"keyword_only"`
 		} `json:"opportunities"`
 	}
 	if err := json.Unmarshal([]byte(stripJSONFences(response.Text)), &parsed); err != nil {
@@ -640,9 +640,9 @@ func analyzeResearch(ctx context.Context, report *ResearchReport, facts *FactFil
 		}
 		opportunity.Scores.Relevance = clamp(judgement(candidate.Relevance, 80))
 		opportunity.Scores.Evidence = 90
-		opportunity.Scores.Reach = clamp(candidate.Reach)
-		opportunity.Scores.Risk = clamp(candidate.RiskScore)
-		opportunity.Scores.Confidence = clamp(candidate.Confidence)
+		opportunity.Scores.Reach = normalizeScore(candidate.Reach)
+		opportunity.Scores.Risk = normalizeScore(candidate.RiskScore)
+		opportunity.Scores.Confidence = normalizeScore(candidate.Confidence)
 		ScoreOpportunity(&opportunity)
 		report.Proposals = append(report.Proposals, opportunity)
 	}
@@ -652,6 +652,21 @@ func analyzeResearch(ctx context.Context, report *ResearchReport, facts *FactFil
 	report.Notes = append(report.Notes,
 		"AI proposals are review-only. They are not added to state automatically and authorize no publication.")
 	return nil
+}
+
+// normalizeScore accepts both a 0-100 judgement and a 0-1 fraction. Models
+// commonly return either form; the engine records a bounded 0-100 score.
+func normalizeScore(value float64) int {
+	if value > 0 && value <= 1 {
+		value *= 100
+	}
+	if value < 0 {
+		value = 0
+	}
+	if value > 100 {
+		value = 100
+	}
+	return int(value + 0.5)
 }
 
 func stripJSONFences(value string) string {

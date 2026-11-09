@@ -19,7 +19,9 @@ Rules:
 - State that Fixture output is deterministic demo data and not real AI whenever you mention a demo or screenshot.
 - Never claim the draft was published.
 - Follow the target channel's rules and audience.
-- Keep the draft under 900 words. Do not add a facts appendix; the tool will append one.`
+- Keep the draft under 900 words. Do not add a facts appendix; the tool will append one.
+- The server rejects any draft with fewer than THREE DISTINCT verified fact ids. You must include at least three different [[fact:id]] markers from the supplied list, each attached to a real claim.
+- Prefer one marker from each of: what-it-is, human-approval, lineage, open-source, fixture-not-real-ai, not-production. Repeating one id does not count as three.`
 
 func runAIContent(args []string, stdout, stderr io.Writer) error {
 	flags := newFlagSet("content ai", stderr)
@@ -76,6 +78,9 @@ func runAIContent(args []string, stdout, stderr io.Writer) error {
 		user += "- " + rule + "\n"
 	}
 	user += "\nVERIFIED FACTS (the only product claims you may make):\n" + factLines.String() +
+		"\nYour draft MUST contain at least three DISTINCT markers such as " +
+		"[[fact:what-it-is]], [[fact:human-approval]], [[fact:lineage]] or " +
+		"[[fact:open-source]]. Only use IDs from the list above. " +
 		"\nWrite the draft now. Today is " + *date + "."
 	response, err := client.Complete(context.Background(), ModelRequest{
 		Purpose:         "content",

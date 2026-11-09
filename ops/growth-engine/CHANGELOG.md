@@ -1,5 +1,22 @@
 # Growth Engine changelog
 
+## 1.3.0 — 2026-11-09
+
+Real provider activation and compatibility fixes after the first owner-run
+DeepSeek acceptance.
+
+- Provider registry supports `thinking_mode`; `deepseek-flash` is configured
+  with thinking disabled so bounded output is not consumed by reasoning.
+- Research scores accept both 0–100 and 0–1 confidence/reach/risk values.
+- Strategy duration fields accept numeric values and render safely.
+- AI content prompt requires at least three distinct verified fact markers.
+- GitHub and DEV Community accounts recorded active with publish scope; owner
+  Ed25519 public key registered. DEV has no native 2FA and is recorded as
+  OAuth-provider 2FA through GitHub; no credential is stored.
+- Real acceptance: 6 calls, estimated $0.01169, cost cap enforced. Content
+  draft verified; research produced 7 evidence-quoted proposals with 0
+  rejected; strategy passed evidence-id validation. Nothing was published.
+
 ## 1.2.0 — 2026-11-08
 
 Final security hardening for Phase II.
