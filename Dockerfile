@@ -1,5 +1,5 @@
 # Build the reference web client and SDK.
-FROM node:24-alpine@sha256:6a1c190e17215d844926b0677f4bf87273ff7d5e54db06d3b5b5863ab0b09a3d AS web-builder
+FROM node:26-alpine@sha256:6bd9ab43c0ec0190ca7b2d193906cb8b7edf6e7f4afa43ddeccd6452710bffb5 AS web-builder
 WORKDIR /src
 COPY package.json package-lock.json ./
 COPY web/package.json ./web/package.json
@@ -10,7 +10,7 @@ COPY sdk ./sdk
 RUN npm run -w web build && npm run -w sdk/typescript build
 
 # Build the Go server and the independent reference provider.
-FROM golang:1.27.3-alpine@sha256:f2c872bcee949b7be9c490efd02b48a8a2fbf947cdf533f1c58525ec9d8170fd AS go-builder
+FROM golang:1.27.3-alpine@sha256:fa3d596898d9f126af7c01d14ee7597bab3f39cccf392ef36b69fe77cd681f18 AS go-builder
 ARG GOPROXY=https://proxy.golang.org,direct
 ENV GOPROXY=${GOPROXY}
 WORKDIR /src
@@ -27,7 +27,7 @@ RUN cd examples/capability-provider && \
     CGO_ENABLED=0 go build -trimpath -o /out/capability-provider .
 
 # Minimal non-root runtime for the server.
-FROM alpine:3.23@sha256:85fe1e81d6758c208f3e1eed4338a1997e19d4be002d4dd32d3100c9a8c010a0 AS server
+FROM alpine:3.24@sha256:f59abe656b692d901e184be3445e084786602108599d2a51d229c0f5a48c71bf AS server
 RUN apk add --no-cache ca-certificates \
     && addgroup -g 10001 -S app \
     && adduser -u 10001 -S -G app -h /app app
@@ -52,7 +52,7 @@ ENTRYPOINT ["/app/server"]
 CMD ["serve"]
 
 # Minimal non-root runtime for the reference capability provider.
-FROM alpine:3.23@sha256:85fe1e81d6758c208f3e1eed4338a1997e19d4be002d4dd32d3100c9a8c010a0 AS provider
+FROM alpine:3.24@sha256:f59abe656b692d901e184be3445e084786602108599d2a51d229c0f5a48c71bf AS provider
 RUN apk add --no-cache ca-certificates \
     && addgroup -g 10001 -S app \
     && adduser -u 10001 -S -G app -h /app app
